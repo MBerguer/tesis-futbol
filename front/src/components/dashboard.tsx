@@ -21,14 +21,14 @@ interface Person {
   categoria: string | undefined;
 }
 
-export function Dashboard({ persons, onPersonClick }) {
+export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPersonClick: (person: Person) => void }) {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const handlePersonClick = (person: Person) => {
     setSelectedPerson(person);
   };
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
-      <aside className="w-full lg:w-1/3">
+      <aside className="w-full lg:w-1/4">
         <Card>
           <CardHeader>
             <CardTitle>Plantel</CardTitle>
@@ -54,7 +54,7 @@ export function Dashboard({ persons, onPersonClick }) {
           </CardContent>
         </Card>
       </aside>
-      <section className="w-full lg:w-2/3">
+      <section className="w-full lg:w-3/4">
         {selectedPerson && (
           <Card>
             <CardHeader>
