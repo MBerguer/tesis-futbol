@@ -65,24 +65,65 @@ export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPer
                 {selectedPerson.nombre} / {selectedPerson.categoria}
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col items-center">
-              <Avatar className="h-96 w-72">
-                <AvatarImage
-                  alt="Selected Person"
-                  src={selectedPerson.path_foto}
-                />
-                <AvatarFallback>{selectedPerson.nombre[0]}</AvatarFallback>
-              </Avatar>
-              <h2 className="mt-4 text-xl font-semibold">
-                {selectedPerson.nombre}
-              </h2>
-              <p>Alias: {selectedPerson.alias}</p>
-              <p>Age: {selectedPerson.edad}</p>
-              <p>Personal Metrics: {selectedPerson.personalMetrics}</p>
+            <CardContent className="flex items-start">
+              <div className="w-1/4">
+                <Avatar className="h-96 w-full">
+                  <AvatarImage alt="Selected Person" src={selectedPerson.path_foto} />
+                  <AvatarFallback>{selectedPerson.nombre[0]}</AvatarFallback>
+                </Avatar>
+              </div>
+              <div className="ml-4">
+                <h2 className="mt-4 text-xl font-semibold">{selectedPerson.nombre}</h2>
+                <p>Alias: {selectedPerson.alias}</p>
+                <p>Age: {selectedPerson.edad}</p>
+                <p>Personal Metrics: {selectedPerson.personalMetrics}</p>
+              </div>
+            </CardContent>
+            <CardContent className="w-full mt-6">
+              <div className="justify-between">
+                <div className="flex gap-4">
+                  <Card className="w-full lg:w-1/3 bg-blue-200">
+                    <CardContent>
+                      <h2 className="text-2xl font-bold">Masa F0</h2>
+                      <p className="text-4xl font-bold">{selectedPerson?.masaF0}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="w-full lg:w-1/3 bg-green-200">
+                    <CardContent>
+                      <h2 className="text-2xl font-bold">Sumatoria de 6 Pliegues</h2>
+                      <p className="text-4xl font-bold">{selectedPerson?.sumatoriaPliegues}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="w-full lg:w-1/3 bg-yellow-200">
+                    <CardContent>
+                      <h2 className="text-2xl font-bold">Relación Musculo-Hueso</h2>
+                      <p className="text-4xl font-bold">{selectedPerson?.relacionMusculoHueso}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </CardContent>
+            <CardContent className="w-full mt-6">
+              <h2 className="text-2xl font-bold">Medición del Salto</h2>
+              <div className="flex gap-4">
+                <Card className="w-full lg:w-1/2">
+                  <CardContent>
+                    <h3 className="text-lg font-semibold">Curva: y = x^2</h3>
+                    {/* Add code for the curve graph */}
+                  </CardContent>
+                </Card>
+                <Card className="w-full lg:w-1/2">
+                  <CardContent>
+                    <h3 className="text-lg font-semibold">Gráfica de Barras</h3>
+                    {/* Add code for the bar graph */}
+                  </CardContent>
+                </Card>
+              </div>
             </CardContent>
           </Card>
-        )}
-      </section>
-    </main>
+        )
+        }
+      </section >
+    </main >
   );
 }
