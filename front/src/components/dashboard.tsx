@@ -19,6 +19,9 @@ interface Person {
   nombre: string;
   path_foto: string | undefined;
   categoria: string | undefined;
+  alias: string | undefined;
+  edad: number | undefined;
+  personalMetrics: string | undefined;
 }
 
 export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPersonClick: (person: Person) => void }) {
@@ -73,6 +76,9 @@ export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPer
               <h2 className="mt-4 text-xl font-semibold">
                 {selectedPerson.nombre}
               </h2>
+              <p>Alias: {selectedPerson.alias}</p>
+              <p>Age: {selectedPerson.edad}</p>
+              <p>Personal Metrics: {selectedPerson.personalMetrics}</p>
             </CardContent>
           </Card>
         )}
