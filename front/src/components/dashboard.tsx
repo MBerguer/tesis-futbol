@@ -13,8 +13,15 @@ import {
   PromiseLikeOfReactNode,
 } from "react";
 import React, { useState } from "react";
-import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
-import { BarChart, Bar, Legend } from 'recharts';
+import {
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from "recharts";
+import { BarChart, Bar, Legend } from "recharts";
 
 interface Person {
   id: Key;
@@ -24,22 +31,25 @@ interface Person {
   alias: string | undefined;
   edad: number | undefined;
   personalMetrics: string | undefined;
+  masaF0: string | undefined;
+  sumatoriaPliegues: string | undefined;
+  relacionMusculoHueso: string | undefined;
 }
 
 const data = [
-  { name: 'Page A', uv: 400, pv: 2400, amt: 2400 },
-  { name: 'Page B', uv: 300, pv: 1398, amt: 2210 },
+  { name: "Page A", uv: 400, pv: 2400, amt: 2400 },
+  { name: "Page B", uv: 300, pv: 1398, amt: 2210 },
   // Agrega más datos aquí
 ];
 
 
-const data2 = [
-  { name: 'Page A', uv: 400, pv: 2400, amt: 2400 },
-  { name: 'Page B', uv: 300, pv: 1398, amt: 2210 },
-  // Agrega más datos aquí
-];
-
-export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPersonClick: (person: Person) => void }) {
+export function Dashboard({
+  persons,
+  onPersonClick,
+}: {
+  persons: Person[];
+  onPersonClick: (person: Person) => void;
+}) {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const handlePersonClick = (person: Person) => {
     setSelectedPerson(person);
@@ -62,7 +72,10 @@ export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPer
                       onClick={() => handlePersonClick(person)}
                     >
                       <Avatar className="h-6 w-6">
-                        <AvatarImage alt={person.nombre} src={person.path_foto} />
+                        <AvatarImage
+                          alt={person.nombre}
+                          src={person.path_foto}
+                        />
                         <AvatarFallback>{person.nombre[0]} </AvatarFallback>
                       </Avatar>
                       <span>{person.nombre}</span>
@@ -85,12 +98,17 @@ export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPer
             <CardContent className="flex items-start">
               <div className="w-1/4">
                 <Avatar className="h-96 w-full">
-                  <AvatarImage alt="Selected Person" src={selectedPerson.path_foto} />
+                  <AvatarImage
+                    alt="Selected Person"
+                    src={selectedPerson.path_foto}
+                  />
                   <AvatarFallback>{selectedPerson.nombre[0]}</AvatarFallback>
                 </Avatar>
               </div>
               <div className="ml-4">
-                <h2 className="mt-4 text-xl font-semibold">{selectedPerson.nombre}</h2>
+                <h2 className="mt-4 text-xl font-semibold">
+                  {selectedPerson.nombre}
+                </h2>
                 <p>Alias: {selectedPerson.alias}</p>
                 <p>Age: {selectedPerson.edad}</p>
                 <p>Personal Metrics: {selectedPerson.personalMetrics}</p>
@@ -102,19 +120,29 @@ export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPer
                   <Card className="w-full lg:w-1/3 bg-blue-200">
                     <CardContent>
                       <h2 className="text-2xl font-bold">Masa F0</h2>
-                      <p className="text-4xl font-bold">{selectedPerson?.masaF0}</p>
+                      <p className="text-4xl font-bold">
+                        {selectedPerson?.masaF0}
+                      </p>
                     </CardContent>
                   </Card>
                   <Card className="w-full lg:w-1/3 bg-green-200">
                     <CardContent>
-                      <h2 className="text-2xl font-bold">Sumatoria de 6 Pliegues</h2>
-                      <p className="text-4xl font-bold">{selectedPerson?.sumatoriaPliegues}</p>
+                      <h2 className="text-2xl font-bold">
+                        Sumatoria de 6 Pliegues
+                      </h2>
+                      <p className="text-4xl font-bold">
+                        {selectedPerson?.sumatoriaPliegues}
+                      </p>
                     </CardContent>
                   </Card>
                   <Card className="w-full lg:w-1/3 bg-yellow-200">
                     <CardContent>
-                      <h2 className="text-2xl font-bold">Relación Musculo-Hueso</h2>
-                      <p className="text-4xl font-bold">{selectedPerson?.relacionMusculoHueso}</p>
+                      <h2 className="text-2xl font-bold">
+                        Relación Musculo-Hueso
+                      </h2>
+                      <p className="text-4xl font-bold">
+                        {selectedPerson?.relacionMusculoHueso}
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -125,7 +153,9 @@ export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPer
               <div className="flex gap-4">
                 <Card className="w-full lg:w-1/2">
                   <CardContent>
-                    <h3 className="text-lg font-semibold my-4">Curva: y = x^2</h3>
+                    <h3 className="text-lg font-semibold my-4">
+                      Curva: y = x^2
+                    </h3>
                     <LineChart width={400} height={300} data={data}>
                       <Line type="monotone" dataKey="uv" stroke="#8884d8" />
                       <CartesianGrid stroke="#ccc" />
@@ -137,14 +167,19 @@ export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPer
                 </Card>
                 <Card className="w-full lg:w-1/2">
                   <CardContent>
-                    <h3 className="text-lg font-semibold my-4">Gráfica de Barras</h3>
+                    <h3 className="text-lg font-semibold my-4">
+                      Gráfica de Barras
+                    </h3>
                     <BarChart
                       width={400}
                       height={300}
                       data={data}
                       layout="vertical"
                       margin={{
-                        top: 5, right: 30, left: 20, bottom: 5,
+                        top: 5,
+                        right: 30,
+                        left: 20,
+                        bottom: 5,
                       }}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
@@ -163,73 +198,116 @@ export function Dashboard({ persons, onPersonClick }: { persons: Person[], onPer
               <div className="justify-between">
                 <div className="flex gap-4">
                   <Card className="w-full lg:w-1/5 bg-red-200">
-                    <CardContent className="py-[5px] flex h-full" style={{ flexFlow: 'wrap row' }}>
+                    <CardContent
+                      className="py-[5px] flex h-full"
+                      style={{ flexFlow: "wrap row" }}
+                    >
                       <div>
                         <h2 className="text-xl font-bold">Max. Dist</h2>
                         <p className="text-2xl font-bold">4.0</p>
                       </div>
-                      <a href="#" className="text-blue-600" style={{
-                        display: 'inline-block',
-                        alignSelf: 'flex-end'
-                      }}>2 Nac : Rac 3</a>
+                      <a
+                        href="#"
+                        className="text-blue-600"
+                        style={{
+                          display: "inline-block",
+                          alignSelf: "flex-end",
+                        }}
+                      >
+                        2 Nac : Rac 3
+                      </a>
                     </CardContent>
                   </Card>
                   <Card className="w-full lg:w-1/5 bg-blue-200">
-                    <CardContent className="py-[5px] flex h-full" style={{ flexFlow: 'wrap row' }}>
+                    <CardContent
+                      className="py-[5px] flex h-full"
+                      style={{ flexFlow: "wrap row" }}
+                    >
                       <div>
                         <h2 className="text-xl font-bold">HSR Max</h2>
                         <p className="text-2xl font-bold">1.6</p>
                       </div>
-                      <a href="#" className="text-blue-600" style={{
-                        display: 'inline-block',
-                        alignSelf: 'flex-end'
-                      }}>2 Nac : Rac 3</a>
+                      <a
+                        href="#"
+                        className="text-blue-600"
+                        style={{
+                          display: "inline-block",
+                          alignSelf: "flex-end",
+                        }}
+                      >
+                        2 Nac : Rac 3
+                      </a>
                     </CardContent>
                   </Card>
                   <Card className="w-full lg:w-1/5 bg-green-200">
-                    <CardContent className="py-[5px] flex h-full" style={{ flexFlow: 'wrap row' }}>
+                    <CardContent
+                      className="py-[5px] flex h-full"
+                      style={{ flexFlow: "wrap row" }}
+                    >
                       <div>
                         <h2 className="text-xl font-bold">Velocidad Max.</h2>
                         <p className="text-2xl font-bold">3.7</p>
                       </div>
-                      <a href="#" className="text-blue-600" style={{
-                        display: 'inline-block',
-                        alignSelf: 'flex-end'
-                      }}>2 Nac : Rac 3</a>
+                      <a
+                        href="#"
+                        className="text-blue-600"
+                        style={{
+                          display: "inline-block",
+                          alignSelf: "flex-end",
+                        }}
+                      >
+                        2 Nac : Rac 3
+                      </a>
                     </CardContent>
                   </Card>
                   <Card className="w-full lg:w-1/5 bg-yellow-200">
-                    <CardContent className="py-[5px] flex h-full" style={{ flexFlow: 'wrap row' }}>
+                    <CardContent
+                      className="py-[5px] flex h-full"
+                      style={{ flexFlow: "wrap row" }}
+                    >
                       <div>
                         <h2 className="text-xl font-bold">High Metab. Dist.</h2>
                         <p className="text-2xl font-bold">0.55</p>
                       </div>
-                      <a href="#" className="text-blue-600" style={{
-                        display: 'inline-block',
-                        alignSelf: 'flex-end'
-                      }}>2 Nac : Rac 3</a>
+                      <a
+                        href="#"
+                        className="text-blue-600"
+                        style={{
+                          display: "inline-block",
+                          alignSelf: "flex-end",
+                        }}
+                      >
+                        2 Nac : Rac 3
+                      </a>
                     </CardContent>
                   </Card>
                   <Card className="w-full lg:w-1/5 bg-purple-200">
-                    <CardContent className="py-[5px] flex h-full" style={{ flexFlow: 'wrap row' }}>
+                    <CardContent
+                      className="py-[5px] flex h-full"
+                      style={{ flexFlow: "wrap row" }}
+                    >
                       <div>
                         <h2 className="text-xl font-bold">z6</h2>
-                        <p className="text-2xl font-bold">15"</p>
+                        <p className="text-2xl font-bold">15``</p>
                       </div>
-                      <a href="#" className="text-blue-600" style={{
-                        display: 'inline-block',
-                        alignSelf: 'flex-end'
-                      }}>2 Nac : Rac 3</a>
+                      <a
+                        href="#"
+                        className="text-blue-600"
+                        style={{
+                          display: "inline-block",
+                          alignSelf: "flex-end",
+                        }}
+                      >
+                        2 Nac : Rac 3
+                      </a>
                     </CardContent>
                   </Card>
                 </div>
               </div>
             </CardContent>
-
           </Card>
-        )
-        }
-      </section >
-    </main >
+        )}
+      </section>
+    </main>
   );
 }
