@@ -1,2 +1,6 @@
 *.zip
 formativas/
+
+.DS_Store
+
+new-front/package-lock.json
