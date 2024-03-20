@@ -14,6 +14,7 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  ComposedChart,
 } from "recharts";
 import { BarChart, Bar, Legend } from "recharts";
 
@@ -33,6 +34,15 @@ interface Person {
 const data = [
   { name: "Page A", uv: 400, pv: 2400, amt: 2400 },
   { name: "Page B", uv: 300, pv: 1398, amt: 2210 },
+  // Agrega más datos aquí
+];
+
+const databloque = [
+  { day: "-5", distanciaTotal: 5709, distanciaHML: 801, promedioHSR: 213 },
+  { day: "-4", distanciaTotal: 5008, distanciaHML: 595, promedioHSR: 151 },
+  { day: "-3", distanciaTotal: 4981, distanciaHML: 686, promedioHSR: 159 },
+  { day: "-2", distanciaTotal: 5201, distanciaHML: 552, promedioHSR: 185 },
+  { day: "-1", distanciaTotal: 2751, distanciaHML: 250, promedioHSR: 36 },
   // Agrega más datos aquí
 ];
 
@@ -80,7 +90,8 @@ export default function Page() {
           <Card>
             <CardHeader>
               <CardTitle>
-                {selectedPerson.nombre} / {selectedPerson.categoria}
+                {selectedPerson.nombre} /{" "}
+                <a href="/equipo">{selectedPerson.categoria}</a>
               </CardTitle>
             </CardHeader>
             <CardContent className="flex items-start">
@@ -291,6 +302,58 @@ export default function Page() {
                     </CardContent>
                   </Card>
                 </div>
+              </div>
+            </CardContent>
+
+            <CardContent className="w-full mt-6">
+              <h2 className="text-2xl font-bold">
+                Bloque de Adquisicion del jugador
+              </h2>
+              <div className="flex gap-4">
+                <Card className="w-full">
+                  <CardContent>
+                    <h3 className="text-lg font-semibold my-4">
+                      Recuperacion (-5), Tension (-4), Duracion (-3), Velocidad
+                      (-2), Bajo HSR (-1)
+                    </h3>
+                    <ComposedChart width={1000} height={500} data={databloque}>
+                      {/* { day: "-5", distanciaTotal: 5709, distanciaHML: 801 }, */}
+                      <XAxis dataKey="day" />
+                      <YAxis
+                        yAxisId={1}
+                        orientation="right"
+                        label={{ value: "Distancia Total", angle: -90 }}
+                      />
+                      <Tooltip />
+                      <Legend />
+                      <CartesianGrid stroke="#f5f5f5" />
+                      <Bar
+                        yAxisId={1}
+                        dataKey="distanciaTotal"
+                        barSize={40}
+                        fill="#413ea0"
+                      />
+                      <Bar
+                        yAxisId={1}
+                        dataKey="distanciaHML"
+                        barSize={40}
+                        fill="#049be5"
+                      />
+                      <YAxis
+                        yAxisId={2}
+                        label={{ value: "Promedio HSR", angle: -90 }}
+                        padding={{ top: 200, bottom: 20 }}
+                      />
+                      <Line
+                        yAxisId={2}
+                        type="monotone"
+                        dataKey="promedioHSR"
+                        stroke="#000"
+                        dot={true}
+                      />
+                    </ComposedChart>
+                  </CardContent>
+                </Card>
               </div>
             </CardContent>
           </Card>
