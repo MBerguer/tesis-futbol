@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import personsData from "./data/fotos_path.json"; // Import local JSON file
+import personsData from "./data/merged_data.json"; // Import local JSON file
 
 import { CardTitle, CardHeader, CardContent, Card } from "./components/ui/card";
 import { AvatarImage, AvatarFallback, Avatar } from "./components/ui/avatar";
@@ -29,6 +29,19 @@ interface Person {
   masaF0: string | undefined;
   sumatoriaPliegues: string | undefined;
   relacionMusculoHueso: string | undefined;
+  Jugador: string | undefined;
+  Fecha_Nacimiento: string | undefined;
+  Documento_de_Identidad: number | undefined | null;
+  Pasaporte: string | undefined;
+  Telefono: string | undefined;
+  Celular: string | undefined;
+  Email: string | undefined;
+  Cobertura_Medica: string | undefined;
+  Estudios: string | undefined;
+  Oriundo: string | undefined;
+  Club_de_Origen: string | undefined;
+  Club_de_Origen_Porcentaje: string | undefined;
+  Posicion: string | undefined;
 }
 
 const data = [
@@ -45,6 +58,20 @@ const databloque = [
   { day: "-1", distanciaTotal: 2751, distanciaHML: 250, promedioHSR: 36 },
   // Agrega más datos aquí
 ];
+
+// calc age
+function calcAge(birthDate: string) {
+  const today = new Date();
+  const birth = new Date(
+    birthDate.replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$2/$1/$3")
+  );
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+}
 
 export default function Page() {
   const [persons, setPersons] = useState<Person[]>(personsData);
@@ -76,7 +103,7 @@ export default function Page() {
                         />
                         <AvatarFallback>{person.nombre[0]} </AvatarFallback>
                       </Avatar>
-                      <span>{person.nombre}</span>
+                      <span>{person.Jugador} ({person.categoria})</span>
                     </Button>
                   </li>
                 ))}
@@ -106,11 +133,33 @@ export default function Page() {
               </div>
               <div className="ml-4">
                 <h2 className="mt-4 text-xl font-semibold">
-                  {selectedPerson.nombre}
+                  {selectedPerson.Jugador}
                 </h2>
-                <p>Alias: {selectedPerson.alias}</p>
-                <p>Age: {selectedPerson.edad}</p>
-                <p>Personal Metrics: {selectedPerson.personalMetrics}</p>
+                <p>Alias: {selectedPerson.nombre}</p>
+                <p>
+                  Edad:{" "}
+                  {selectedPerson.Fecha_Nacimiento &&
+                    calcAge(selectedPerson.Fecha_Nacimiento)}
+                </p>
+                <p>Medidas personales: {selectedPerson.personalMetrics}</p>
+                <p>Fecha_Nacimiento: {selectedPerson.Fecha_Nacimiento}</p>
+                <p>
+                  Documento_de_Identidad:{" "}
+                  {selectedPerson.Documento_de_Identidad}
+                </p>
+                <p>Pasaporte: {selectedPerson.Pasaporte}</p>
+                <p>Telefono: {selectedPerson.Telefono}</p>
+                <p>Celular: {selectedPerson.Celular}</p>
+                <p>Email: {selectedPerson.Email}</p>
+                <p>Cobertura_Medica: {selectedPerson.Cobertura_Medica}</p>
+                <p>Estudios: {selectedPerson.Estudios}</p>
+                <p>Oriundo: {selectedPerson.Oriundo}</p>
+                <p>Club_de_Origen: {selectedPerson.Club_de_Origen}</p>
+                <p>
+                  Club_de_Origen_Porcentaje:{" "}
+                  {selectedPerson.Club_de_Origen_Porcentaje}
+                </p>
+                <p>Posicion: {selectedPerson.Posicion}</p>
               </div>
             </CardContent>
             <CardContent className="w-full mt-6">

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import personsData from "./data/fotos_path.json"; // Import local JSON file
+import personsData from "./data/merged_data.json"; // Import local JSON file
 
 import { CardTitle, CardHeader, CardContent, Card } from "./components/ui/card";
 import { AvatarImage, AvatarFallback, Avatar } from "./components/ui/avatar";
@@ -28,6 +28,19 @@ interface Person {
   masaF0: string | undefined;
   sumatoriaPliegues: string | undefined;
   relacionMusculoHueso: string | undefined;
+  Jugador: string | undefined;
+  Fecha_Nacimiento: string | undefined;
+  Documento_de_Identidad: number | undefined | null;
+  Pasaporte: string | undefined;
+  Telefono: string | undefined;
+  Celular: string | undefined;
+  Email: string | undefined;
+  Cobertura_Medica: string | undefined;
+  Estudios: string | undefined;
+  Oriundo: string | undefined;
+  Club_de_Origen: string | undefined;
+  Club_de_Origen_Porcentaje: string | undefined;
+  Posicion: string | undefined;
 }
 
 const databloque = [
