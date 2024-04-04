@@ -3,7 +3,7 @@
 import { Dashboard } from "@/components/dashboard";
 import Image from "next/image";
 import React, { useState, useEffect } from "react";
-import personsData from "../data/fotos_path.json"; // Import local JSON file
+import personsData from "../data/merged_data.json"; // Import local JSON file
 
 export default function Home() {
   const [persons, setPersons] = useState(personsData);
