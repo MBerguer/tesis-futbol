@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import VideoComponent from "./videoComponent";
 
 export default function Page() {
   const [selectedPlayer, setSelectedPlayer] = useState("");
@@ -54,16 +55,18 @@ export default function Page() {
   // This will return the entire overview of a match
   return (
     <div className="bg-gray-100 p-4">
-      <button
-        onClick={() => (window.location.href = "/dashboard")}
-        className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-      >
-        Volver al Dashboard
-      </button>
+      <div className="flex justify-end">
+        <button
+          onClick={() => (window.location.href = "/dashboard")}
+          className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Volver al Dashboard
+        </button>
+      </div>
       <h1 className="text-2xl font-bold mb-4">Detalles del Partido</h1>
-      <div className="flex">
-        <div className="w-1/2">
-          <div className="bg-white p-4 rounded shadow">
+      <div className="flex gap-4">
+        <div className="w-1/3">
+          <div className="bg-white p-4 rounded shadow mb-4">
             <p className="text-lg font-semibold mb-2">
               {matchMetadata.teamA} vs {matchMetadata.teamB}
             </p>
@@ -72,8 +75,7 @@ export default function Page() {
             <p>Árbitro: {matchMetadata.referee}</p>
             <p>Asistencia: {matchMetadata.attendance}</p>
           </div>
-        </div>
-        <div className="w-1/2">
+
           <div className="bg-white p-4 rounded shadow">
             <p className="text-lg font-semibold mb-2">
               Resultado: {matchMetadata.teamA} {matchMetadata.result.teamAScore}{" "}
@@ -105,8 +107,15 @@ export default function Page() {
             </ul>
           </div>
         </div>
+
+        <div className="w-2/3">
+          <div className="mt-4">
+            <h2 className="text-xl font-bold mb-2">Video del Partido</h2>
+            <VideoComponent />
+          </div>
+        </div>
       </div>
-      <div className="mt-4">
+      <div className="w-full">
         <h2 className="text-xl font-bold mb-2">Métricas del Jugador</h2>
         <select
           value={selectedPlayer}
@@ -127,15 +136,6 @@ export default function Page() {
           </div>
         )}
       </div>
-      <div className="mt-4">
-        <h2 className="text-xl font-bold mb-2">Video del Partido</h2>
-        <video
-          src="https://s3.amazonaws.com/azvideotagtesting/21012876/videos/139069/Nacional%205-1%20Juventud%20Clausura%202023.mp4"
-          controls
-          className="w-full"
-        />
-      </div>
-      video time: <input type="text" id="videoTime" value="0" />
     </div>
   );
 }
