@@ -103,7 +103,9 @@ export default function Page() {
                         />
                         <AvatarFallback>{person.nombre[0]} </AvatarFallback>
                       </Avatar>
-                      <span>{person.Jugador} ({person.categoria})</span>
+                      <span>
+                        {person.Jugador} ({person.categoria})
+                      </span>
                     </Button>
                   </li>
                 ))}
@@ -117,7 +119,7 @@ export default function Page() {
           <Card>
             <CardHeader>
               <CardTitle>
-                {selectedPerson.nombre} /{" "}
+                {selectedPerson.nombre} /
                 <a href="/equipo">{selectedPerson.categoria}</a>
               </CardTitle>
             </CardHeader>
@@ -252,7 +254,7 @@ export default function Page() {
                     >
                       <div>
                         <h2 className="text-xl font-bold">Max. Dist</h2>
-                        <p className="text-2xl font-bold">4.0</p>
+                        <p className="text-2xl font-bold">4013m</p>
                       </div>
                       <a
                         href="/match"
@@ -273,7 +275,7 @@ export default function Page() {
                     >
                       <div>
                         <h2 className="text-xl font-bold">HSR Max</h2>
-                        <p className="text-2xl font-bold">1.6</p>
+                        <p className="text-2xl font-bold">1653m</p>
                       </div>
                       <a
                         href="#"
@@ -294,7 +296,7 @@ export default function Page() {
                     >
                       <div>
                         <h2 className="text-xl font-bold">Velocidad Max.</h2>
-                        <p className="text-2xl font-bold">3.7</p>
+                        <p className="text-2xl font-bold">27 km/h</p>
                       </div>
                       <a
                         href="#"
@@ -315,7 +317,7 @@ export default function Page() {
                     >
                       <div>
                         <h2 className="text-xl font-bold">High Metab. Dist.</h2>
-                        <p className="text-2xl font-bold">0.55</p>
+                        <p className="text-2xl font-bold">550 m</p>
                       </div>
                       <a
                         href="#"
@@ -336,7 +338,7 @@ export default function Page() {
                     >
                       <div>
                         <h2 className="text-xl font-bold">z6</h2>
-                        <p className="text-2xl font-bold">15``</p>
+                        <p className="text-2xl font-bold">15" (229m)</p>
                       </div>
                       <a
                         href="#"
