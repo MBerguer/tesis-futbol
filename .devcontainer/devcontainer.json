@@ -1,0 +1,33 @@
+{
+    "name": "Rust with PostgreSQL",
+    "dockerComposeFile": "./docker-compose.container.yaml",
+    "service": "rust-futbol",
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "rust.analyzer.extraArgs": [
+                    "--cfg",
+                    "sqlx_11"
+                ],
+                "terminal.integrated.shell.linux": "/bin/bash"
+            },
+            "extensions": [
+                "vsc-remote.remote-containers",
+                "ahgood.shift-shift",
+                "streetsidesoftware.code-spell-checker",
+                "eamodio.gitlens",
+                "rust-lang.rust-analyzer",
+                "serayuzgur.crates",
+                "njpwerner.autodocstring",
+                "tamasfe.even-better-toml",
+                "ms-azuretools.vscode-docker"
+            ]
+        }
+    },
+    "postCreateCommand": "cd rust; cargo run",
+    "forwardPorts": [
+        8000,
+        5432
+    ]
+}

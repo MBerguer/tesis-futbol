@@ -4,3 +4,5 @@ formativas/
 .DS_Store
 
 new-front/package-lock.json
+
+rust/target/
