@@ -6,11 +6,7 @@
     "customizations": {
         "vscode": {
             "settings": {
-                "rust.analyzer.extraArgs": [
-                    "--cfg",
-                    "sqlx_11"
-                ],
-                "terminal.integrated.shell.linux": "/bin/bash"
+                "extensions.verifySignature": false
             },
             "extensions": [
                 "vsc-remote.remote-containers",
