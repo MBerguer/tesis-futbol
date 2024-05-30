@@ -1,20 +1,18 @@
 # Dockerfile
 FROM rust:latest
 
-# Install PostgreSQL client
-RUN apt-get update && apt-get install -y postgresql-client
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+  && apt-get -y install clang curl exa bat ripgrep fd-find \
+  && apt-get autoremove -y \
+  && apt-get clean -y
 
-# Set working directory
-WORKDIR /usr/src/app
 
-# Copy project files
-COPY . .
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
-# Expose port
-EXPOSE 8000
+# sqlx support for running the migrations 
+# https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md
+RUN cargo install sqlx-cli --no-default-features --features native-tls,postgres
+RUN cargo binstall -y cargo-watch cargo-audit cargo-tarpaulin cargo-update
 
-# Run cargo build to install dependencies
-RUN cargo build
-
-# Command to start the application
-CMD ["cargo", "run"]
+# So we go directly to the back-rs folder when we open the terminal
+RUN echo "cd /workspaces/tesis-futbol/rust" >> /root/.bashrc
