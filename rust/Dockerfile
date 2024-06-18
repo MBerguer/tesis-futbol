@@ -2,10 +2,11 @@
 FROM rust:latest
 
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-  && apt-get -y install clang curl exa bat ripgrep fd-find \
+  && apt-get -y install clang curl exa bat ripgrep fd-find rustfmt \
   && apt-get autoremove -y \
   && apt-get clean -y
 
+RUN rustup component add rustfmt
 
 RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
