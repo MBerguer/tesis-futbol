@@ -31,41 +31,6 @@ pub async fn get_player_stats_match(params: RawPathParams) -> Json<Value> {
 }
 
 pub async fn get_all_players() -> Json<Value> {
-    Json(json!({
-        "players": [
-            {
-                "player_id": "1234",
-                "name": "Luis Suárez",
-                "team": "Atlético Madrid",
-                "position": "forward",
-                "status": "active"
-            },
-            {
-                "player_id": "1235",
-                "name": "Edinson Cavani",
-                "team": "Manchester United",
-                "position": "forward",
-                "status": "active"
-            },
-            {
-                "player_id": "1236",
-                "name": "Diego Godín",
-                "team": "Cagliari",
-                "position": "defender",
-                "status": "active"
-            },
-            {
-                "player_id": "1237",
-                "name": "Federico Valverde",
-                "team": "Real Madrid",
-                "position": "midfielder",
-                "status": "active"
-            }
-        ]
-    }))
-}
-
-pub async fn get_all_sqlx() -> Json<Value> {
     //instanciate a dbconfig from the impl DbConfig
 
     let dbconfig = DbConfig::new();
@@ -83,13 +48,13 @@ pub async fn get_all_sqlx() -> Json<Value> {
         .await
         .unwrap();
 
-    let mut seriized_players = Vec::new();
+    let mut serialized_players = Vec::new();
 
     // the attribute of a player are:
     // Jugador, Fecha_Nacimiento, `Documento_de_Identidad`, `Pasaporte`, `Telefono`, `Celular`, `Email`, `Cobertura_Medica`, `Estudios`, `Oriundo`, `Club_de_Origen`, `Club_de_Origen_Porcentaje, `Posicion`
 
     players.iter().for_each(|player| {
-        seriized_players.push(json!({
+        serialized_players.push(json!({
             "Jugador": player.Jugador,
             "Fecha_Nacimiento": player.Fecha_Nacimiento,
             "Documento_de_Identidad": player.Documento_de_Identidad,
@@ -107,6 +72,43 @@ pub async fn get_all_sqlx() -> Json<Value> {
     });
 
     Json(json!({
-        "players": seriized_players
+        "players": serialized_players
+    }))
+}
+
+pub async fn get_all_players_photos() -> Json<Value> {
+    //instanciate a dbconfig from the impl DbConfig
+
+    let dbconfig = DbConfig::new();
+    //format a url to connect to the database with the dbconfig
+
+    // connect to pg
+    let pool = sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string())
+        .await
+        .unwrap();
+
+    // fetch all players in the database, particularly the table administrativo
+
+    let fotos = sqlx::query!("SELECT * FROM fotos_path")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+    let mut serialized_fotos = Vec::new();
+
+    // the attribute of a fotos_path are:
+    // id, categoria, nombre, path_foto
+
+    fotos.iter().for_each(|foto| {
+        serialized_fotos.push(json!({
+            "id": foto.id,
+            "categoria": foto.categoria,
+            "nombre": foto.nombre,
+            "path": foto.path_foto
+        }))
+    });
+
+    Json(json!({
+        "fotos": serialized_fotos
     }))
 }
