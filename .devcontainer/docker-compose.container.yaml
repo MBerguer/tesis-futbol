@@ -28,5 +28,16 @@ services:
     volumes:
       - db-futbol:/var/lib/postgresql/data
 
+  jupyter:
+    image: jupyter/base-notebook
+    environment:
+      - JUPYTER_SERVER_DATA_RATE_LIMIT=1000000000
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_PASSWORD_FILE=/srv/jupyter/jupyter_notebook_config.json
+    volumes:
+      - .././notebooks:/home/jovyan/work
+      - .././hashed_password.txt:/srv/jupyter/jupyter_notebook_config.json
+    network_mode: service:db-futbol
+
 volumes:
   db-futbol:
