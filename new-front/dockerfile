@@ -1,0 +1,34 @@
+# # dockerfile for new-front, the idea is to make the nextjs app available in a container
+# # and to be able to run it in a container
+
+# # Step 1: Build the app
+# FROM node:14.17.0-alpine as build
+
+# WORKDIR /app
+
+# COPY package.json ./
+# COPY yarn.lock ./
+
+# RUN yarn install
+
+# COPY . .
+
+# RUN yarn build
+
+# # Step 2: Serve the app
+# FROM node:14.17.0-alpine
+
+# WORKDIR /app
+
+# COPY --from=build /app/package.json ./
+# COPY --from=build /app/yarn.lock ./
+# COPY --from=build /app/.next ./.next
+# COPY --from=build /app/public ./public
+
+# RUN yarn install --production
+
+# EXPOSE 3000
+
+# CMD ["yarn", "start"]
+
+
