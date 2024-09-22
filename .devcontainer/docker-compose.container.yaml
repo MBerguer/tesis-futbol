@@ -1,4 +1,7 @@
 services:
+
+  # Rust service for hosting the rust backend application,
+  # this service is dependent on the db-futbol service
   rust-futbol:
     build:
       context: ../rust/
@@ -17,6 +20,8 @@ services:
     depends_on:
       - db-futbol
 
+  # PostgreSQL service for the rust backend application,
+  # it has a volume to persist the data
   db-futbol:
     image: postgres:14
     restart: unless-stopped
@@ -28,16 +33,42 @@ services:
     volumes:
       - db-futbol:/var/lib/postgresql/data
 
+  # Jupyter service for hosting the jupyter notebook,
+  # this service is dependent on the db-futbol service
   jupyter:
     image: jupyter/base-notebook
     environment:
       - JUPYTER_SERVER_DATA_RATE_LIMIT=1000000000
       - JUPYTER_ENABLE_LAB=yes
       - JUPYTER_PASSWORD_FILE=/srv/jupyter/jupyter_notebook_config.json
+      - PASSWORD=password
     volumes:
       - .././notebooks:/home/jovyan/work
       - .././hashed_password.txt:/srv/jupyter/jupyter_notebook_config.json
     network_mode: service:db-futbol
 
+  # Next service for hosting the next frontend application,
+  # this service is dependent on the db-futbol service, and the rust-futbol service
+  # next-futbol:
+  #   build:
+  #     context: ../new-front/
+  #     dockerfile: Dockerfile
+  #   env_file:
+  #     # Ensure that the variables in .env match the same variables in devcontainer.json
+  #     - ../next/.container.env
+  #   # Overrides default command so things don't shut down after the process ends.
+  #   command: sleep infinity
+  #   # Runs app on the same network as the database container, allows "forwardPorts" in devcontainer.json function.
+  #   network_mode: service:db-futbol
+  #   # Use "forwardPorts" in **devcontainer.json** to forward an app port locally. 
+  #   # (Adding the "ports" property to this file will not forward from a Codespace.)
+  #   volumes:
+  #     - ../..:/workspaces:cached
+  #   depends_on:
+  #     - db-futbol
+  #     - rust-futbol
+
+
+# Volumes for persisting the data of the database
 volumes:
   db-futbol:
