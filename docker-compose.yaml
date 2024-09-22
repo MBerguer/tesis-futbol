@@ -9,5 +9,5 @@ services:
       - JUPYTER_ENABLE_LAB=yes
       - JUPYTER_PASSWORD_FILE=/srv/jupyter/jupyter_notebook_config.json
     volumes:
-      - ./notebooks:/home/jovyan/work
-      - ./hashed_password.txt:/srv/jupyter/jupyter_notebook_config.json
+      - .././notebooks:/home/jovyan/work
+      - .././hashed_password.txt:/srv/jupyter/jupyter_notebook_config.json

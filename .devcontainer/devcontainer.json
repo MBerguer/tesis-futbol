@@ -24,6 +24,7 @@
     "postCreateCommand": "cd rust; cargo run",
     "forwardPorts": [
         8000,
-        5432
+        5432,
+        8888
     ]
 }
