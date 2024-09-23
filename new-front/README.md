@@ -2,6 +2,8 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next
 
 ## Getting Started
 
+0. Copy the formativas folder from drive
+
 First, run the development server:
 
 ```bash
