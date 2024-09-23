@@ -17,6 +17,7 @@ services:
     # (Adding the "ports" property to this file will not forward from a Codespace.)
     volumes:
       - ../..:/workspaces:cached
+      - .././new-front/public/formativas:/workspaces/new-front/public/formativas
     depends_on:
       - db-futbol
 
@@ -46,7 +47,6 @@ services:
       - .././notebooks:/home/jovyan/work
       - .././hashed_password.txt:/srv/jupyter/jupyter_notebook_config.json
     network_mode: service:db-futbol
-
   # Next service for hosting the next frontend application,
   # this service is dependent on the db-futbol service, and the rust-futbol service
   # next-futbol:
@@ -69,6 +69,6 @@ services:
   #     - rust-futbol
 
 
-# Volumes for persisting the data of the database
+  # Volumes for persisting the data of the database
 volumes:
   db-futbol:

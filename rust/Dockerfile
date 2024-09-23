@@ -19,7 +19,7 @@ RUN cargo install sqlx-cli --no-default-features --features native-tls,postgres
 RUN echo "cd /workspaces/tesis-futbol/rust" >> /root/.bashrc
 
 
-ENV NODE_VERSION=16.13.0
+ENV NODE_VERSION=18.17.0
 RUN apt install -y curl
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 ENV NVM_DIR=/root/.nvm
@@ -56,3 +56,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 
 # Enable pnpm
 RUN corepack enable pnpm
+
+# installing nextjs
+RUN npm install -g next
+
