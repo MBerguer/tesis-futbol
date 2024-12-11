@@ -58,5 +58,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 RUN corepack enable pnpm
 
 # installing nextjs
-RUN npm install -g next
+# RUN npm install -g next
+
+
+RUN npx create-next-app@latest
 
