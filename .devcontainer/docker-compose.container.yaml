@@ -47,6 +47,8 @@ services:
       - .././notebooks:/home/jovyan/work
       - .././hashed_password.txt:/srv/jupyter/jupyter_notebook_config.json
     network_mode: service:db-futbol
+    ports:
+      - 8888:8888
   # Next service for hosting the next frontend application,
   # this service is dependent on the db-futbol service, and the rust-futbol service
   # next-futbol:
