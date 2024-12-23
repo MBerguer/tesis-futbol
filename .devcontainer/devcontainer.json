@@ -29,5 +29,6 @@
         8000,
         5432,
         8888
+        // Error response from daemon: conflicting options: port publishing and the container type network mode 
     ]
 }
