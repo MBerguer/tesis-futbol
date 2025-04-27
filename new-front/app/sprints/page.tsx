@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../dashboard/components/ui/card";
+import { Button } from "../dashboard/components/ui/button";
 
 interface MatchTable {
   tables: string[];
@@ -11,11 +12,24 @@ interface MatchPlayers {
   players: string[];
 }
 
+interface MatchEntry {
+  player_display_name: string;
+  time: string;
+  speed: number;
+  centralized_elapsed_time: number;
+}
+
+interface MatchEntries {
+  entries: MatchEntry[];
+}
+
 export default function SprintsPage() {
   const [matchTables, setMatchTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [players, setPlayers] = useState<string[]>([]);
+  const [entries, setEntries] = useState<MatchEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingEntries, setLoadingEntries] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,6 +68,25 @@ export default function SprintsPage() {
     }
   };
 
+  const handleShowEntries = async () => {
+    if (!selectedTable) return;
+    
+    setLoadingEntries(true);
+    try {
+      const response = await fetch(`http://localhost:8000/match/table/${selectedTable}/entries`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch entries");
+      }
+      const data: MatchEntries = await response.json();
+      setEntries(data.entries || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setEntries([]);
+    } finally {
+      setLoadingEntries(false);
+    }
+  };
+
   if (loading && !selectedTable) {
     return <div>Loading...</div>;
   }
@@ -86,26 +119,73 @@ export default function SprintsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {selectedTable ? `Players in ${selectedTable}` : 'Select a match to view players'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div>Loading players...</div>
-            ) : (
-              <ul className="space-y-2">
-                {players.map((player, index) => (
-                  <li key={index} className="p-2 border rounded">
-                    {player}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {selectedTable ? `Players in ${selectedTable}` : 'Select a match to view players'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div>Loading players...</div>
+              ) : (
+                <ul className="space-y-2">
+                  {players.map((player, index) => (
+                    <li key={index} className="p-2 border rounded">
+                      {player}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {selectedTable && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Match Entries</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  onClick={handleShowEntries}
+                  className="mb-4"
+                >
+                  Show Player First Appearances
+                </Button>
+                {loadingEntries ? (
+                  <div>Loading entries...</div>
+                ) : entries && entries.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead>
+                        <tr>
+                          <th className="px-4 py-2">Player</th>
+                          <th className="px-4 py-2">Time</th>
+                          <th className="px-4 py-2">Speed</th>
+                          <th className="px-4 py-2">Centralized Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {entries.map((entry, index) => (
+                          console.log(entry),
+                          <tr key={index} className="border-t">
+                            <td className="px-4 py-2">{entry.player_display_name}</td>
+                            <td className="px-4 py-2">{entry.time}</td>
+                            <td className="px-4 py-2">{entry.speed.toFixed(2)}</td>
+                            <td className="px-4 py-2">{entry.centralized_elapsed_time.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div>No entries to show</div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </main>
   );

@@ -16,5 +16,9 @@ pub fn matches_routes(pool: PgPool) -> Router {
             "/table/:table_name/players",
             get(matches::get_match_players),
         )
+        .route(
+            "/table/:table_name/entries",
+            get(matches::get_match_entries_with_centralized_time),
+        )
         .with_state(pool)
 }
