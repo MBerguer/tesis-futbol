@@ -5,6 +5,7 @@ use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use sqlx::Row;
+use std::collections::HashMap;
 
 pub async fn get_match_details() -> Json<Value> {
     Json(json!({
@@ -236,7 +237,6 @@ pub async fn get_match_entries_with_centralized_time(
         FROM "{}" t
         JOIN first_timestamps ft ON t.player_display_name = ft.player_display_name
         ORDER BY t.time
-        LIMIT 10
         "#,
         table_name,
         earliest_timestamp.format("%H:%M:%S.%f").to_string(),
@@ -293,9 +293,45 @@ pub async fn get_match_entries_with_centralized_time(
         })
         .collect();
 
-    println!("entries_json: {:?}", entries_json);
+    println!("entries_json length: {}", entries_json.len());
+
+    // Agrupar por jugador
+    let mut player_entries: HashMap<String, Vec<Value>> = HashMap::new();
+    for entry in entries_json {
+        if let (Some(player), Some(time)) = (
+            entry["player_display_name"].as_str(),
+            entry["centralized_elapsed_time"].as_f64(),
+        ) {
+            player_entries
+                .entry(player.to_string())
+                .or_default()
+                .push(entry);
+        }
+    }
+
+    // Filtrar cada jugador por intervalos de 10 segundos
+    let mut filtered_entries = Vec::new();
+    for (_player, mut entries) in player_entries {
+        // Ordenar por tiempo
+        entries.sort_by(|a, b| {
+            a["centralized_elapsed_time"]
+                .as_f64()
+                .partial_cmp(&b["centralized_elapsed_time"].as_f64())
+                .unwrap()
+        });
+        let mut last_time = None;
+        for entry in entries {
+            let time = entry["centralized_elapsed_time"].as_f64().unwrap();
+            if last_time.is_none() || (time - last_time.unwrap()) >= 10.0 {
+                filtered_entries.push(entry.clone());
+                last_time = Some(time);
+            }
+        }
+    }
+
+    println!("filtered_entries length: {}", filtered_entries.len());
 
     Json(json!({
-        "entries": entries_json
+        "entries": filtered_entries
     }))
 }

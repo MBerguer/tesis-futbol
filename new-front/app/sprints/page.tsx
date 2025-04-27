@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../dashboard/components/ui/card";
 import { Button } from "../dashboard/components/ui/button";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface MatchTable {
   tables: string[];
@@ -31,6 +32,7 @@ export default function SprintsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTable, setShowTable] = useState(false);
 
   useEffect(() => {
     const fetchMatchTables = async () => {
@@ -87,6 +89,39 @@ export default function SprintsPage() {
     }
   };
 
+  // Group entries by player for the chart
+  const playerData = React.useMemo(() => {
+    const dataByPlayer: { [key: string]: MatchEntry[] } = {};
+    entries.forEach(entry => {
+      if (!dataByPlayer[entry.player_display_name]) {
+        dataByPlayer[entry.player_display_name] = [];
+      }
+      dataByPlayer[entry.player_display_name].push(entry);
+    });
+    // Ordenar por tiempo para cada jugador
+    Object.keys(dataByPlayer).forEach(player => {
+      dataByPlayer[player].sort((a, b) => a.centralized_elapsed_time - b.centralized_elapsed_time);
+    });
+    return dataByPlayer;
+  }, [entries]);
+
+  // Construir una lista de todos los tiempos únicos
+  const allTimes = React.useMemo(() => {
+    return Array.from(new Set(entries.map(e => e.centralized_elapsed_time))).sort((a, b) => a - b);
+  }, [entries]);
+
+  // Construir la tabla cruzada (pivot) para el gráfico
+  const chartData = React.useMemo(() => {
+    return allTimes.map(time => {
+      const row: any = { centralized_elapsed_time: time };
+      Object.keys(playerData).forEach(player => {
+        const found = playerData[player].find(e => e.centralized_elapsed_time === time);
+        row[player] = found ? found.speed : null;
+      });
+      return row;
+    });
+  }, [allTimes, playerData]);
+
   if (loading && !selectedTable) {
     return <div>Loading...</div>;
   }
@@ -141,6 +176,47 @@ export default function SprintsPage() {
             </CardContent>
           </Card>
 
+          {selectedTable && entries.length > 0 && (
+            <Card className="col-span-2">
+              <CardHeader>
+                <CardTitle>Player Speeds Over Time</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[500px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={chartData}
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="centralized_elapsed_time" 
+                        label={{ value: 'Elapsed_time (seconds)', position: 'insideBottom', offset: -5 }}
+                      />
+                      <YAxis 
+                        label={{ value: 'Speed (m/s)', angle: -90, position: 'insideLeft' }}
+                      />
+                      <Tooltip />
+                      <Legend />
+                      {Object.keys(playerData).map((player, index) => (
+                        <Line
+                          key={player}
+                          type="monotone"
+                          dataKey={player}
+                          name={player}
+                          stroke={`hsl(${index * 137.5}, 70%, 50%)`}
+                          dot={false}
+                          isAnimationActive={false}
+                          connectNulls={true}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {selectedTable && (
             <Card>
               <CardHeader>
@@ -151,33 +227,42 @@ export default function SprintsPage() {
                   onClick={handleShowEntries}
                   className="mb-4"
                 >
-                  Show Player First Appearances
+                  Load Player First Appearances
                 </Button>
                 {loadingEntries ? (
                   <div>Loading entries...</div>
                 ) : entries && entries.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead>
-                        <tr>
-                          <th className="px-4 py-2">Player</th>
-                          <th className="px-4 py-2">Time</th>
-                          <th className="px-4 py-2">Speed</th>
-                          <th className="px-4 py-2">Centralized Time</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {entries.map((entry, index) => (
-                          console.log(entry),
-                          <tr key={index} className="border-t">
-                            <td className="px-4 py-2">{entry.player_display_name}</td>
-                            <td className="px-4 py-2">{entry.time}</td>
-                            <td className="px-4 py-2">{entry.speed.toFixed(2)}</td>
-                            <td className="px-4 py-2">{entry.centralized_elapsed_time.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div>
+                    <Button
+                      onClick={() => setShowTable(!showTable)}
+                      className="mb-4"
+                    >
+                      {showTable ? 'Hide Table Details' : 'Show Table Details'}
+                    </Button>
+                    {showTable && (
+                      <div className="overflow-x-auto max-h-[400px]">
+                        <table className="min-w-full">
+                          <thead className="sticky top-0 bg-white">
+                            <tr>
+                              <th className="px-4 py-2">Player</th>
+                              <th className="px-4 py-2">Time</th>
+                              <th className="px-4 py-2">Speed</th>
+                              <th className="px-4 py-2">Centralized Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {entries.map((entry, index) => (
+                              <tr key={index} className="border-t">
+                                <td className="px-4 py-2">{entry.player_display_name}</td>
+                                <td className="px-4 py-2">{entry.time}</td>
+                                <td className="px-4 py-2">{entry.speed.toFixed(2)}</td>
+                                <td className="px-4 py-2">{entry.centralized_elapsed_time.toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div>No entries to show</div>
@@ -185,6 +270,8 @@ export default function SprintsPage() {
               </CardContent>
             </Card>
           )}
+
+          
         </div>
       </div>
     </main>
