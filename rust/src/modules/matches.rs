@@ -342,17 +342,44 @@ pub async fn detect_and_store_match_periods(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
 ) -> Json<Value> {
+    println!("Processing table: {}", table_name);
+
+    // Verificar la estructura de la tabla match_periods
+    let table_structure = sqlx::query(
+        r#"
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'match_periods'
+        "#,
+    )
+    .fetch_all(&pool)
+    .await;
+
+    if let Ok(columns) = table_structure {
+        println!("\nTable structure:");
+        for row in columns {
+            let column_name: String = row.get("column_name");
+            let data_type: String = row.get("data_type");
+            println!("{}: {}", column_name, data_type);
+        }
+        println!("");
+    }
+
     // 1. Leer todos los datos de la tabla del partido
     let query = format!("SELECT * FROM \"{}\" ORDER BY time", table_name);
     let rows = match sqlx::query(&query).fetch_all(&pool).await {
         Ok(r) => r,
         Err(e) => {
+            println!("Error fetching match data: {}", e);
             return Json(json!({"error": format!("Error fetching match data: {}", e)}));
         }
     };
     if rows.is_empty() {
+        println!("No data found in match table");
         return Json(json!({"error": "No data found in match table"}));
     }
+
+    println!("Found {} rows in match table", rows.len());
 
     // 2. Convertir a estructura de datos dinámica
     let mut data = Vec::new();
@@ -492,7 +519,10 @@ pub async fn detect_and_store_match_periods(
     // Fin del segundo tiempo: 45 minutos después del inicio del segundo tiempo o cuando la velocidad baja sostenidamente
     let mut second_half_end = second_half_start + duracion_segundo_tiempo;
     acc = 0;
-    for (sec, speed) in second_avg_speed.iter().filter(|(s, _)| *s > second_half_start) {
+    for (sec, speed) in second_avg_speed
+        .iter()
+        .filter(|(s, _)| *s > second_half_start)
+    {
         if *speed <= velocidad_partido {
             acc += 1;
         } else {
@@ -503,6 +533,15 @@ pub async fn detect_and_store_match_periods(
             break;
         }
     }
+
+    // Antes de guardar en la base de datos, imprimir los valores
+    println!("Detected periods:");
+    println!("First half start: {}", first_half_start);
+    println!("First half end: {}", first_half_end);
+    println!("Second half start: {}", second_half_start);
+    println!("Second half end: {}", second_half_end);
+    println!("Halftime start: {}", halftime_start);
+    println!("Halftime end: {}", halftime_end);
 
     // Guardar/actualizar en match_periods
     let insert_query = r#"
@@ -523,8 +562,19 @@ pub async fn detect_and_store_match_periods(
             detected_halftime_start = EXCLUDED.detected_halftime_start,
             detected_halftime_end = EXCLUDED.detected_halftime_end,
             updated_at = NOW()
+        RETURNING *
     "#;
-    let _ = sqlx::query(insert_query)
+
+    println!("\nInserting/updating with values:");
+    println!("table_name: {}", table_name);
+    println!("first_half_start: {}", first_half_start);
+    println!("first_half_end: {}", first_half_end);
+    println!("second_half_start: {}", second_half_start);
+    println!("second_half_end: {}", second_half_end);
+    println!("halftime_start: {}", halftime_start);
+    println!("halftime_end: {}", halftime_end);
+
+    match sqlx::query(insert_query)
         .bind(&table_name)
         .bind(first_half_start)
         .bind(first_half_end)
@@ -532,48 +582,93 @@ pub async fn detect_and_store_match_periods(
         .bind(second_half_end)
         .bind(halftime_start)
         .bind(halftime_end)
-        .execute(&pool)
-        .await;
-
-    // Leer los valores manuales si existen
-    let select_query = r#"
-        SELECT * FROM match_periods WHERE match_name = $1
-    "#;
-    let row = sqlx::query(select_query)
-        .bind(&table_name)
         .fetch_one(&pool)
         .await
-        .ok();
-    if let Some(row) = row {
-        let detected_first_half_start: i64 = row.try_get("detected_first_half_start").unwrap_or(0);
-        let detected_first_half_end: i64 = row.try_get("detected_first_half_end").unwrap_or(0);
-        let detected_second_half_start: i64 = row.try_get("detected_second_half_start").unwrap_or(0);
-        let detected_second_half_end: i64 = row.try_get("detected_second_half_end").unwrap_or(0);
-        let detected_halftime_start: i64 = row.try_get("detected_halftime_start").unwrap_or(0);
-        let detected_halftime_end: i64 = row.try_get("detected_halftime_end").unwrap_or(0);
-        let manual_first_half_start: Option<i64> = row.try_get("manual_first_half_start").ok();
-        let manual_first_half_end: Option<i64> = row.try_get("manual_first_half_end").ok();
-        let manual_second_half_start: Option<i64> = row.try_get("manual_second_half_start").ok();
-        let manual_second_half_end: Option<i64> = row.try_get("manual_second_half_end").ok();
-        let manual_halftime_start: Option<i64> = row.try_get("manual_halftime_start").ok();
-        let manual_halftime_end: Option<i64> = row.try_get("manual_halftime_end").ok();
-        return Json(json!({
-            "match_name": table_name,
-            "detected_first_half_start": detected_first_half_start,
-            "detected_first_half_end": detected_first_half_end,
-            "detected_second_half_start": detected_second_half_start,
-            "detected_second_half_end": detected_second_half_end,
-            "detected_halftime_start": detected_halftime_start,
-            "detected_halftime_end": detected_halftime_end,
-            "manual_first_half_start": manual_first_half_start,
-            "manual_first_half_end": manual_first_half_end,
-            "manual_second_half_start": manual_second_half_start,
-            "manual_second_half_end": manual_second_half_end,
-            "manual_halftime_start": manual_halftime_start,
-            "manual_halftime_end": manual_halftime_end
-        }));
+    {
+        Ok(row) => {
+            println!("\nReturned values after insert/update:");
+            println!(
+                "detected_first_half_start: {}",
+                row.try_get::<i64, _>("detected_first_half_start")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_first_half_end: {}",
+                row.try_get::<i64, _>("detected_first_half_end")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_second_half_start: {}",
+                row.try_get::<i64, _>("detected_second_half_start")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_second_half_end: {}",
+                row.try_get::<i64, _>("detected_second_half_end")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_halftime_start: {}",
+                row.try_get::<i64, _>("detected_halftime_start")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_halftime_end: {}",
+                row.try_get::<i64, _>("detected_halftime_end").unwrap_or(0)
+            );
+        }
+        Err(e) => println!("Error in insert/update: {}", e),
     }
-    Json(json!({"error": "Could not fetch match periods after insert/update"}))
+
+    // Después de la inserción/actualización, hacer un SELECT directo para obtener los datos
+    let select_query = r#"
+        SELECT 
+            match_name,
+            detected_first_half_start,
+            detected_first_half_end,
+            detected_second_half_start,
+            detected_second_half_end,
+            detected_halftime_start,
+            detected_halftime_end,
+            manual_first_half_start,
+            manual_first_half_end,
+            manual_second_half_start,
+            manual_second_half_end,
+            manual_halftime_start,
+            manual_halftime_end
+        FROM match_periods 
+        WHERE match_name = $1
+    "#;
+
+    match sqlx::query(select_query)
+        .bind(&table_name)
+        .fetch_one(&pool)
+        .await {
+        Ok(row) => {
+            println!("\nFinal SELECT result:");
+            let response = json!({
+                "match_name": row.try_get::<String, _>("match_name").unwrap_or_default(),
+                "detected_first_half_start": row.try_get::<i64, _>("detected_first_half_start").unwrap_or_default(),
+                "detected_first_half_end": row.try_get::<i64, _>("detected_first_half_end").unwrap_or_default(),
+                "detected_second_half_start": row.try_get::<i64, _>("detected_second_half_start").unwrap_or_default(),
+                "detected_second_half_end": row.try_get::<i64, _>("detected_second_half_end").unwrap_or_default(),
+                "detected_halftime_start": row.try_get::<i64, _>("detected_halftime_start").unwrap_or_default(),
+                "detected_halftime_end": row.try_get::<i64, _>("detected_halftime_end").unwrap_or_default(),
+                "manual_first_half_start": row.try_get::<Option<i64>, _>("manual_first_half_start").unwrap_or_default(),
+                "manual_first_half_end": row.try_get::<Option<i64>, _>("manual_first_half_end").unwrap_or_default(),
+                "manual_second_half_start": row.try_get::<Option<i64>, _>("manual_second_half_start").unwrap_or_default(),
+                "manual_second_half_end": row.try_get::<Option<i64>, _>("manual_second_half_end").unwrap_or_default(),
+                "manual_halftime_start": row.try_get::<Option<i64>, _>("manual_halftime_start").unwrap_or_default(),
+                "manual_halftime_end": row.try_get::<Option<i64>, _>("manual_halftime_end").unwrap_or_default()
+            });
+            println!("Response JSON: {}", response);
+            return Json(response);
+        }
+        Err(e) => {
+            println!("Error in final SELECT: {}", e);
+            return Json(json!({"error": format!("Error retrieving match periods: {}", e)}));
+        }
+    }
 }
 
 // Utilidad para calcular diferencia en segundos entre dos strings HH:MM:SS(.MS)

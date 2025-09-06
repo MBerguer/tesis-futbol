@@ -117,10 +117,31 @@ export default function SprintsPage() {
         throw new Error("Failed to detect periods");
       }
       const data = await response.json();
+      console.log("Raw response data:", data);
+      
       if (data.error) {
         throw new Error(data.error);
       }
-      setPeriods(data);
+
+      // Convertir explícitamente a números y verificar
+      const processedData = {
+        match_name: data.match_name,
+        detected_first_half_start: parseInt(data.detected_first_half_start),
+        detected_first_half_end: parseInt(data.detected_first_half_end),
+        detected_second_half_start: parseInt(data.detected_second_half_start),
+        detected_second_half_end: parseInt(data.detected_second_half_end),
+        detected_halftime_start: parseInt(data.detected_halftime_start),
+        detected_halftime_end: parseInt(data.detected_halftime_end),
+        manual_first_half_start: data.manual_first_half_start ? parseInt(data.manual_first_half_start) : undefined,
+        manual_first_half_end: data.manual_first_half_end ? parseInt(data.manual_first_half_end) : undefined,
+        manual_second_half_start: data.manual_second_half_start ? parseInt(data.manual_second_half_start) : undefined,
+        manual_second_half_end: data.manual_second_half_end ? parseInt(data.manual_second_half_end) : undefined,
+        manual_halftime_start: data.manual_halftime_start ? parseInt(data.manual_halftime_start) : undefined,
+        manual_halftime_end: data.manual_halftime_end ? parseInt(data.manual_halftime_end) : undefined,
+      };
+      
+      console.log("Processed data with explicit parsing:", processedData);
+      setPeriods(processedData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       setPeriods(null);
@@ -164,10 +185,27 @@ export default function SprintsPage() {
 
   // Función para convertir segundos a formato MM:SS
   const formatTime = (seconds: number | undefined) => {
-    if (seconds === undefined) return "-";
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    if (seconds === undefined || seconds === null) return "-";
+    
+    console.log("formatTime input:", seconds);
+    
+    // Asegurarse de que estamos trabajando con un número
+    const rawSeconds = parseInt(String(seconds));
+    console.log("formatTime parsed seconds:", rawSeconds);
+    
+    if (isNaN(rawSeconds)) {
+      console.log("formatTime: invalid number");
+      return "-";
+    }
+    
+    const totalSeconds = Math.abs(rawSeconds);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    
+    const formattedTime = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    console.log("formatTime output:", formattedTime);
+    
+    return formattedTime;
   };
 
   if (loading && !selectedTable) {
