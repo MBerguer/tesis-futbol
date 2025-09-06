@@ -17,6 +17,12 @@ Sistema de análisis deportivo para fútbol con análisis de datos GPS, métrica
 # Levantar todos los servicios
 ./start-dev.sh
 
+# Levantar servicios en background (recomendado para devcontainer)
+./start-dev-simple.sh
+
+# Verificar estado de servicios
+./check-services.sh
+
 # Detener todos los servicios
 ./stop-dev.sh
 ```
