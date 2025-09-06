@@ -1,5 +1,5 @@
 use crate::modules::players;
-use axum::{routing::get, routing::post, Router};
+use axum::{routing::get, Router};
 
 // Already binded to /players in main.rs
 pub fn players_routes() -> Router {

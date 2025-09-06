@@ -1,4 +1,4 @@
-use axum::{routing::get, routing::post, Router};
+use axum::{routing::get, Router};
 use sqlx::postgres::PgPoolOptions;
 use std::env;
 use tower_http::cors::{Any, CorsLayer};
