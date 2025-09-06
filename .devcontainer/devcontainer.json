@@ -1,4 +1,4 @@
-{
+ { 
   "name": "Rust with PostgreSQL",
   "dockerComposeFile": "./docker-compose.container.yaml",
   "service": "next-futbol",

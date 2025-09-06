@@ -42,3 +42,4 @@ echo "  - Frontend: http://localhost:3000"
 echo "  - Backend: http://localhost:8000"
 echo "  - Jupyter: http://localhost:8888"
 
+
