@@ -1,7 +1,7 @@
 {
     "name": "Rust with PostgreSQL",
     "dockerComposeFile": "./docker-compose.container.yaml",
-    "service": "rust-futbol",
+    "service": "next-futbol",
     "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
     "customizations": {
         "vscode": {
@@ -24,8 +24,9 @@
             ]
         }
     },
-    "postCreateCommand": "cd rust; cargo run",
+    "postCreateCommand": "./start-dev.sh",
     "forwardPorts": [
+        3000,
         8000,
         5432,
         8888

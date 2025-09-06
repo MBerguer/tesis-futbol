@@ -49,28 +49,26 @@ services:
     network_mode: service:db-futbol
     # ports:
     #   - 8888:8888
-  # Next service for hosting the next frontend application,
-  # this service is dependent on the db-futbol service, and the rust-futbol service
-  # next-futbol:
-  #   build:
-  #     context: ../new-front/
-  #     dockerfile: Dockerfile
-  #   env_file:
-  #     # Ensure that the variables in .env match the same variables in devcontainer.json
-  #     - ../next/.container.env
-  #   # Overrides default command so things don't shut down after the process ends.
-  #   command: sleep infinity
-  #   # Runs app on the same network as the database container, allows "forwardPorts" in devcontainer.json function.
-  #   network_mode: service:db-futbol
-  #   # Use "forwardPorts" in **devcontainer.json** to forward an app port locally. 
-  #   # (Adding the "ports" property to this file will not forward from a Codespace.)
-  #   volumes:
-  #     - ../..:/workspaces:cached
-  #   depends_on:
-  #     - db-futbol
-  #     - rust-futbol
-
-
+    # Next service for hosting the next frontend application,
+    # this service is dependent on the db-futbol service, and the rust-futbol service
+  next-futbol:
+    build:
+      context: ../new-front/
+      dockerfile: Dockerfile
+    env_file:
+      # Ensure that the variables in .env match the same variables in devcontainer.json
+      - ../new-front/.container.env
+    # Overrides default command so things don't shut down after the process ends.
+    command: sleep infinity
+    # Runs app on the same network as the database container, allows "forwardPorts" in devcontainer.json function.
+    network_mode: service:db-futbol
+    # Use "forwardPorts" in **devcontainer.json** to forward an app port locally. 
+    # (Adding the "ports" property to this file will not forward from a Codespace.)
+    volumes:
+      - ../..:/workspaces:cached
+    depends_on:
+      - db-futbol
+      - rust-futbol
   # Volumes for persisting the data of the database
 volumes:
   db-futbol:
