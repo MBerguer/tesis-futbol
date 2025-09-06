@@ -52,10 +52,12 @@ export default function SprintsPage() {
   const [periods, setPeriods] = useState<MatchPeriods | null>(null);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
 
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   useEffect(() => {
     const fetchMatchTables = async () => {
       try {
-        const response = await fetch("http://localhost:8000/match/tables");
+        const response = await fetch(`${API_BASE}/match/tables`);
         if (!response.ok) {
           throw new Error("Failed to fetch match tables");
         }
@@ -75,7 +77,7 @@ export default function SprintsPage() {
     setSelectedTable(tableName);
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/match/table/${tableName}/players`);
+      const response = await fetch(`${API_BASE}/match/table/${tableName}/players`);
       if (!response.ok) {
         throw new Error("Failed to fetch players");
       }
@@ -93,7 +95,7 @@ export default function SprintsPage() {
     
     setLoadingEntries(true);
     try {
-      const response = await fetch(`http://localhost:8000/match/table/${selectedTable}/entries`);
+      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/entries`);
       if (!response.ok) {
         throw new Error("Failed to fetch entries");
       }
@@ -112,7 +114,7 @@ export default function SprintsPage() {
     
     setLoadingPeriods(true);
     try {
-      const response = await fetch(`http://localhost:8000/match/table/${selectedTable}/periods/detect`);
+      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/periods/detect`);
       if (!response.ok) {
         throw new Error("Failed to detect periods");
       }

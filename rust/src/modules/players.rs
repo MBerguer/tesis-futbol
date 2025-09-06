@@ -55,19 +55,19 @@ pub async fn get_all_players() -> Json<Value> {
 
     players.iter().for_each(|player| {
         serialized_players.push(json!({
-            "Jugador": player.jugador,
-            "Fecha_Nacimiento": player.fecha_nacimiento,
-            "Documento_de_Identidad": player.documento_identidad,
-            "Pasaporte": player.pasaporte,
-            "Telefono": player.telefono,
-            "Celular": player.celular,
-            "Email": player.email,
-            "Cobertura_Medica": player.cobertura_medica,
-            "Estudios": player.estudios,
-            "Oriundo": player.oriundo,
-            "Club_de_Origen": player.club_origen,
-            "Club_de_Origen_Porcentaje": player.club_origen_porcentaje,
-            "Posicion": player.posicion
+            "Jugador": player.Jugador,
+            "Fecha_Nacimiento": player.Fecha_Nacimiento,
+            "Documento_de_Identidad": player.Documento_de_Identidad,
+            "Pasaporte": player.Pasaporte,
+            "Telefono": player.Telefono,
+            "Celular": player.Celular,
+            "Email": player.Email,
+            "Cobertura_Medica": player.Cobertura_Medica,
+            "Estudios": player.Estudios,
+            "Oriundo": player.Oriundo,
+            "Club_de_Origen": player.Club_de_Origen,
+            "Club_de_Origen_Porcentaje": player.Club_de_Origen_Porcentaje,
+            "Posicion": player.Posicion
         }))
     });
 
@@ -104,7 +104,7 @@ pub async fn get_all_players_photos() -> Json<Value> {
             "id": foto.id,
             "categoria": "default", // No tenemos categoria en la tabla fotos_path
             "nombre": foto.nombre,
-            "path": foto.path
+            "path": foto.path_foto
         }))
     });
 

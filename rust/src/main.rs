@@ -27,6 +27,13 @@ async fn main() {
         .nest("/player", routes::players_routes::players_routes())
         .layer(cors);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
+    // Allow overriding the port via environment variable API_PORT (defaults to 8000)
+    let port: u16 = env
+        ::var("API_PORT")
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(8000);
+    let bind_addr = format!("0.0.0.0:{}", port);
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
