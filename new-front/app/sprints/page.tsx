@@ -24,6 +24,22 @@ interface MatchEntries {
   entries: MatchEntry[];
 }
 
+interface MatchPeriods {
+  match_name: string;
+  detected_first_half_start: number;
+  detected_first_half_end: number;
+  detected_second_half_start: number;
+  detected_second_half_end: number;
+  detected_halftime_start: number;
+  detected_halftime_end: number;
+  manual_first_half_start?: number;
+  manual_first_half_end?: number;
+  manual_second_half_start?: number;
+  manual_second_half_end?: number;
+  manual_halftime_start?: number;
+  manual_halftime_end?: number;
+}
+
 export default function SprintsPage() {
   const [matchTables, setMatchTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -33,6 +49,8 @@ export default function SprintsPage() {
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
+  const [periods, setPeriods] = useState<MatchPeriods | null>(null);
+  const [loadingPeriods, setLoadingPeriods] = useState(false);
 
   useEffect(() => {
     const fetchMatchTables = async () => {
@@ -89,6 +107,28 @@ export default function SprintsPage() {
     }
   };
 
+  const handleDetectPeriods = async () => {
+    if (!selectedTable) return;
+    
+    setLoadingPeriods(true);
+    try {
+      const response = await fetch(`http://localhost:8000/match/table/${selectedTable}/periods/detect`);
+      if (!response.ok) {
+        throw new Error("Failed to detect periods");
+      }
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      setPeriods(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setPeriods(null);
+    } finally {
+      setLoadingPeriods(false);
+    }
+  };
+
   // Group entries by player for the chart
   const playerData = React.useMemo(() => {
     const dataByPlayer: { [key: string]: MatchEntry[] } = {};
@@ -121,6 +161,14 @@ export default function SprintsPage() {
       return row;
     });
   }, [allTimes, playerData]);
+
+  // Función para convertir segundos a formato MM:SS
+  const formatTime = (seconds: number | undefined) => {
+    if (seconds === undefined) return "-";
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   if (loading && !selectedTable) {
     return <div>Loading...</div>;
@@ -271,7 +319,68 @@ export default function SprintsPage() {
             </Card>
           )}
 
-          
+          {selectedTable && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Match Periods</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  onClick={handleDetectPeriods}
+                  className="mb-4"
+                  disabled={loadingPeriods}
+                >
+                  {loadingPeriods ? "Detecting Periods..." : "Detect Match Periods"}
+                </Button>
+
+                {periods && (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead>
+                        <tr>
+                          <th className="px-4 py-2">Period</th>
+                          <th className="px-4 py-2">Detected Time</th>
+                          <th className="px-4 py-2">Manual Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="px-4 py-2">First Half Start</td>
+                          <td className="px-4 py-2">{formatTime(periods.detected_first_half_start)}</td>
+                          <td className="px-4 py-2">{formatTime(periods.manual_first_half_start)}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2">First Half End</td>
+                          <td className="px-4 py-2">{formatTime(periods.detected_first_half_end)}</td>
+                          <td className="px-4 py-2">{formatTime(periods.manual_first_half_end)}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2">Halftime Start</td>
+                          <td className="px-4 py-2">{formatTime(periods.detected_halftime_start)}</td>
+                          <td className="px-4 py-2">{formatTime(periods.manual_halftime_start)}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2">Halftime End</td>
+                          <td className="px-4 py-2">{formatTime(periods.detected_halftime_end)}</td>
+                          <td className="px-4 py-2">{formatTime(periods.manual_halftime_end)}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2">Second Half Start</td>
+                          <td className="px-4 py-2">{formatTime(periods.detected_second_half_start)}</td>
+                          <td className="px-4 py-2">{formatTime(periods.manual_second_half_start)}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2">Second Half End</td>
+                          <td className="px-4 py-2">{formatTime(periods.detected_second_half_end)}</td>
+                          <td className="px-4 py-2">{formatTime(periods.manual_second_half_end)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </main>
