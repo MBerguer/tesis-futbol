@@ -1,0 +1,34 @@
+{
+  "name": "Rust with PostgreSQL",
+  "dockerComposeFile": "./docker-compose.container.yaml",
+  "service": "next-futbol",
+  "workspaceFolder": "/workspaces/tesis-futbol",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "extensions.verifySignature": false
+      },
+      "extensions": [
+        "vsc-remote.remote-containers",
+        "ahgood.shift-shift",
+        "streetsidesoftware.code-spell-checker",
+        "eamodio.gitlens",
+        "rust-lang.rust-analyzer",
+        "serayuzgur.crates",
+        "njpwerner.autodocstring",
+        "tamasfe.even-better-toml",
+        "ms-azuretools.vscode-docker",
+        "ms-toolsai.jupyter",
+        "ms-python.python"
+      ]
+    }
+  },
+  "postCreateCommand": "./start-dev.sh",
+  "forwardPorts": [3000, 8000, 5432, 8888]
+}
+
+
+
+
+
+

@@ -1,35 +1,29 @@
-{
-    "name": "Rust with PostgreSQL",
-    "dockerComposeFile": "./docker-compose.container.yaml",
-    "service": "next-futbol",
-    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-    "customizations": {
-        "vscode": {
-            "settings": {
-                "extensions.verifySignature": false
-            },
-            "extensions": [
-                "vsc-remote.remote-containers",
-                "ahgood.shift-shift",
-                "streetsidesoftware.code-spell-checker",
-                "eamodio.gitlens",
-                "rust-lang.rust-analyzer",
-                "serayuzgur.crates",
-                "njpwerner.autodocstring",
-                "tamasfe.even-better-toml",
-                "ms-azuretools.vscode-docker",
-                "ms-toolsai.jupyter",
-                "ms-python.python",
-                "ms-toolsai.jupyter-"
-            ]
-        }
-    },
-    "postCreateCommand": "./start-dev.sh",
-    "forwardPorts": [
-        3000,
-        8000,
-        5432,
-        8888
-        // Error response from daemon: conflicting options: port publishing and the container type network mode 
-    ]
+triggering the rebuild{
+  "name": "Rust with PostgreSQL",
+  "dockerComposeFile": "./docker-compose.container.yaml",
+  "service": "next-futbol",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "extensions.verifySignature": false
+      },
+      "extensions": [
+        "vsc-remote.remote-containers",
+        "ahgood.shift-shift",
+        "streetsidesoftware.code-spell-checker",
+        "eamodio.gitlens",
+        "rust-lang.rust-analyzer",
+        "serayuzgur.crates",
+        "njpwerner.autodocstring",
+        "tamasfe.even-better-toml",
+        "ms-azuretools.vscode-docker",
+        "ms-toolsai.jupyter",
+        "ms-python.python"
+      ]
+    }
+  },
+  "postCreateCommand": "./start-dev.sh",
+  "forwardPorts": [3000, 8000, 5432, 8888],
+  "overrideCommand": false
 }
