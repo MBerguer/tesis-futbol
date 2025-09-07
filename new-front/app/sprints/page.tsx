@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../dashboard/components/ui/card";
 import { Button } from "../dashboard/components/ui/button";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 
 interface MatchTable {
   tables: string[];
@@ -78,7 +78,17 @@ export default function SprintsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
   const [periods, setPeriods] = useState<MatchPeriods | null>(null);
+  const [kickoffSpike, setKickoffSpike] = useState<number | null>(null);
+  const [thresholds, setThresholds] = useState<{ match: number; halftime: number; kickoff: number } | null>(null);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
+  const thresholdsMps = React.useMemo(() => {
+    if (!thresholds) return null;
+    return {
+      match: thresholds.match / 3.6,
+      halftime: thresholds.halftime / 3.6,
+      kickoff: thresholds.kickoff / 3.6,
+    };
+  }, [thresholds]);
   
   // Nuevos estados para worst cases y sprints
   const [worstCases, setWorstCases] = useState<WorstCase[]>([]);
@@ -150,7 +160,7 @@ export default function SprintsPage() {
     
     setLoadingPeriods(true);
     try {
-      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/periods/detect`);
+      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/periods/detect-notebook`);
       if (!response.ok) {
         throw new Error("Failed to detect periods");
       }
@@ -189,6 +199,8 @@ export default function SprintsPage() {
       
       console.log("Processed data with explicit parsing:", processedData);
       setPeriods(processedData);
+      setKickoffSpike(typeof data.kickoff_spike_sec === 'number' ? data.kickoff_spike_sec : null);
+      setThresholds(data.thresholds || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       setPeriods(null);
@@ -269,6 +281,51 @@ export default function SprintsPage() {
       return row;
     });
   }, [allTimes, playerData]);
+
+  // Serie promedio por segundo (estilo notebook), requiere >=2 jugadores por segundo
+  const avgSeries = React.useMemo(() => {
+    if (entries.length === 0) return [] as { second: number; speed: number }[];
+    const secondToSpeeds: Map<number, number[]> = new Map();
+    const secondToPlayers: Map<number, Set<string>> = new Map();
+    for (const e of entries) {
+      const sec = Math.floor(e.centralized_elapsed_time);
+      if (!secondToSpeeds.has(sec)) secondToSpeeds.set(sec, []);
+      secondToSpeeds.get(sec)!.push(e.speed);
+      if (!secondToPlayers.has(sec)) secondToPlayers.set(sec, new Set());
+      secondToPlayers.get(sec)!.add(e.player_display_name);
+    }
+    const seconds = Array.from(secondToSpeeds.keys());
+    if (seconds.length === 0) return [] as { second: number; speed: number }[];
+    const minSec = Math.min(...seconds);
+    const maxSec = Math.max(...seconds);
+    const series: { second: number; speed: number }[] = [];
+    for (let s = minSec; s <= maxSec; s++) {
+      const speeds = secondToSpeeds.get(s) || [];
+      const players = secondToPlayers.get(s) || new Set<string>();
+      if (players.size >= 2 && speeds.length > 0) {
+        const sum = speeds.reduce((a, b) => a + b, 0);
+        series.push({ second: s, speed: sum / speeds.length });
+      } else {
+        series.push({ second: s, speed: 0 });
+      }
+    }
+    return series;
+  }, [entries]);
+
+  // X-axis ticks only at PT start/end and ST start/end
+  const keyTicks = React.useMemo(() => {
+    if (!periods) return undefined;
+    const values: number[] = [];
+    const push = (v: number | undefined) => {
+      if (typeof v === 'number') values.push(v);
+    };
+    push(periods.detected_first_half_start);
+    push(periods.detected_first_half_end);
+    push(periods.detected_second_half_start);
+    push(periods.detected_second_half_end);
+    // unique & sorted
+    return Array.from(new Set(values)).sort((a, b) => a - b);
+  }, [periods]);
 
   // Función para convertir segundos a formato MM:SS
   const formatTime = (seconds: number | undefined) => {
@@ -376,6 +433,45 @@ export default function SprintsPage() {
                       />
                       <Tooltip />
                       <Legend />
+                      {/* Horizontal threshold lines (converted from km/h to m/s) */}
+                      {thresholdsMps && (
+                        <>
+                          <ReferenceLine y={thresholdsMps.match} stroke="#A0AEC0" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '5.9 km/h' }} />
+                          <ReferenceLine y={thresholdsMps.halftime} stroke="#CBD5E0" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '11 km/h' }} />
+                          <ReferenceLine y={thresholdsMps.kickoff} stroke="#E53E3E" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '20 km/h' }} />
+                        </>
+                      )}
+                      {/* Halftime shaded area */}
+                      {periods && periods.detected_halftime_start !== undefined && periods.detected_halftime_end !== undefined && (
+                        <ReferenceArea x1={periods.detected_halftime_start} x2={periods.detected_halftime_end} y1={0} y2={'auto'} fill="#FED7D7" fillOpacity={0.15} />
+                      )}
+                      {/* Vertical markers for PT/HT/ST */}
+                      {periods && (
+                        <>
+                          {typeof periods.detected_first_half_start === 'number' && (
+                            <ReferenceLine x={periods.detected_first_half_start} stroke="#38A169" label={{ value: 'PT Start', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_first_half_end === 'number' && (
+                            <ReferenceLine x={periods.detected_first_half_end} stroke="#2F855A" label={{ value: 'PT End', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_halftime_start === 'number' && (
+                            <ReferenceLine x={periods.detected_halftime_start} stroke="#805AD5" label={{ value: 'HT Start', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_halftime_end === 'number' && (
+                            <ReferenceLine x={periods.detected_halftime_end} stroke="#6B46C1" label={{ value: 'HT End', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_second_half_start === 'number' && (
+                            <ReferenceLine x={periods.detected_second_half_start} stroke="#3182CE" label={{ value: 'ST Start', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_second_half_end === 'number' && (
+                            <ReferenceLine x={periods.detected_second_half_end} stroke="#2B6CB0" label={{ value: 'ST End', position: 'top' }} />
+                          )}
+                        </>
+                      )}
+                      {/* Kickoff spike marker if present */}
+                      {typeof kickoffSpike === 'number' && (
+                        <ReferenceLine x={kickoffSpike} stroke="#DD6B20" strokeDasharray="3 3" label={{ value: 'Kickoff spike', position: 'top' }} />
+                      )}
                       {Object.keys(playerData).map((player, index) => (
                         <Line
                           key={player}
@@ -388,6 +484,67 @@ export default function SprintsPage() {
                           connectNulls={true}
                         />
                       ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedTable && avgSeries.length > 0 && (
+            <Card className="col-span-2">
+              <CardHeader>
+                <CardTitle>Average Speed Over Time (Notebook-style)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[420px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={avgSeries} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="second" ticks={keyTicks} tickFormatter={(s) => formatTime(s)} />
+                      <YAxis label={{ value: 'Speed (m/s)', angle: -90, position: 'insideLeft' }} />
+                      <Tooltip labelFormatter={(l:any)=> `t=${formatTime(l)}`} />
+                      <Legend />
+                      {/* thresholds (km/h -> m/s) */}
+                      {thresholdsMps && (
+                        <>
+                          <ReferenceLine y={thresholdsMps.match} stroke="#A0AEC0" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '5.9 km/h' }} />
+                          <ReferenceLine y={thresholdsMps.halftime} stroke="#CBD5E0" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '11 km/h' }} />
+                          <ReferenceLine y={thresholdsMps.kickoff} stroke="#E53E3E" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '20 km/h' }} />
+                        </>
+                      )}
+                      {/* halftime band */}
+                      {periods && periods.detected_halftime_start !== undefined && periods.detected_halftime_end !== undefined && (
+                        <ReferenceArea x1={periods.detected_halftime_start} x2={periods.detected_halftime_end} fill="#E53E3E" fillOpacity={0.28} ifOverflow="extendDomain" />
+                      )}
+                      {/* PT/HT/ST markers */}
+                      {periods && (
+                        <>
+                          {typeof periods.detected_first_half_start === 'number' && (
+                            <ReferenceLine x={periods.detected_first_half_start} stroke="#38A169" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'PT Start', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_first_half_end === 'number' && (
+                            <ReferenceLine x={periods.detected_first_half_end} stroke="#2F855A" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'PT End', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_halftime_start === 'number' && (
+                            <ReferenceLine x={periods.detected_halftime_start} stroke="#805AD5" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'HT Start', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_halftime_end === 'number' && (
+                            <ReferenceLine x={periods.detected_halftime_end} stroke="#6B46C1" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'HT End', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_second_half_start === 'number' && (
+                            <ReferenceLine x={periods.detected_second_half_start} stroke="#3182CE" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'ST Start', position: 'top' }} />
+                          )}
+                          {typeof periods.detected_second_half_end === 'number' && (
+                            <ReferenceLine x={periods.detected_second_half_end} stroke="#2B6CB0" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'ST End', position: 'top' }} />
+                          )}
+                        </>
+                      )}
+                      {/* kickoff spike */}
+                      {typeof kickoffSpike === 'number' && (
+                        <ReferenceLine x={kickoffSpike} stroke="#DD6B20" strokeDasharray="3 3" strokeWidth={2} label={{ value: 'Kickoff spike', position: 'top' }} />
+                      )}
+                      <Line type="monotone" dataKey="speed" name="Avg speed" stroke="#2C5282" dot={false} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -508,6 +665,8 @@ export default function SprintsPage() {
                     </table>
                   </div>
                 )}
+
+                {/* Removed heavy chart for now to keep UX fast; reuse Players chart above for exploration */}
               </CardContent>
             </Card>
           )}
