@@ -124,6 +124,55 @@ pub async fn detect_match_periods_notebook(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
 ) -> Json<Value> {
+    // 0) Cache: if we already have detected values for this match, return them (fast path)
+    let cached = sqlx::query(
+        r#"
+        SELECT 
+            detected_first_half_start,
+            detected_first_half_end,
+            detected_second_half_start,
+            detected_second_half_end,
+            detected_halftime_start,
+            detected_halftime_end
+        FROM match_periods
+        WHERE match_name = $1
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_optional(&pool)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(row) = cached {
+        let fh_start: i32 = row.try_get("detected_first_half_start").unwrap_or(0);
+        let fh_end: i32 = row.try_get("detected_first_half_end").unwrap_or(0);
+        let sh_start: i32 = row.try_get("detected_second_half_start").unwrap_or(0);
+        let sh_end: i32 = row.try_get("detected_second_half_end").unwrap_or(0);
+        let ht_start: i32 = row.try_get("detected_halftime_start").unwrap_or(0);
+        let ht_end: i32 = row.try_get("detected_halftime_end").unwrap_or(0);
+
+        if fh_start > 0 && fh_end > 0 && sh_start > 0 && sh_end > 0 && ht_start > 0 && ht_end > 0 {
+            // compute base time cheaply
+            let base_time_query = format!("SELECT MIN(time) AS min_time FROM \"{}\"", table_name);
+            let base_row = sqlx::query(&base_time_query).fetch_one(&pool).await.ok();
+            let base_time: String = base_row
+                .and_then(|r| r.try_get::<String, _>("min_time").ok())
+                .unwrap_or_default();
+            return Json(json!({
+                "match_name": table_name,
+                "detected_first_half_start": fh_start,
+                "detected_first_half_end": fh_end,
+                "detected_halftime_start": ht_start,
+                "detected_halftime_end": ht_end,
+                "detected_second_half_start": sh_start,
+                "detected_second_half_end": sh_end,
+                "base_time": base_time,
+                "kickoff_spike_sec": Value::Null,
+                "thresholds": {"match": 5.9_f64, "halftime": 11.0_f64, "kickoff": 20.0_f64}
+            }));
+        }
+    }
     // cargar tabla completa ordenada por time
     let query = format!("SELECT player_display_name, time, speed FROM \"{}\" ORDER BY time", table_name);
     let rows = match sqlx::query(&query).fetch_all(&pool).await {
@@ -277,6 +326,38 @@ pub async fn detect_match_periods_notebook(
         if *sp <= velocidad_partido { acc += 1; } else { acc = 0; }
         if acc >= 20 { second_half_end = *sec; break; }
     }
+
+    // 8) Persist results to cache table (UPSERT)
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO match_periods (
+            match_name,
+            detected_first_half_start,
+            detected_first_half_end,
+            detected_second_half_start,
+            detected_second_half_end,
+            detected_halftime_start,
+            detected_halftime_end
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT (match_name) DO UPDATE SET
+            detected_first_half_start = EXCLUDED.detected_first_half_start,
+            detected_first_half_end   = EXCLUDED.detected_first_half_end,
+            detected_second_half_start= EXCLUDED.detected_second_half_start,
+            detected_second_half_end  = EXCLUDED.detected_second_half_end,
+            detected_halftime_start   = EXCLUDED.detected_halftime_start,
+            detected_halftime_end     = EXCLUDED.detected_halftime_end,
+            updated_at = NOW()
+        "#,
+    )
+    .bind(&table_name)
+    .bind(first_half_start as i32)
+    .bind(first_half_end as i32)
+    .bind(second_half_start as i32)
+    .bind(second_half_end as i32)
+    .bind(halftime_start as i32)
+    .bind(halftime_end as i32)
+    .execute(&pool)
+    .await;
 
     Json(json!({
         "match_name": table_name,

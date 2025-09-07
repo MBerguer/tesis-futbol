@@ -21,10 +21,6 @@ pub fn matches_routes(pool: PgPool) -> Router {
             get(matches::get_match_entries_with_centralized_time),
         )
         .route(
-            "/table/:table_name/periods/detect",
-            get(matches::detect_and_store_match_periods),
-        )
-        .route(
             "/table/:table_name/periods/detect-notebook",
             get(matches::detect_match_periods_notebook),
         )
