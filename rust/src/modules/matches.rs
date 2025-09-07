@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use sqlx::Column;
 use sqlx::PgPool;
 use sqlx::Row;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 // Constantes para umbrales de velocidad (en km/h)
 const HSR_THRESHOLD_KMH: f64 = 19.8; // High Speed Running: 19.8 km/h
@@ -105,6 +105,159 @@ pub async fn get_match_gps_players_details() -> Json<Value> {
     }))
 }
 
+/// Detalle de períodos detectados replicando exactamente la lógica del notebook
+/// Endpoint: GET /match/table/:table_name/periods/detect-notebook
+///
+/// Pasos (idénticos al notebook):
+/// - centralizar tiempo por jugador y luego contra el mínimo global
+/// - construir `Second = floor(centralized_elapsed_time)`
+/// - calcular `second_avg_speed` aplicando:
+///   * mínimo de jugadores por segundo (2 en el md efectivo)
+///   * rellenar huecos con velocidad 0
+/// - detectar entretiempo por runs consecutivos de `speed <= 11` con ventana 900s y reducción de 10s
+///   * excluir el primer grupo (inicio)
+///   * limitar a 900s y refinar fin con primer `speed > 11` posterior
+/// - detectar inicio PT: último run de `speed > 5.9` de 20s antes de halftime_start
+/// - detectar inicio ST: run `speed > 11` de 10s tras halftime_end
+/// - detectar fin ST: tras 45min, primer run `speed <= 5.9` de 20s
+pub async fn detect_match_periods_notebook(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+) -> Json<Value> {
+    // cargar tabla completa ordenada por time
+    let query = format!("SELECT player_display_name, time, speed FROM \"{}\" ORDER BY time", table_name);
+    let rows = match sqlx::query(&query).fetch_all(&pool).await {
+        Ok(r) => r,
+        Err(e) => return Json(json!({"error": format!("db read error: {}", e)})),
+    };
+    if rows.is_empty() {
+        return Json(json!({"error": "no data"}));
+    }
+
+    // construir vector dinámico tipo notebook
+    let mut data: Vec<serde_json::Map<String, Value>> = Vec::with_capacity(rows.len());
+    for row in rows {
+        let mut m = serde_json::Map::new();
+        if let Ok(v) = row.try_get::<String, _>("player_display_name") { m.insert("player_display_name".into(), Value::from(v)); }
+        if let Ok(v) = row.try_get::<String, _>("time") { m.insert("time".into(), Value::from(v)); }
+        if let Ok(v) = row.try_get::<f64, _>("speed") { m.insert("speed".into(), Value::from(v)); }
+        data.push(m);
+    }
+
+    // centralizar tiempos como en get_match_entries_with_centralized_time (idéntico criterio)
+    let min_time_string = data
+        .iter()
+        .filter_map(|r| r.get("time").and_then(|v| v.as_str()))
+        .min()
+        .unwrap_or("")
+        .to_string();
+    for r in data.iter_mut() {
+        if let Some(t) = r.get("time").and_then(|v| v.as_str()) {
+            let secs = diff_in_seconds(&min_time_string, t);
+            r.insert("centralized_elapsed_time".into(), Value::from(secs));
+        }
+    }
+
+    // parámetros notebook
+    let velocidad_partido = 5.9_f64;
+    let velocidad_partido_entretiempo = 11.0_f64;
+    let ventana_primer_tiempo: i64 = 20; // PT: 20s
+    let ventana_segundo_tiempo: i64 = 6;  // ST: >5s en notebook => 6s
+    let duracion_segundo_tiempo: i64 = 45 * 60;
+
+    // construir Second y promedios por segundo (mín 2 jugadores y relleno de huecos)
+    let mut second_to_speeds: HashMap<i64, Vec<f64>> = HashMap::new();
+    let mut second_to_players: HashMap<i64, HashSet<String>> = HashMap::new();
+    for r in &data {
+        if let (Some(sec), Some(speed), Some(player)) = (
+            r.get("centralized_elapsed_time").and_then(|v| v.as_f64()).map(|s| s.floor() as i64),
+            r.get("speed").and_then(|v| v.as_f64()),
+            r.get("player_display_name").and_then(|v| v.as_str()),
+        ) {
+            second_to_speeds.entry(sec).or_default().push(speed);
+            second_to_players.entry(sec).or_default().insert(player.to_string());
+        }
+    }
+    let max_second = *second_to_speeds.keys().max().unwrap_or(&0);
+    let mut second_avg_speed: Vec<(i64, f64)> = Vec::with_capacity((max_second + 1) as usize);
+    for sec in 0..=max_second {
+        let num_players = second_to_players.get(&sec).map(|s| s.len()).unwrap_or(0);
+        if num_players >= 2 {
+            let empty: Vec<f64> = Vec::new();
+            let speeds = second_to_speeds.get(&sec).unwrap_or(&empty);
+            let avg = if speeds.is_empty() { 0.0 } else { speeds.iter().sum::<f64>() / speeds.len() as f64 };
+            second_avg_speed.push((sec, avg));
+        } else {
+            second_avg_speed.push((sec, 0.0));
+        }
+    }
+
+    // runs de baja velocidad para entretiempo
+    let mut runs: Vec<Vec<i64>> = Vec::new();
+    let mut run: Vec<i64> = Vec::new();
+    for (sec, sp) in &second_avg_speed {
+        if *sp <= velocidad_partido_entretiempo { run.push(*sec); }
+        else { if !run.is_empty() { runs.push(run.clone()); run.clear(); } }
+    }
+    if !run.is_empty() { runs.push(run); }
+
+    let mut current_window = 900_i64;
+    let maximum_halftime_end = max_second - duracion_segundo_tiempo;
+    let mut halftime_blocks: Vec<Vec<i64>>;
+    loop {
+        halftime_blocks = runs
+            .iter()
+            .filter(|b| b.len() as i64 >= current_window)
+            .filter(|b| !b.is_empty() && b[0] > 60)
+            .filter(|b| *b.last().unwrap_or(&0) <= maximum_halftime_end)
+            .cloned()
+            .collect();
+        if !halftime_blocks.is_empty() || current_window <= 0 { break; }
+        current_window -= 10;
+    }
+    let halftime_block = halftime_blocks.into_iter().next().unwrap_or_default();
+    let (halftime_start, mut halftime_end) = if halftime_block.is_empty() { (0, 0) } else { (halftime_block[0], *halftime_block.last().unwrap()) };
+    if halftime_start > 0 {
+        let max_halftime_end = halftime_start + 900;
+        if halftime_end > max_halftime_end { halftime_end = max_halftime_end; }
+        if let Some((refined_end, _)) = second_avg_speed.iter().filter(|(s, _)| *s > halftime_end).find(|(_, sp)| *sp > velocidad_partido_entretiempo) { halftime_end = *refined_end; }
+    }
+
+    // inicio PT: PRIMER run > 5.9 de 20s (ignorando los primeros 60s)
+    let mut acc: i64 = 0;
+    let mut first_half_start = 0;
+    for (sec, sp) in second_avg_speed.iter().filter(|(s, _)| *s > 60).filter(|(s, _)| *s <= halftime_start) {
+        if *sp > velocidad_partido { acc += 1; } else { acc = 0; }
+        if acc >= ventana_primer_tiempo { first_half_start = *sec - ventana_primer_tiempo + 1; break; }
+    }
+    let first_half_end = halftime_start;
+
+    // inicio ST: run > 11 por 10s
+    acc = 0;
+    let mut second_half_start = halftime_end;
+    for (sec, sp) in second_avg_speed.iter().filter(|(s, _)| *s > halftime_end) {
+        if *sp > velocidad_partido_entretiempo { acc += 1; } else { acc = 0; }
+        if acc >= ventana_segundo_tiempo { second_half_start = *sec - ventana_segundo_tiempo + 1; break; }
+    }
+
+    // fin ST: a partir de 45min, caída sostenida <= 5.9 por 20s
+    let mut second_half_end = second_half_start + duracion_segundo_tiempo;
+    acc = 0;
+    for (sec, sp) in second_avg_speed.iter().filter(|(s, _)| *s >= second_half_end) {
+        if *sp <= velocidad_partido { acc += 1; } else { acc = 0; }
+        if acc >= 20 { second_half_end = *sec; break; }
+    }
+
+    Json(json!({
+        "match_name": table_name,
+        "detected_first_half_start": first_half_start,
+        "detected_first_half_end": first_half_end,
+        "detected_halftime_start": halftime_start,
+        "detected_halftime_end": halftime_end,
+        "detected_second_half_start": second_half_start,
+        "detected_second_half_end": second_half_end,
+    }))
+}
 pub async fn submit_match_players() {}
 
 pub async fn list_match_tables(State(pool): State<PgPool>) -> Json<Value> {
@@ -528,9 +681,9 @@ pub async fn detect_and_store_match_periods(
     // Parámetros del notebook
     let velocidad_partido = 5.9;
     let velocidad_partido_entretiempo = 11.0;
-    let ventana_primer_tiempo = 10; // segundos
-    let ventana_segundo_tiempo = 5; // segundos
-    let ventana_entretiempo = 9 * 60; // 9 minutos en segundos
+    let ventana_primer_tiempo = 20; // segundos (corregido desde notebook)
+    let ventana_segundo_tiempo = 10; // segundos (corregido desde notebook)
+    let _ventana_entretiempo = 9 * 60; // 9 minutos en segundos
     let _ventana_max_entretiempo = 15 * 60; // 15 minutos en segundos
     let duracion_segundo_tiempo = 45 * 60; // 45 minutos en segundos
 
@@ -542,89 +695,172 @@ pub async fn detect_and_store_match_periods(
         row.get("speed").and_then(|v| v.as_f64()).is_some()
     }).count();
     println!("Data points with both elapsed_time and speed: {}", speed_data_count);
+    
+    // Debug: verificar rango de tiempos
+    if let (Some(min_time), Some(max_time)) = (
+        data.iter().filter_map(|row| row.get("centralized_elapsed_time").and_then(|v| v.as_f64())).min_by(|a, b| a.partial_cmp(b).unwrap()),
+        data.iter().filter_map(|row| row.get("centralized_elapsed_time").and_then(|v| v.as_f64())).max_by(|a, b| a.partial_cmp(b).unwrap())
+    ) {
+        println!("Time range: {} to {} seconds ({} to {} minutes)", 
+                 min_time, max_time, 
+                 min_time / 60.0, max_time / 60.0);
+    }
 
     // Agrupar por segundo y calcular velocidad promedio por segundo
-    let mut second_speed: HashMap<i64, Vec<f64>> = HashMap::new();
+    // Siguiendo el notebook: considerar sólo segundos con al menos N jugadores; rellenar huecos con 0
+    let min_players_for_second: usize = 2; // el notebook usa 2 en el código efectivo
+    let mut second_to_speeds: HashMap<i64, Vec<f64>> = HashMap::new();
+    let mut second_to_players: HashMap<i64, HashSet<String>> = HashMap::new();
+
     for row in &data {
-        if let (Some(sec), Some(speed)) = (
-            row.get("centralized_elapsed_time").and_then(|v| v.as_f64()),
-            row.get("speed").and_then(|v| v.as_f64()),
-        ) {
-            let sec = sec.floor() as i64;
-            second_speed.entry(sec).or_default().push(speed);
+        let sec_opt = row
+            .get("centralized_elapsed_time")
+            .and_then(|v| v.as_f64())
+            .map(|s| s.floor() as i64);
+        let speed_opt = row.get("speed").and_then(|v| v.as_f64());
+        let player_opt = row.get("player_display_name").and_then(|v| v.as_str());
+
+        if let (Some(sec), Some(speed), Some(player)) = (sec_opt, speed_opt, player_opt) {
+            second_to_speeds.entry(sec).or_default().push(speed);
+            second_to_players
+                .entry(sec)
+                .or_default()
+                .insert(player.to_string());
         }
     }
-    let mut second_avg_speed: Vec<(i64, f64)> = second_speed
-        .iter()
-        .map(|(sec, speeds)| {
+
+    let max_second: i64 = second_to_speeds.keys().copied().max().unwrap_or(0);
+    let mut second_avg_speed: Vec<(i64, f64)> = Vec::with_capacity((max_second + 1) as usize);
+    for sec in 0..=max_second {
+        let num_players = second_to_players
+            .get(&sec)
+            .map(|s| s.len())
+            .unwrap_or(0);
+        if num_players >= min_players_for_second {
+            let empty: Vec<f64> = Vec::new();
+            let speeds = second_to_speeds.get(&sec).unwrap_or(&empty);
             let avg = if speeds.is_empty() {
                 0.0
             } else {
                 speeds.iter().sum::<f64>() / speeds.len() as f64
             };
-            (*sec, avg)
-        })
-        .collect();
-    second_avg_speed.sort_by_key(|(sec, _)| *sec);
+            second_avg_speed.push((sec, avg));
+        } else {
+            // Rellenar con velocidad 0 cuando no hay suficientes jugadores o falta el segundo
+            second_avg_speed.push((sec, 0.0));
+        }
+    }
 
     println!("Calculated {} seconds of speed data", second_avg_speed.len());
     if second_avg_speed.len() > 0 {
         println!("First 10 seconds: {:?}", &second_avg_speed[..std::cmp::min(10, second_avg_speed.len())]);
     }
 
-    // Detectar bloques de entretiempo (velocidad <= 11 durante al menos 9 minutos)
-    let mut halftime_blocks = Vec::new();
-    let mut current_block = Vec::new();
+    // Detectar bloques de entretiempo (velocidad <= 11 durante al menos 15 minutos, reduciendo hasta encontrar)
+    let mut halftime_blocks: Vec<Vec<i64>> = Vec::new();
+    let mut current_window = 900; // 15 minutos = 900 segundos (como en el notebook)
+
+    // Precalcular runs de "velocidad baja" (<= 11 km/h)
+    let mut runs: Vec<Vec<i64>> = Vec::new();
+    let mut run: Vec<i64> = Vec::new();
     for (sec, speed) in &second_avg_speed {
         if *speed <= velocidad_partido_entretiempo {
-            current_block.push(*sec);
+            run.push(*sec);
         } else {
-            if current_block.len() as i64 >= ventana_entretiempo {
-                halftime_blocks.push(current_block.clone());
+            if !run.is_empty() {
+                runs.push(run.clone());
+                run.clear();
             }
-            current_block.clear();
         }
     }
-    if current_block.len() as i64 >= ventana_entretiempo {
-        halftime_blocks.push(current_block.clone());
+    if !run.is_empty() {
+        runs.push(run);
+    }
+
+    // Buscar bloques válidos, reduciendo ventana si es necesario
+    let maximum_halftime_end = max_second - duracion_segundo_tiempo; // dejar espacio mínimo para ST
+    loop {
+        halftime_blocks = runs
+            .iter()
+            .filter(|block| block.len() as i64 >= current_window)
+            .filter(|block| !block.is_empty() && block[0] > 60) // evitar el bloque inicial
+            .filter(|block| *block.last().unwrap_or(&0) <= maximum_halftime_end)
+            .map(|b| b.clone())
+            .collect();
+
+        if !halftime_blocks.is_empty() || current_window <= 0 {
+            break;
+        }
+        current_window -= 10;
     }
     
-    println!("Found {} halftime blocks (min {} seconds each)", halftime_blocks.len(), ventana_entretiempo);
+    println!("Found {} halftime blocks (min {} seconds each)", halftime_blocks.len(), current_window);
     for (i, block) in halftime_blocks.iter().enumerate() {
         println!("  Block {}: {} seconds (from {} to {})", i, block.len(), block[0], block.last().unwrap());
     }
     
-    // Tomar el primer bloque válido que no sea al principio
+    // Debug: verificar si hay bloques de entretiempo válidos
+    if halftime_blocks.is_empty() {
+        println!("WARNING: No halftime blocks found! This might indicate:");
+        println!("  - Data doesn't have a clear halftime period");
+        println!("  - Halftime threshold ({} seconds) is too high", current_window);
+        println!("  - Speed threshold ({} km/h) is too low", velocidad_partido_entretiempo);
+    }
+    
+    // Tomar el primer bloque válido que no sea al principio (filtrar grupo 1 como en el notebook)
     let halftime_block = halftime_blocks
         .into_iter()
         .find(|block| !block.is_empty() && block[0] > 60) // evitar bloques al inicio
         .unwrap_or_default();
-    let (halftime_start, halftime_end) = if !halftime_block.is_empty() {
+    let (halftime_start, mut halftime_end) = if !halftime_block.is_empty() {
         (halftime_block[0], *halftime_block.last().unwrap())
     } else {
         (0, 0)
     };
+
+    // Limitar a 900s y refinar final del entretiempo con primer segundo de alta velocidad posterior
+    if halftime_start > 0 {
+        let max_halftime_end = halftime_start + 900;
+        if halftime_end > max_halftime_end { halftime_end = max_halftime_end; }
+
+        if let Some((refined_end, _)) = second_avg_speed
+            .iter()
+            .filter(|(s, _)| *s > halftime_end)
+            .find(|(_, sp)| *sp > velocidad_partido_entretiempo)
+        {
+            halftime_end = *refined_end;
+        }
+    }
     
     println!("Selected halftime block: from {} to {}", halftime_start, halftime_end);
 
-    // Detectar inicio del primer tiempo (primer bloque de velocidad > 5.9 durante 10+ segundos)
+    // Detectar inicio del primer tiempo: tomar el ULTIMO run > 5.9 sostenido por ventana_primer_tiempo antes del halftime_start
     let mut first_half_start = 0;
     let mut acc = 0;
-    for (sec, speed) in &second_avg_speed {
+    let mut last_run_start_candidate: Option<i64> = None;
+    for (sec, speed) in second_avg_speed.iter().filter(|(s, _)| *s <= halftime_start) {
         if *speed > velocidad_partido {
             acc += 1;
         } else {
+            // si veníamos acumulando y era válido, guardar candidate
+            if acc >= ventana_primer_tiempo {
+                let start = *sec - acc + 1;
+                last_run_start_candidate = Some(start);
+            }
             acc = 0;
         }
-        if acc >= ventana_primer_tiempo {
-            first_half_start = *sec - ventana_primer_tiempo + 1;
-            break;
-        }
     }
+    // cierre de bucle: si termina con run válido, guardarlo
+    if acc >= ventana_primer_tiempo {
+        let last_sec = halftime_start.min(max_second);
+        let start = last_sec - acc + 1;
+        last_run_start_candidate = Some(start);
+    }
+    first_half_start = last_run_start_candidate.unwrap_or(0);
     // Fin del primer tiempo: inicio del entretiempo
     let first_half_end = halftime_start;
 
-    // Detectar inicio del segundo tiempo (después del entretiempo, bloque de velocidad > 11 durante 5+ segundos)
+    // Detectar inicio del segundo tiempo (después del entretiempo, bloque de velocidad > 11 sostenido)
     let mut second_half_start = halftime_end;
     let mut acc = 0;
     for (sec, speed) in second_avg_speed.iter().filter(|(s, _)| *s > halftime_end) {
@@ -638,19 +874,16 @@ pub async fn detect_and_store_match_periods(
             break;
         }
     }
-    // Fin del segundo tiempo: 45 minutos después del inicio del segundo tiempo o cuando la velocidad baja sostenidamente
+    // Fin del segundo tiempo: al menos 45 min y luego baja sostenida
     let mut second_half_end = second_half_start + duracion_segundo_tiempo;
     acc = 0;
-    for (sec, speed) in second_avg_speed
-        .iter()
-        .filter(|(s, _)| *s > second_half_start)
-    {
+    for (sec, speed) in second_avg_speed.iter().filter(|(s, _)| *s >= second_half_end) {
         if *speed <= velocidad_partido {
             acc += 1;
         } else {
             acc = 0;
         }
-        if acc >= 10 {
+        if acc >= 20 {
             second_half_end = *sec;
             break;
         }
