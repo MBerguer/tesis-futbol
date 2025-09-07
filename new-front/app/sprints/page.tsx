@@ -81,6 +81,7 @@ export default function SprintsPage() {
   const [kickoffSpike, setKickoffSpike] = useState<number | null>(null);
   const [thresholds, setThresholds] = useState<{ match: number; halftime: number; kickoff: number } | null>(null);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
+  const [baseTime, setBaseTime] = useState<string | null>(null);
   const thresholdsMps = React.useMemo(() => {
     if (!thresholds) return null;
     return {
@@ -199,6 +200,7 @@ export default function SprintsPage() {
       
       console.log("Processed data with explicit parsing:", processedData);
       setPeriods(processedData);
+      setBaseTime(typeof data.base_time === 'string' ? data.base_time : null);
       setKickoffSpike(typeof data.kickoff_spike_sec === 'number' ? data.kickoff_spike_sec : null);
       setThresholds(data.thresholds || null);
     } catch (err) {
@@ -357,6 +359,39 @@ export default function SprintsPage() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Convert base time (HH:MM:SS.MS) + seconds to absolute HH:MM:SS
+  const derivedBaseTime = React.useMemo(() => {
+    if (!entries || entries.length === 0) return null as string | null;
+    const t = entries
+      .map(e => e.time)
+      .filter(Boolean)
+      .sort()[0];
+    return t || null;
+  }, [entries]);
+
+  const toAbsoluteTime = (sec: number | undefined) => {
+    if (sec === undefined || sec === null) return "-";
+    const base = baseTime || derivedBaseTime;
+    if (!base) return "-";
+    const [hh, mm, ssms] = base.split(":");
+    const ssInt = parseInt((ssms || "0").split(".")[0] || '0', 10);
+    const baseSeconds = parseInt(hh || '0', 10) * 3600 + parseInt(mm || '0', 10) * 60 + ssInt;
+    const target = Math.floor(baseSeconds + Math.floor(sec));
+    const h = Math.floor(target / 3600) % 24;
+    const m = Math.floor((target % 3600) / 60);
+    const s = target % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const formatDuration = (start?: number, end?: number) => {
+    if (start === undefined || end === undefined) return "-";
+    const diff = Math.max(0, Math.floor(end - start));
+    const hh = Math.floor(diff / 3600);
+    const mm = Math.floor((diff % 3600) / 60);
+    const ss = diff % 60;
+    return `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}:${ss.toString().padStart(2,'0')}`;
+  };
+
   if (loading && !selectedTable) {
     return <div>Loading...</div>;
   }
@@ -426,12 +461,13 @@ export default function SprintsPage() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
                         dataKey="centralized_elapsed_time" 
-                        label={{ value: 'Elapsed_time (seconds)', position: 'insideBottom', offset: -5 }}
+                        tickFormatter={(s) => toAbsoluteTime(s)}
+                        label={{ value: 'Clock (HH:MM:SS)', position: 'insideBottom', offset: -5 }}
                       />
                       <YAxis 
                         label={{ value: 'Speed (m/s)', angle: -90, position: 'insideLeft' }}
                       />
-                      <Tooltip />
+                      <Tooltip labelFormatter={(l:any)=> toAbsoluteTime(l)} />
                       <Legend />
                       {/* Horizontal threshold lines (converted from km/h to m/s) */}
                       {thresholdsMps && (
@@ -501,9 +537,9 @@ export default function SprintsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={avgSeries} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="second" ticks={keyTicks} tickFormatter={(s) => formatTime(s)} />
+                      <XAxis dataKey="second" ticks={keyTicks} tickFormatter={(s) => toAbsoluteTime(s)} />
                       <YAxis label={{ value: 'Speed (m/s)', angle: -90, position: 'insideLeft' }} />
-                      <Tooltip labelFormatter={(l:any)=> `t=${formatTime(l)}`} />
+                      <Tooltip labelFormatter={(l:any)=> toAbsoluteTime(l)} />
                       <Legend />
                       {/* thresholds (km/h -> m/s) */}
                       {thresholdsMps && (
@@ -621,48 +657,33 @@ export default function SprintsPage() {
                 </Button>
 
                 {periods && (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead>
-                        <tr>
-                          <th className="px-4 py-2">Period</th>
-                          <th className="px-4 py-2">Detected Time</th>
-                          <th className="px-4 py-2">Manual Time</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="px-4 py-2">First Half Start</td>
-                          <td className="px-4 py-2">{formatTime(periods.detected_first_half_start)}</td>
-                          <td className="px-4 py-2">{formatTime(periods.manual_first_half_start)}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2">First Half End</td>
-                          <td className="px-4 py-2">{formatTime(periods.detected_first_half_end)}</td>
-                          <td className="px-4 py-2">{formatTime(periods.manual_first_half_end)}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2">Halftime Start</td>
-                          <td className="px-4 py-2">{formatTime(periods.detected_halftime_start)}</td>
-                          <td className="px-4 py-2">{formatTime(periods.manual_halftime_start)}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2">Halftime End</td>
-                          <td className="px-4 py-2">{formatTime(periods.detected_halftime_end)}</td>
-                          <td className="px-4 py-2">{formatTime(periods.manual_halftime_end)}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2">Second Half Start</td>
-                          <td className="px-4 py-2">{formatTime(periods.detected_second_half_start)}</td>
-                          <td className="px-4 py-2">{formatTime(periods.manual_second_half_start)}</td>
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-2">Second Half End</td>
-                          <td className="px-4 py-2">{formatTime(periods.detected_second_half_end)}</td>
-                          <td className="px-4 py-2">{formatTime(periods.manual_second_half_end)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="font-semibold mb-2">Primer Tiempo:</h4>
+                      <div className="ml-4 space-y-1 text-sm md:text-base">
+                        <div>[Inicio] segundos centralized elapsed: {Math.floor(periods.detected_first_half_start ?? 0)} minuto: {formatMatchTime(periods.detected_first_half_start)} (hora: {toAbsoluteTime(periods.detected_first_half_start)})</div>
+                        <div>[Fin] segundo: {Math.floor(periods.detected_first_half_end ?? 0)} minuto: {formatMatchTime(periods.detected_first_half_end)} (hora: {toAbsoluteTime(periods.detected_first_half_end)})</div>
+                        <div>Duración: {formatDuration(periods.detected_first_half_start, periods.detected_first_half_end)} minutos</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-semibold mb-2">Segundo Tiempo:</h4>
+                      <div className="ml-4 space-y-1 text-sm md:text-base">
+                        <div>[Inicio] segundo: {Math.floor(periods.detected_second_half_start ?? 0)} minuto: {formatMatchTime(periods.detected_second_half_start)} (hora: {toAbsoluteTime(periods.detected_second_half_start)})</div>
+                        <div>[Fin] segundo: {Math.floor(periods.detected_second_half_end ?? 0)} minuto: {formatMatchTime(periods.detected_second_half_end)} (hora: {toAbsoluteTime(periods.detected_second_half_end)})</div>
+                        <div>Duración: {formatDuration(periods.detected_second_half_start, periods.detected_second_half_end)} minutos</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-semibold mb-2">Entretiempo:</h4>
+                      <div className="ml-4 space-y-1 text-sm md:text-base">
+                        <div>[Inicio] segundo: {Math.floor(periods.detected_halftime_start ?? 0)} minuto: {formatMatchTime(periods.detected_halftime_start)} (hora: {toAbsoluteTime(periods.detected_halftime_start)})</div>
+                        <div>[Fin] segundo: {Math.floor(periods.detected_halftime_end ?? 0)} minuto: {formatMatchTime(periods.detected_halftime_end)} (hora: {toAbsoluteTime(periods.detected_halftime_end)})</div>
+                        <div>Duración: {formatDuration(periods.detected_halftime_start, periods.detected_halftime_end)} minutos</div>
+                      </div>
+                    </div>
                   </div>
                 )}
 

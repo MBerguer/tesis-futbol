@@ -235,14 +235,14 @@ pub async fn detect_match_periods_notebook(
     // Post-corrección del inicio PT: si la duración < 45', buscar "kickoff surge" (>20 km/h)
     // y reajustar al primer run >5.9 por 20s posterior a ese pico; si no hay, forzar 45'
     let desired_first_half_secs: i64 = 45 * 60;
+    let mut kickoff_spike_sec: Option<i64> = None;
     if first_half_start > 0 && (first_half_end - first_half_start) < desired_first_half_secs {
         let kickoff_spike_kmh: f64 = 20.0;
         // Buscar el primer segundo con pico >= 20 km/h antes del HT
-        let mut spike_sec: Option<i64> = None;
         for (sec, sp) in second_avg_speed.iter().filter(|(s, _)| *s <= first_half_end) {
-            if *sp >= kickoff_spike_kmh { spike_sec = Some(*sec); break; }
+            if *sp >= kickoff_spike_kmh { kickoff_spike_sec = Some(*sec); break; }
         }
-        if let Some(s0) = spike_sec {
+        if let Some(s0) = kickoff_spike_sec {
             // Desde el pico, buscar el primer run >5.9 de 20s
             let mut acc2: i64 = 0;
             let mut adjusted: Option<i64> = None;
@@ -286,6 +286,9 @@ pub async fn detect_match_periods_notebook(
         "detected_halftime_end": halftime_end,
         "detected_second_half_start": second_half_start,
         "detected_second_half_end": second_half_end,
+        "base_time": min_time_string,
+        "kickoff_spike_sec": kickoff_spike_sec,
+        "thresholds": {"match": velocidad_partido, "halftime": velocidad_partido_entretiempo, "kickoff": 20.0}
     }))
 }
 pub async fn submit_match_players() {}
