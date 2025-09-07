@@ -40,6 +40,34 @@ interface MatchPeriods {
   manual_halftime_end?: number;
 }
 
+interface WorstCase {
+  player_display_name: string;
+  start_second: number;
+  end_second: number;
+  distance_covered: number;
+}
+
+interface WorstCases {
+  worst_cases: WorstCase[];
+}
+
+interface SprintInWorstCase {
+  player_display_name: string;
+  sprint_id: number;
+  start_second: number;
+  end_second: number;
+  sprint_start_time: string;
+  sprint_end_time: string;
+  total_sprint_distance: number;
+  min_speed_reached_within_sprint: number;
+  max_speed_reached_within_sprint: number;
+  worst_case_distance_covered: number;
+}
+
+interface SprintsInWorstCases {
+  sprints_in_worst_cases: SprintInWorstCase[];
+}
+
 export default function SprintsPage() {
   const [matchTables, setMatchTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -51,6 +79,14 @@ export default function SprintsPage() {
   const [showTable, setShowTable] = useState(false);
   const [periods, setPeriods] = useState<MatchPeriods | null>(null);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
+  
+  // Nuevos estados para worst cases y sprints
+  const [worstCases, setWorstCases] = useState<WorstCase[]>([]);
+  const [sprintsInWorstCases, setSprintsInWorstCases] = useState<SprintInWorstCase[]>([]);
+  const [loadingWorstCases, setLoadingWorstCases] = useState(false);
+  const [loadingSprints, setLoadingSprints] = useState(false);
+  const [showWorstCases, setShowWorstCases] = useState(false);
+  const [showSprints, setShowSprints] = useState(false);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -152,6 +188,46 @@ export default function SprintsPage() {
     }
   };
 
+  const handleLoadWorstCases = async () => {
+    if (!selectedTable) return;
+    
+    setLoadingWorstCases(true);
+    try {
+      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/worst-cases-from-view`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch worst cases");
+      }
+      const data: WorstCases = await response.json();
+      setWorstCases(data.worst_cases || []);
+      setShowWorstCases(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setWorstCases([]);
+    } finally {
+      setLoadingWorstCases(false);
+    }
+  };
+
+  const handleLoadSprints = async () => {
+    if (!selectedTable) return;
+    
+    setLoadingSprints(true);
+    try {
+      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/sprints-in-worst-cases`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch sprints");
+      }
+      const data: SprintsInWorstCases = await response.json();
+      setSprintsInWorstCases(data.sprints_in_worst_cases || []);
+      setShowSprints(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setSprintsInWorstCases([]);
+    } finally {
+      setLoadingSprints(false);
+    }
+  };
+
   // Group entries by player for the chart
   const playerData = React.useMemo(() => {
     const dataByPlayer: { [key: string]: MatchEntry[] } = {};
@@ -208,6 +284,18 @@ export default function SprintsPage() {
     console.log("formatTime output:", formattedTime);
     
     return formattedTime;
+  };
+
+  // Función para convertir segundos desde inicio del partido a formato HH:MM:SS
+  const formatMatchTime = (seconds: number | undefined) => {
+    if (seconds === undefined || seconds === null) return "-";
+    
+    const totalSeconds = Math.floor(seconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   if (loading && !selectedTable) {
@@ -416,6 +504,92 @@ export default function SprintsPage() {
                         </tr>
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedTable && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Worst Cases Analysis</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-4 mb-4">
+                  <Button 
+                    onClick={handleLoadWorstCases}
+                    disabled={loadingWorstCases}
+                  >
+                    {loadingWorstCases ? "Loading..." : "Load Worst Cases"}
+                  </Button>
+                  <Button 
+                    onClick={handleLoadSprints}
+                    disabled={loadingSprints}
+                  >
+                    {loadingSprints ? "Loading..." : "Load Sprints in Worst Cases"}
+                  </Button>
+                </div>
+
+                {showWorstCases && worstCases.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-3">Worst Cases (HSR ≥19.8 km/h)</h3>
+                    <div className="overflow-x-auto max-h-[400px]">
+                      <table className="min-w-full">
+                        <thead className="sticky top-0 bg-white">
+                          <tr>
+                            <th className="px-4 py-2">Player</th>
+                            <th className="px-4 py-2">Start Time</th>
+                            <th className="px-4 py-2">End Time</th>
+                            <th className="px-4 py-2">Distance (m)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {worstCases.map((worstCase, index) => (
+                            <tr key={index} className="border-t">
+                              <td className="px-4 py-2">{worstCase.player_display_name}</td>
+                              <td className="px-4 py-2">{formatMatchTime(worstCase.start_second)}</td>
+                              <td className="px-4 py-2">{formatMatchTime(worstCase.end_second)}</td>
+                              <td className="px-4 py-2">{worstCase.distance_covered.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {showSprints && sprintsInWorstCases.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Sprints in Worst Cases (≥25.2 km/h)</h3>
+                    <div className="overflow-x-auto max-h-[400px]">
+                      <table className="min-w-full">
+                        <thead className="sticky top-0 bg-white">
+                          <tr>
+                            <th className="px-4 py-2">Player</th>
+                            <th className="px-4 py-2">Sprint ID</th>
+                            <th className="px-4 py-2">Start Time</th>
+                            <th className="px-4 py-2">End Time</th>
+                            <th className="px-4 py-2">Min Speed</th>
+                            <th className="px-4 py-2">Max Speed</th>
+                            <th className="px-4 py-2">Distance (m)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sprintsInWorstCases.map((sprint, index) => (
+                            <tr key={index} className="border-t">
+                              <td className="px-4 py-2">{sprint.player_display_name}</td>
+                              <td className="px-4 py-2">{sprint.sprint_id}</td>
+                              <td className="px-4 py-2">{sprint.sprint_start_time}</td>
+                              <td className="px-4 py-2">{sprint.sprint_end_time}</td>
+                              <td className="px-4 py-2">{sprint.min_speed_reached_within_sprint.toFixed(2)}</td>
+                              <td className="px-4 py-2">{sprint.max_speed_reached_within_sprint.toFixed(2)}</td>
+                              <td className="px-4 py-2">{sprint.total_sprint_distance.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </CardContent>

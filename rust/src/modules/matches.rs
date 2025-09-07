@@ -883,6 +883,136 @@ pub async fn get_player_worst_cases_from_view(
     }))
 }
 
+pub async fn get_sprints_in_worst_cases(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+) -> Json<Value> {
+    // Query para encontrar sprints dentro de los worst cases
+    let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
+    
+    let sprints_query = format!(
+        r#"
+        WITH high_speed_data AS (
+            SELECT 
+                player_display_name, 
+                time,
+                distancia_total_calc,
+                speed,
+                '00:00:00'::TIME + 
+                (SUBSTRING(time FROM 1 FOR 2) || ' hours')::INTERVAL
+                + (SUBSTRING(time FROM 4 FOR 2) || ' minutes')::INTERVAL
+                + (SUBSTRING(time FROM 7) || ' seconds')::INTERVAL AS second_interval
+            FROM public.{}
+            WHERE speed > {}  -- High Speed Running threshold
+        ),
+        minute_window_data AS (
+            SELECT 
+                player_display_name,
+                second_interval,
+                SUM(distancia_total_calc) OVER (
+                    PARTITION BY player_display_name 
+                    ORDER BY second_interval
+                    RANGE BETWEEN INTERVAL '0 seconds' PRECEDING AND INTERVAL '59 seconds' FOLLOWING
+                ) AS total_distance_in_minute
+            FROM high_speed_data
+        ),
+        max_minute_window AS (
+            SELECT 
+                player_display_name,
+                second_interval AS start_second,
+                second_interval + INTERVAL '1 minute' AS end_second,
+                total_distance_in_minute AS distance_covered,
+                ROW_NUMBER() OVER (
+                    PARTITION BY player_display_name 
+                    ORDER BY total_distance_in_minute DESC
+                ) AS rank
+            FROM minute_window_data
+        ),
+        sprint_data AS (
+            SELECT 
+                player_display_name, 
+                time,
+                speed,
+                distancia_total_calc,
+                LAG(distancia_total_calc) OVER (PARTITION BY player_display_name ORDER BY time) AS prev_hsr,
+                LEAD(distancia_total_calc) OVER (PARTITION BY player_display_name ORDER BY time) AS next_hsr
+            FROM public.{}
+        ),
+        grouped_sprints AS (
+            SELECT
+                player_display_name,
+                time,
+                speed,
+                distancia_total_calc,
+                SUM(CASE 
+                    WHEN prev_hsr = 0 AND distancia_total_calc > 0 THEN 1 
+                    ELSE 0 
+                END) OVER (PARTITION BY player_display_name ORDER BY time) AS sprint_id
+            FROM sprint_data
+        ),
+        sprint_summary AS (
+            SELECT
+                player_display_name,
+                sprint_id,
+                MIN(time) AS sprint_start_time,
+                MAX(time) AS sprint_end_time,
+                SUM(distancia_total_calc) AS total_sprint_distance,
+                MIN(speed) AS min_speed_reached_within_sprint,
+                MAX(speed) AS max_speed_reached_within_sprint
+            FROM grouped_sprints
+            WHERE distancia_total_calc > 0 AND speed >= {}  -- Sprint threshold
+            GROUP BY player_display_name, sprint_id
+        )
+        SELECT 
+            mw.player_display_name,
+            mw.start_second::TEXT as start_second,
+            mw.end_second::TEXT as end_second,
+            ss.sprint_start_time::TEXT as sprint_start_time,
+            ss.sprint_end_time::TEXT as sprint_end_time,
+            ss.total_sprint_distance,
+            ss.min_speed_reached_within_sprint,
+            ss.max_speed_reached_within_sprint,
+            mw.distance_covered,
+            ss.sprint_id
+        FROM max_minute_window mw
+        JOIN sprint_summary ss
+            ON mw.player_display_name = ss.player_display_name
+            AND TO_CHAR(ss.sprint_start_time::TIME, 'HH24:MI:SS') >= TO_CHAR(mw.start_second::TIME, 'HH24:MI:SS')
+            AND TO_CHAR(ss.sprint_end_time::TIME, 'HH24:MI:SS') <= TO_CHAR(mw.end_second::TIME, 'HH24:MI:SS')
+        WHERE mw.rank = 1
+        ORDER BY mw.player_display_name, ss.sprint_id
+        "#,
+        view_name, HSR_THRESHOLD_KMH, view_name, SPRINT_THRESHOLD_KMH
+    );
+
+    let results = sqlx::query(&sprints_query)
+        .fetch_all(&pool)
+        .await
+        .unwrap_or_default();
+
+    let sprints_json: Vec<Value> = results
+        .into_iter()
+        .map(|row| {
+            json!({
+                "player_display_name": row.try_get::<String, _>("player_display_name").unwrap_or_default(),
+                "sprint_id": row.try_get::<i64, _>("sprint_id").unwrap_or(0),
+                "start_second": parse_interval_to_seconds(&row.try_get::<String, _>("start_second").unwrap_or_default()),
+                "end_second": parse_interval_to_seconds(&row.try_get::<String, _>("end_second").unwrap_or_default()),
+                "sprint_start_time": row.try_get::<String, _>("sprint_start_time").unwrap_or_default(),
+                "sprint_end_time": row.try_get::<String, _>("sprint_end_time").unwrap_or_default(),
+                "total_sprint_distance": row.try_get::<f64, _>("total_sprint_distance").unwrap_or(0.0),
+                "min_speed_reached_within_sprint": row.try_get::<f64, _>("min_speed_reached_within_sprint").unwrap_or(0.0),
+                "max_speed_reached_within_sprint": row.try_get::<f64, _>("max_speed_reached_within_sprint").unwrap_or(0.0),
+                "worst_case_distance_covered": row.try_get::<f64, _>("distance_covered").unwrap_or(0.0)
+            })
+        })
+        .collect();
+
+    Json(json!({
+        "sprints_in_worst_cases": sprints_json
+    }))
+}
+
 // Utilidad para calcular diferencia en segundos entre dos strings HH:MM:SS(.MS)
 fn diff_in_seconds(time1: &str, time2: &str) -> f64 {
     let parse = |t: &str| {

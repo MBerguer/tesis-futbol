@@ -28,5 +28,9 @@ pub fn matches_routes(pool: PgPool) -> Router {
             "/table/:table_name/worst-cases-from-view",
             get(matches::get_player_worst_cases_from_view),
         )
+        .route(
+            "/table/:table_name/sprints-in-worst-cases",
+            get(matches::get_sprints_in_worst_cases),
+        )
         .with_state(pool)
 }
