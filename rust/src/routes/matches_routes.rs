@@ -24,5 +24,9 @@ pub fn matches_routes(pool: PgPool) -> Router {
             "/table/:table_name/periods/detect",
             get(matches::detect_and_store_match_periods),
         )
+        .route(
+            "/table/:table_name/worst-cases-from-view",
+            get(matches::get_player_worst_cases_from_view),
+        )
         .with_state(pool)
 }

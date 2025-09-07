@@ -8,6 +8,10 @@ use sqlx::PgPool;
 use sqlx::Row;
 use std::collections::HashMap;
 
+// Constantes para umbrales de velocidad (en km/h)
+const HSR_THRESHOLD_KMH: f64 = 19.8; // High Speed Running: 19.8 km/h
+const SPRINT_THRESHOLD_KMH: f64 = 25.2; // Sprint: 25.2 km/h
+
 pub async fn get_match_details() -> Json<Value> {
     Json(json!({
         "match_id": "1234",
@@ -369,21 +373,40 @@ pub async fn detect_and_store_match_periods(
         .fetch_one(&pool)
         .await 
     {
-        let match_name: String = row.try_get("match_name").unwrap_or_default();
-        let detected_first_half_start: i64 = row.try_get::<i32, _>("detected_first_half_start").unwrap_or(0) as i64;
-        let detected_first_half_end: i64 = row.try_get::<i32, _>("detected_first_half_end").unwrap_or(0) as i64;
-        let detected_second_half_start: i64 = row.try_get::<i32, _>("detected_second_half_start").unwrap_or(0) as i64;
-        let detected_second_half_end: i64 = row.try_get::<i32, _>("detected_second_half_end").unwrap_or(0) as i64;
-        let detected_halftime_start: i64 = row.try_get::<i32, _>("detected_halftime_start").unwrap_or(0) as i64;
-        let detected_halftime_end: i64 = row.try_get::<i32, _>("detected_halftime_end").unwrap_or(0) as i64;
-        let manual_first_half_start: Option<i64> = row.try_get::<i32, _>("manual_first_half_start").ok().map(|v| v as i64);
-        let manual_first_half_end: Option<i64> = row.try_get::<i32, _>("manual_first_half_end").ok().map(|v| v as i64);
-        let manual_second_half_start: Option<i64> = row.try_get::<i32, _>("manual_second_half_start").ok().map(|v| v as i64);
-        let manual_second_half_end: Option<i64> = row.try_get::<i32, _>("manual_second_half_end").ok().map(|v| v as i64);
-        let manual_halftime_start: Option<i64> = row.try_get::<i32, _>("manual_halftime_start").ok().map(|v| v as i64);
-        let manual_halftime_end: Option<i64> = row.try_get::<i32, _>("manual_halftime_end").ok().map(|v| v as i64);
+        println!("Found existing data for match: {}", table_name);
         
-        return Json(json!({
+        // Debug: imprimir cada campo individualmente
+        let match_name: String = row.try_get("match_name").unwrap_or_default();
+        
+        // Debug: verificar el tipo de datos que estamos obteniendo
+        println!("Raw row data:");
+        for (i, column) in row.columns().iter().enumerate() {
+            let col_name = column.name();
+            println!("  Column {}: {} (type: {})", i, col_name, column.type_info());
+        }
+        
+        let detected_first_half_start: i64 = row.try_get("detected_first_half_start").unwrap_or(0);
+        let detected_first_half_end: i64 = row.try_get("detected_first_half_end").unwrap_or(0);
+        let detected_second_half_start: i64 = row.try_get("detected_second_half_start").unwrap_or(0);
+        let detected_second_half_end: i64 = row.try_get("detected_second_half_end").unwrap_or(0);
+        let detected_halftime_start: i64 = row.try_get("detected_halftime_start").unwrap_or(0);
+        let detected_halftime_end: i64 = row.try_get("detected_halftime_end").unwrap_or(0);
+        let manual_first_half_start: Option<i64> = row.try_get("manual_first_half_start").ok();
+        let manual_first_half_end: Option<i64> = row.try_get("manual_first_half_end").ok();
+        let manual_second_half_start: Option<i64> = row.try_get("manual_second_half_start").ok();
+        let manual_second_half_end: Option<i64> = row.try_get("manual_second_half_end").ok();
+        let manual_halftime_start: Option<i64> = row.try_get("manual_halftime_start").ok();
+        let manual_halftime_end: Option<i64> = row.try_get("manual_halftime_end").ok();
+        
+        println!("Existing values from DB:");
+        println!("  detected_first_half_start: {}", detected_first_half_start);
+        println!("  detected_first_half_end: {}", detected_first_half_end);
+        println!("  detected_second_half_start: {}", detected_second_half_start);
+        println!("  detected_second_half_end: {}", detected_second_half_end);
+        println!("  detected_halftime_start: {}", detected_halftime_start);
+        println!("  detected_halftime_end: {}", detected_halftime_end);
+        
+        let response = json!({
             "match_name": match_name,
             "detected_first_half_start": detected_first_half_start,
             "detected_first_half_end": detected_first_half_end,
@@ -397,7 +420,10 @@ pub async fn detect_and_store_match_periods(
             "manual_second_half_end": manual_second_half_end,
             "manual_halftime_start": manual_halftime_start,
             "manual_halftime_end": manual_halftime_end
-        }));
+        });
+        
+        println!("Returning existing data: {}", response);
+        return Json(response);
     }
 
     println!("No existing data found, proceeding with detection...");
@@ -659,8 +685,37 @@ pub async fn detect_and_store_match_periods(
         .fetch_one(&pool)
         .await
     {
-        Ok(_row) => {
-            // Data inserted successfully, will be retrieved in the final SELECT
+        Ok(row) => {
+            println!("\nReturned values after insert/update:");
+            println!(
+                "detected_first_half_start: {}",
+                row.try_get::<i64, _>("detected_first_half_start")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_first_half_end: {}",
+                row.try_get::<i64, _>("detected_first_half_end")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_second_half_start: {}",
+                row.try_get::<i64, _>("detected_second_half_start")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_second_half_end: {}",
+                row.try_get::<i64, _>("detected_second_half_end")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_halftime_start: {}",
+                row.try_get::<i64, _>("detected_halftime_start")
+                    .unwrap_or(0)
+            );
+            println!(
+                "detected_halftime_end: {}",
+                row.try_get::<i64, _>("detected_halftime_end").unwrap_or(0)
+            );
         }
         Err(e) => println!("Error in insert/update: {}", e),
     }
@@ -690,21 +745,39 @@ pub async fn detect_and_store_match_periods(
         .fetch_one(&pool)
         .await {
         Ok(row) => {
-            let match_name: String = row.try_get("match_name").unwrap_or_default();
-            let detected_first_half_start: i64 = row.try_get::<i32, _>("detected_first_half_start").unwrap_or(0) as i64;
-            let detected_first_half_end: i64 = row.try_get::<i32, _>("detected_first_half_end").unwrap_or(0) as i64;
-            let detected_second_half_start: i64 = row.try_get::<i32, _>("detected_second_half_start").unwrap_or(0) as i64;
-            let detected_second_half_end: i64 = row.try_get::<i32, _>("detected_second_half_end").unwrap_or(0) as i64;
-            let detected_halftime_start: i64 = row.try_get::<i32, _>("detected_halftime_start").unwrap_or(0) as i64;
-            let detected_halftime_end: i64 = row.try_get::<i32, _>("detected_halftime_end").unwrap_or(0) as i64;
-            let manual_first_half_start: Option<i64> = row.try_get::<i32, _>("manual_first_half_start").ok().map(|v| v as i64);
-            let manual_first_half_end: Option<i64> = row.try_get::<i32, _>("manual_first_half_end").ok().map(|v| v as i64);
-            let manual_second_half_start: Option<i64> = row.try_get::<i32, _>("manual_second_half_start").ok().map(|v| v as i64);
-            let manual_second_half_end: Option<i64> = row.try_get::<i32, _>("manual_second_half_end").ok().map(|v| v as i64);
-            let manual_halftime_start: Option<i64> = row.try_get::<i32, _>("manual_halftime_start").ok().map(|v| v as i64);
-            let manual_halftime_end: Option<i64> = row.try_get::<i32, _>("manual_halftime_end").ok().map(|v| v as i64);
+            println!("\nFinal SELECT result:");
             
-            return Json(json!({
+            // Debug: imprimir cada campo individualmente
+            let match_name: String = row.try_get("match_name").unwrap_or_default();
+            let detected_first_half_start: i64 = row.try_get("detected_first_half_start").unwrap_or_default();
+            let detected_first_half_end: i64 = row.try_get("detected_first_half_end").unwrap_or_default();
+            let detected_second_half_start: i64 = row.try_get("detected_second_half_start").unwrap_or_default();
+            let detected_second_half_end: i64 = row.try_get("detected_second_half_end").unwrap_or_default();
+            let detected_halftime_start: i64 = row.try_get("detected_halftime_start").unwrap_or_default();
+            let detected_halftime_end: i64 = row.try_get("detected_halftime_end").unwrap_or_default();
+            let manual_first_half_start: Option<i64> = row.try_get("manual_first_half_start").unwrap_or_default();
+            let manual_first_half_end: Option<i64> = row.try_get("manual_first_half_end").unwrap_or_default();
+            let manual_second_half_start: Option<i64> = row.try_get("manual_second_half_start").unwrap_or_default();
+            let manual_second_half_end: Option<i64> = row.try_get("manual_second_half_end").unwrap_or_default();
+            let manual_halftime_start: Option<i64> = row.try_get("manual_halftime_start").unwrap_or_default();
+            let manual_halftime_end: Option<i64> = row.try_get("manual_halftime_end").unwrap_or_default();
+            
+            println!("Raw values from DB:");
+            println!("  match_name: {}", match_name);
+            println!("  detected_first_half_start: {}", detected_first_half_start);
+            println!("  detected_first_half_end: {}", detected_first_half_end);
+            println!("  detected_second_half_start: {}", detected_second_half_start);
+            println!("  detected_second_half_end: {}", detected_second_half_end);
+            println!("  detected_halftime_start: {}", detected_halftime_start);
+            println!("  detected_halftime_end: {}", detected_halftime_end);
+            println!("  manual_first_half_start: {:?}", manual_first_half_start);
+            println!("  manual_first_half_end: {:?}", manual_first_half_end);
+            println!("  manual_second_half_start: {:?}", manual_second_half_start);
+            println!("  manual_second_half_end: {:?}", manual_second_half_end);
+            println!("  manual_halftime_start: {:?}", manual_halftime_start);
+            println!("  manual_halftime_end: {:?}", manual_halftime_end);
+            
+            let response = json!({
                 "match_name": match_name,
                 "detected_first_half_start": detected_first_half_start,
                 "detected_first_half_end": detected_first_half_end,
@@ -718,13 +791,96 @@ pub async fn detect_and_store_match_periods(
                 "manual_second_half_end": manual_second_half_end,
                 "manual_halftime_start": manual_halftime_start,
                 "manual_halftime_end": manual_halftime_end
-            }));
+            });
+            println!("Response JSON: {}", response);
+            return Json(response);
         }
         Err(e) => {
             println!("Error in final SELECT: {}", e);
             return Json(json!({"error": format!("Error retrieving match periods: {}", e)}));
         }
     }
+}
+
+
+
+pub async fn get_player_worst_cases_from_view(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+) -> Json<Value> {
+    // Query usando la vista procesada (como en tu query original)
+    let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
+    
+    let worst_cases_query = format!(
+        r#"
+        WITH high_speed_data AS (
+            SELECT 
+                player_display_name, 
+                time,
+                distancia_total_calc,
+                speed,
+                '00:00:00'::TIME + 
+                (SUBSTRING(time FROM 1 FOR 2) || ' hours')::INTERVAL
+                + (SUBSTRING(time FROM 4 FOR 2) || ' minutes')::INTERVAL
+                + (SUBSTRING(time FROM 7) || ' seconds')::INTERVAL AS second_interval
+            FROM public.{}
+            WHERE speed > {}  -- High Speed Running threshold
+        ),
+        minute_window_data AS (
+            SELECT 
+                player_display_name,
+                second_interval,
+                SUM(distancia_total_calc) OVER (
+                    PARTITION BY player_display_name 
+                    ORDER BY second_interval
+                    RANGE BETWEEN INTERVAL '0 seconds' PRECEDING AND INTERVAL '59 seconds' FOLLOWING
+                ) AS total_distance_in_minute
+            FROM high_speed_data
+        ),
+        max_minute_window AS (
+            SELECT 
+                player_display_name,
+                second_interval AS start_second,
+                second_interval + INTERVAL '1 minute' AS end_second,
+                total_distance_in_minute AS distance_covered,
+                ROW_NUMBER() OVER (
+                    PARTITION BY player_display_name 
+                    ORDER BY total_distance_in_minute DESC
+                ) AS rank
+            FROM minute_window_data
+        )
+        SELECT 
+            player_display_name,
+            start_second::TEXT as start_second,
+            end_second::TEXT as end_second,
+            distance_covered
+        FROM max_minute_window
+        WHERE rank = 1
+        ORDER BY player_display_name
+        "#,
+        view_name, HSR_THRESHOLD_KMH
+    );
+
+    let results = sqlx::query(&worst_cases_query)
+        .fetch_all(&pool)
+        .await
+        .unwrap_or_default();
+
+    let worst_cases_json: Vec<Value> = results
+        .into_iter()
+        .map(|row| {
+            json!({
+                "player_display_name": row.try_get::<String, _>("player_display_name").unwrap_or_default(),
+                "start_second": parse_interval_to_seconds(&row.try_get::<String, _>("start_second").unwrap_or_default()),
+                "end_second": parse_interval_to_seconds(&row.try_get::<String, _>("end_second").unwrap_or_default()),
+                "distance_covered": row.try_get::<f64, _>("distance_covered").unwrap_or(0.0)
+            })
+        })
+        .collect();
+
+    Json(json!({
+        "worst_cases": worst_cases_json
+    }))
 }
 
 // Utilidad para calcular diferencia en segundos entre dos strings HH:MM:SS(.MS)
@@ -741,3 +897,23 @@ fn diff_in_seconds(time1: &str, time2: &str) -> f64 {
     };
     parse(time2) - parse(time1)
 }
+
+// Utilidad para convertir intervalo PostgreSQL a segundos
+fn parse_interval_to_seconds(interval_str: &str) -> f64 {
+    if interval_str.is_empty() {
+        return 0.0;
+    }
+    
+    // Formato de PostgreSQL INTERVAL: "HH:MM:SS" o "HH:MM:SS.MS"
+    let parts: Vec<&str> = interval_str.split(':').collect();
+    if parts.len() < 3 {
+        return 0.0;
+    }
+    
+    let h = parts[0].parse::<f64>().unwrap_or(0.0);
+    let m = parts[1].parse::<f64>().unwrap_or(0.0);
+    let s = parts[2].parse::<f64>().unwrap_or(0.0);
+    
+    h * 3600.0 + m * 60.0 + s
+}
+
