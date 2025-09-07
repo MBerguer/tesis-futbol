@@ -26,12 +26,12 @@ interface MatchEntries {
 
 interface MatchPeriods {
   match_name: string;
-  detected_first_half_start: number;
-  detected_first_half_end: number;
-  detected_second_half_start: number;
-  detected_second_half_end: number;
-  detected_halftime_start: number;
-  detected_halftime_end: number;
+  detected_first_half_start?: number;
+  detected_first_half_end?: number;
+  detected_second_half_start?: number;
+  detected_second_half_end?: number;
+  detected_halftime_start?: number;
+  detected_halftime_end?: number;
   manual_first_half_start?: number;
   manual_first_half_end?: number;
   manual_second_half_start?: number;
@@ -161,21 +161,30 @@ export default function SprintsPage() {
         throw new Error(data.error);
       }
 
+      // Función helper para convertir valores de manera segura
+      const safeParseInt = (value: any): number | undefined => {
+        if (value === null || value === undefined || value === "") {
+          return undefined;
+        }
+        const parsed = parseInt(String(value));
+        return isNaN(parsed) ? undefined : parsed;
+      };
+
       // Convertir explícitamente a números y verificar
       const processedData = {
         match_name: data.match_name,
-        detected_first_half_start: parseInt(data.detected_first_half_start),
-        detected_first_half_end: parseInt(data.detected_first_half_end),
-        detected_second_half_start: parseInt(data.detected_second_half_start),
-        detected_second_half_end: parseInt(data.detected_second_half_end),
-        detected_halftime_start: parseInt(data.detected_halftime_start),
-        detected_halftime_end: parseInt(data.detected_halftime_end),
-        manual_first_half_start: data.manual_first_half_start ? parseInt(data.manual_first_half_start) : undefined,
-        manual_first_half_end: data.manual_first_half_end ? parseInt(data.manual_first_half_end) : undefined,
-        manual_second_half_start: data.manual_second_half_start ? parseInt(data.manual_second_half_start) : undefined,
-        manual_second_half_end: data.manual_second_half_end ? parseInt(data.manual_second_half_end) : undefined,
-        manual_halftime_start: data.manual_halftime_start ? parseInt(data.manual_halftime_start) : undefined,
-        manual_halftime_end: data.manual_halftime_end ? parseInt(data.manual_halftime_end) : undefined,
+        detected_first_half_start: safeParseInt(data.detected_first_half_start),
+        detected_first_half_end: safeParseInt(data.detected_first_half_end),
+        detected_second_half_start: safeParseInt(data.detected_second_half_start),
+        detected_second_half_end: safeParseInt(data.detected_second_half_end),
+        detected_halftime_start: safeParseInt(data.detected_halftime_start),
+        detected_halftime_end: safeParseInt(data.detected_halftime_end),
+        manual_first_half_start: safeParseInt(data.manual_first_half_start),
+        manual_first_half_end: safeParseInt(data.manual_first_half_end),
+        manual_second_half_start: safeParseInt(data.manual_second_half_start),
+        manual_second_half_end: safeParseInt(data.manual_second_half_end),
+        manual_halftime_start: safeParseInt(data.manual_halftime_start),
+        manual_halftime_end: safeParseInt(data.manual_halftime_end),
       };
       
       console.log("Processed data with explicit parsing:", processedData);
@@ -265,14 +274,10 @@ export default function SprintsPage() {
   const formatTime = (seconds: number | undefined) => {
     if (seconds === undefined || seconds === null) return "-";
     
-    console.log("formatTime input:", seconds);
-    
     // Asegurarse de que estamos trabajando con un número
     const rawSeconds = parseInt(String(seconds));
-    console.log("formatTime parsed seconds:", rawSeconds);
     
     if (isNaN(rawSeconds)) {
-      console.log("formatTime: invalid number");
       return "-";
     }
     
@@ -280,10 +285,7 @@ export default function SprintsPage() {
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
     
-    const formattedTime = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    console.log("formatTime output:", formattedTime);
-    
-    return formattedTime;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Función para convertir segundos desde inicio del partido a formato HH:MM:SS

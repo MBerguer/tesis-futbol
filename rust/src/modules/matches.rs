@@ -385,18 +385,18 @@ pub async fn detect_and_store_match_periods(
             println!("  Column {}: {} (type: {})", i, col_name, column.type_info());
         }
         
-        let detected_first_half_start: i64 = row.try_get("detected_first_half_start").unwrap_or(0);
-        let detected_first_half_end: i64 = row.try_get("detected_first_half_end").unwrap_or(0);
-        let detected_second_half_start: i64 = row.try_get("detected_second_half_start").unwrap_or(0);
-        let detected_second_half_end: i64 = row.try_get("detected_second_half_end").unwrap_or(0);
-        let detected_halftime_start: i64 = row.try_get("detected_halftime_start").unwrap_or(0);
-        let detected_halftime_end: i64 = row.try_get("detected_halftime_end").unwrap_or(0);
-        let manual_first_half_start: Option<i64> = row.try_get("manual_first_half_start").ok();
-        let manual_first_half_end: Option<i64> = row.try_get("manual_first_half_end").ok();
-        let manual_second_half_start: Option<i64> = row.try_get("manual_second_half_start").ok();
-        let manual_second_half_end: Option<i64> = row.try_get("manual_second_half_end").ok();
-        let manual_halftime_start: Option<i64> = row.try_get("manual_halftime_start").ok();
-        let manual_halftime_end: Option<i64> = row.try_get("manual_halftime_end").ok();
+        let detected_first_half_start: i32 = row.try_get("detected_first_half_start").unwrap_or(0);
+        let detected_first_half_end: i32 = row.try_get("detected_first_half_end").unwrap_or(0);
+        let detected_second_half_start: i32 = row.try_get("detected_second_half_start").unwrap_or(0);
+        let detected_second_half_end: i32 = row.try_get("detected_second_half_end").unwrap_or(0);
+        let detected_halftime_start: i32 = row.try_get("detected_halftime_start").unwrap_or(0);
+        let detected_halftime_end: i32 = row.try_get("detected_halftime_end").unwrap_or(0);
+        let manual_first_half_start: Option<i32> = row.try_get("manual_first_half_start").ok();
+        let manual_first_half_end: Option<i32> = row.try_get("manual_first_half_end").ok();
+        let manual_second_half_start: Option<i32> = row.try_get("manual_second_half_start").ok();
+        let manual_second_half_end: Option<i32> = row.try_get("manual_second_half_end").ok();
+        let manual_halftime_start: Option<i32> = row.try_get("manual_halftime_start").ok();
+        let manual_halftime_end: Option<i32> = row.try_get("manual_halftime_end").ok();
         
         println!("Existing values from DB:");
         println!("  detected_first_half_start: {}", detected_first_half_start);
@@ -406,24 +406,31 @@ pub async fn detect_and_store_match_periods(
         println!("  detected_halftime_start: {}", detected_halftime_start);
         println!("  detected_halftime_end: {}", detected_halftime_end);
         
-        let response = json!({
-            "match_name": match_name,
-            "detected_first_half_start": detected_first_half_start,
-            "detected_first_half_end": detected_first_half_end,
-            "detected_second_half_start": detected_second_half_start,
-            "detected_second_half_end": detected_second_half_end,
-            "detected_halftime_start": detected_halftime_start,
-            "detected_halftime_end": detected_halftime_end,
-            "manual_first_half_start": manual_first_half_start,
-            "manual_first_half_end": manual_first_half_end,
-            "manual_second_half_start": manual_second_half_start,
-            "manual_second_half_end": manual_second_half_end,
-            "manual_halftime_start": manual_halftime_start,
-            "manual_halftime_end": manual_halftime_end
-        });
-        
-        println!("Returning existing data: {}", response);
-        return Json(response);
+        // Si todos los valores detectados son 0, ejecutar nueva detección
+        if detected_first_half_start == 0 && detected_first_half_end == 0 && 
+           detected_second_half_start == 0 && detected_second_half_end == 0 &&
+           detected_halftime_start == 0 && detected_halftime_end == 0 {
+            println!("All detected values are 0, proceeding with new detection...");
+        } else {
+            let response = json!({
+                "match_name": match_name,
+                "detected_first_half_start": detected_first_half_start,
+                "detected_first_half_end": detected_first_half_end,
+                "detected_second_half_start": detected_second_half_start,
+                "detected_second_half_end": detected_second_half_end,
+                "detected_halftime_start": detected_halftime_start,
+                "detected_halftime_end": detected_halftime_end,
+                "manual_first_half_start": manual_first_half_start,
+                "manual_first_half_end": manual_first_half_end,
+                "manual_second_half_start": manual_second_half_start,
+                "manual_second_half_end": manual_second_half_end,
+                "manual_halftime_start": manual_halftime_start,
+                "manual_halftime_end": manual_halftime_end
+            });
+            
+            println!("Returning existing data: {}", response);
+            return Json(response);
+        }
     }
 
     println!("No existing data found, proceeding with detection...");
@@ -528,6 +535,13 @@ pub async fn detect_and_store_match_periods(
     let duracion_segundo_tiempo = 45 * 60; // 45 minutos en segundos
 
     println!("Starting period detection with {} data points", data.len());
+    
+    // Debug: verificar si hay datos de velocidad
+    let speed_data_count = data.iter().filter(|row| {
+        row.get("centralized_elapsed_time").and_then(|v| v.as_f64()).is_some() &&
+        row.get("speed").and_then(|v| v.as_f64()).is_some()
+    }).count();
+    println!("Data points with both elapsed_time and speed: {}", speed_data_count);
 
     // Agrupar por segundo y calcular velocidad promedio por segundo
     let mut second_speed: HashMap<i64, Vec<f64>> = HashMap::new();
@@ -574,6 +588,12 @@ pub async fn detect_and_store_match_periods(
     if current_block.len() as i64 >= ventana_entretiempo {
         halftime_blocks.push(current_block.clone());
     }
+    
+    println!("Found {} halftime blocks (min {} seconds each)", halftime_blocks.len(), ventana_entretiempo);
+    for (i, block) in halftime_blocks.iter().enumerate() {
+        println!("  Block {}: {} seconds (from {} to {})", i, block.len(), block[0], block.last().unwrap());
+    }
+    
     // Tomar el primer bloque válido que no sea al principio
     let halftime_block = halftime_blocks
         .into_iter()
@@ -584,6 +604,8 @@ pub async fn detect_and_store_match_periods(
     } else {
         (0, 0)
     };
+    
+    println!("Selected halftime block: from {} to {}", halftime_start, halftime_end);
 
     // Detectar inicio del primer tiempo (primer bloque de velocidad > 5.9 durante 10+ segundos)
     let mut first_half_start = 0;
@@ -642,6 +664,18 @@ pub async fn detect_and_store_match_periods(
     println!("Second half end: {}", second_half_end);
     println!("Halftime start: {}", halftime_start);
     println!("Halftime end: {}", halftime_end);
+    
+    // Debug: imprimir algunos datos de velocidad para entender qué está pasando
+    println!("Sample speed data (first 20 entries):");
+    for (i, (sec, speed)) in second_avg_speed.iter().take(20).enumerate() {
+        println!("  {}: sec={}, speed={}", i, sec, speed);
+    }
+    
+    println!("Sample speed data (last 20 entries):");
+    let total_entries = second_avg_speed.len();
+    for (i, (sec, speed)) in second_avg_speed.iter().skip(total_entries.saturating_sub(20)).enumerate() {
+        println!("  {}: sec={}, speed={}", i, sec, speed);
+    }
 
     // Guardar/actualizar en match_periods
     let insert_query = r#"
@@ -689,32 +723,32 @@ pub async fn detect_and_store_match_periods(
             println!("\nReturned values after insert/update:");
             println!(
                 "detected_first_half_start: {}",
-                row.try_get::<i64, _>("detected_first_half_start")
+                row.try_get::<i32, _>("detected_first_half_start")
                     .unwrap_or(0)
             );
             println!(
                 "detected_first_half_end: {}",
-                row.try_get::<i64, _>("detected_first_half_end")
+                row.try_get::<i32, _>("detected_first_half_end")
                     .unwrap_or(0)
             );
             println!(
                 "detected_second_half_start: {}",
-                row.try_get::<i64, _>("detected_second_half_start")
+                row.try_get::<i32, _>("detected_second_half_start")
                     .unwrap_or(0)
             );
             println!(
                 "detected_second_half_end: {}",
-                row.try_get::<i64, _>("detected_second_half_end")
+                row.try_get::<i32, _>("detected_second_half_end")
                     .unwrap_or(0)
             );
             println!(
                 "detected_halftime_start: {}",
-                row.try_get::<i64, _>("detected_halftime_start")
+                row.try_get::<i32, _>("detected_halftime_start")
                     .unwrap_or(0)
             );
             println!(
                 "detected_halftime_end: {}",
-                row.try_get::<i64, _>("detected_halftime_end").unwrap_or(0)
+                row.try_get::<i32, _>("detected_halftime_end").unwrap_or(0)
             );
         }
         Err(e) => println!("Error in insert/update: {}", e),
@@ -749,18 +783,18 @@ pub async fn detect_and_store_match_periods(
             
             // Debug: imprimir cada campo individualmente
             let match_name: String = row.try_get("match_name").unwrap_or_default();
-            let detected_first_half_start: i64 = row.try_get("detected_first_half_start").unwrap_or_default();
-            let detected_first_half_end: i64 = row.try_get("detected_first_half_end").unwrap_or_default();
-            let detected_second_half_start: i64 = row.try_get("detected_second_half_start").unwrap_or_default();
-            let detected_second_half_end: i64 = row.try_get("detected_second_half_end").unwrap_or_default();
-            let detected_halftime_start: i64 = row.try_get("detected_halftime_start").unwrap_or_default();
-            let detected_halftime_end: i64 = row.try_get("detected_halftime_end").unwrap_or_default();
-            let manual_first_half_start: Option<i64> = row.try_get("manual_first_half_start").unwrap_or_default();
-            let manual_first_half_end: Option<i64> = row.try_get("manual_first_half_end").unwrap_or_default();
-            let manual_second_half_start: Option<i64> = row.try_get("manual_second_half_start").unwrap_or_default();
-            let manual_second_half_end: Option<i64> = row.try_get("manual_second_half_end").unwrap_or_default();
-            let manual_halftime_start: Option<i64> = row.try_get("manual_halftime_start").unwrap_or_default();
-            let manual_halftime_end: Option<i64> = row.try_get("manual_halftime_end").unwrap_or_default();
+            let detected_first_half_start: i32 = row.try_get("detected_first_half_start").unwrap_or_default();
+            let detected_first_half_end: i32 = row.try_get("detected_first_half_end").unwrap_or_default();
+            let detected_second_half_start: i32 = row.try_get("detected_second_half_start").unwrap_or_default();
+            let detected_second_half_end: i32 = row.try_get("detected_second_half_end").unwrap_or_default();
+            let detected_halftime_start: i32 = row.try_get("detected_halftime_start").unwrap_or_default();
+            let detected_halftime_end: i32 = row.try_get("detected_halftime_end").unwrap_or_default();
+            let manual_first_half_start: Option<i32> = row.try_get("manual_first_half_start").ok();
+            let manual_first_half_end: Option<i32> = row.try_get("manual_first_half_end").ok();
+            let manual_second_half_start: Option<i32> = row.try_get("manual_second_half_start").ok();
+            let manual_second_half_end: Option<i32> = row.try_get("manual_second_half_end").ok();
+            let manual_halftime_start: Option<i32> = row.try_get("manual_halftime_start").ok();
+            let manual_halftime_end: Option<i32> = row.try_get("manual_halftime_end").ok();
             
             println!("Raw values from DB:");
             println!("  match_name: {}", match_name);
