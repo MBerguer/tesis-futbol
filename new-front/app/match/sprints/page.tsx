@@ -312,12 +312,16 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
               <div className="grid grid-cols-1 gap-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Average Speed Over Time</CardTitle>
+                    <CardTitle>Average Speed Over Time
+                    {loadingEntries&&(
+                      <Spinner />
+                    )}
+                    </CardTitle>
                     <ThresholdLegend thresholds={thresholds} />
                   </CardHeader>
                   <CardContent>
-                    {loadingEntries || loadingPeriods ? (
-                      <Spinner />
+                    {loadingEntries ? (                      
+                      <Skeleton className="h-[360px]" />
                     ) : entries.length === 0 || !periods ? (
                       <div className="text-sm text-gray-600">No data to display.</div>
                     ) : (
@@ -339,7 +343,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     <CardTitle>Match Video</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {loadingEntries ? <Spinner /> : <VideoComponent />}
+                    <VideoComponent />
                   </CardContent>
                 </Card>
                 <Card>

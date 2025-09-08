@@ -5,6 +5,39 @@
 /* MapLibre CSS */
 @import "maplibre-gl/dist/maplibre-gl.css";
 
+/* Hide range input thumb (slider knob) for custom overlay markers */
+.range-no-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0px;
+  height: 0px;
+  background: transparent;
+  border: none;
+  opacity: 0;
+  pointer-events: none;
+}
+.range-no-thumb::-moz-range-thumb {
+  width: 0px;
+  height: 0px;
+  border: none;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+.range-no-thumb::-ms-thumb {
+  width: 0px;
+  height: 0px;
+  border: none;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Ensure WebKit uses our styling (keeps native track, hides thumb) */
+.range-no-thumb {
+  -webkit-tap-highlight-color: transparent;
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
