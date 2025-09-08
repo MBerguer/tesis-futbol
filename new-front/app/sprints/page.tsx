@@ -1,11 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useMatchData } from "./hooks/useMatchData";
 import { Card, CardContent, CardHeader, CardTitle } from "../dashboard/components/ui/card";
 import { Button } from "../dashboard/components/ui/button";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
-import { formatTime, formatMatchTime, toAbsoluteTime as toAbsFromUtils, formatDuration } from './utils/time';
 import PeriodsSummary from "./components/PeriodsSummary";
 import PlayersChart from "./components/PlayersChart";
 import AvgSpeedChart from "./components/AvgSpeedChart";
@@ -15,6 +13,7 @@ import SprintsTable from "./components/SprintsTable";
 import Skeleton from "./components/Skeleton";
 import TopProgress from "./components/TopProgress";
 import ThresholdLegend from "./components/ThresholdLegend";
+import PlayerMiniList from "./components/PlayerMiniList";
 
 interface MatchTable {
   tables: string[];
@@ -29,10 +28,6 @@ interface MatchEntry {
   time: string;
   speed: number;
   centralized_elapsed_time: number;
-}
-
-interface MatchEntries {
-  entries: MatchEntry[];
 }
 
 interface MatchPeriods {
@@ -58,10 +53,6 @@ interface WorstCase {
   distance_covered: number;
 }
 
-interface WorstCases {
-  worst_cases: WorstCase[];
-}
-
 interface SprintInWorstCase {
   player_display_name: string;
   sprint_id: number;
@@ -75,9 +66,6 @@ interface SprintInWorstCase {
   worst_case_distance_covered: number;
 }
 
-interface SprintsInWorstCases {
-  sprints_in_worst_cases: SprintInWorstCase[];
-}
 
 export default function SprintsPage() {
   const [matchTables, setMatchTables] = useState<string[]>([]);
@@ -87,21 +75,11 @@ export default function SprintsPage() {
   const [entries, setEntries] = useState<MatchEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingEntries, setLoadingEntries] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showTable, setShowTable] = useState(false);
   const [periods, setPeriods] = useState<MatchPeriods | null>(null);
   const [kickoffSpike, setKickoffSpike] = useState<number | null>(null);
   const [thresholds, setThresholds] = useState<{ match: number; halftime: number; kickoff: number } | null>(null);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [baseTime, setBaseTime] = useState<string | null>(null);
-  const thresholdsMps = React.useMemo(() => {
-    if (!thresholds) return null;
-    return {
-      match: thresholds.match / 3.6,
-      halftime: thresholds.halftime / 3.6,
-      kickoff: thresholds.kickoff / 3.6,
-    };
-  }, [thresholds]);
   
   // Nuevos estados para worst cases y sprints
   const [worstCases, setWorstCases] = useState<WorstCase[]>([]);
@@ -113,6 +91,7 @@ export default function SprintsPage() {
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'periods'>('overview');
 
   // Auto-loading data hook (must be called directly, not inside useMemo)
   const autoData = useMatchData(API_BASE, selectedTable, reloadToken);
@@ -125,8 +104,6 @@ export default function SprintsPage() {
   const sprintsAuto = autoData.sprints;
   const loadingDetectAuto = autoData.loadingDetect;
   const loadingEntriesAuto = autoData.loadingEntries;
-  const loadingWorstAuto = autoData.loadingWorstCases;
-  const loadingSprintsAuto = autoData.loadingSprints;
 
   // Bridge hook data into existing local state (minimal refactor)
   useEffect(() => {
@@ -139,7 +116,6 @@ export default function SprintsPage() {
     if (sprintsAuto) { setSprintsInWorstCases(sprintsAuto); setShowSprints(sprintsAuto.length > 0); }
     setLoadingEntries(loadingEntriesAuto);
     setLoadingPeriods(loadingDetectAuto);
-    if (autoData.error) setError(autoData.error);
   }, [entriesAuto, periodsAuto, thresholdsAuto, kickoffSpikeAuto, baseTimeAuto, worstCasesAuto, sprintsAuto, loadingEntriesAuto, loadingDetectAuto, autoData.error]);
 
   // Clear previous data instantly on table change to show fresh skeletons
@@ -200,7 +176,7 @@ export default function SprintsPage() {
           setSelectedTable(fromUrl);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
+        console.error(err instanceof Error ? err.message : "An error occurred");
       } finally { setLoading(false); }
     };
     fetchMatchTables();
@@ -222,133 +198,6 @@ export default function SprintsPage() {
     } catch {}
   };
 
-  const handleRefresh = () => {
-    setReloadToken(Date.now());
-  };
-
-  // auto-load flows now; keep function only for legacy UI toggle
-  const handleShowEntries = async () => {};
-
-  const handleDetectPeriods = async () => {};
-
-  const handleLoadWorstCases = async () => {
-    if (!selectedTable) return;
-    
-    setLoadingWorstCases(true);
-    try {
-      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/worst-cases-from-view`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch worst cases");
-      }
-      const data: WorstCases = await response.json();
-      setWorstCases(data.worst_cases || []);
-      setShowWorstCases(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      setWorstCases([]);
-    } finally {
-      setLoadingWorstCases(false);
-    }
-  };
-
-  const handleLoadSprints = async () => {
-    if (!selectedTable) return;
-    
-    setLoadingSprints(true);
-    try {
-      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/sprints-in-worst-cases`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch sprints");
-      }
-      const data: SprintsInWorstCases = await response.json();
-      setSprintsInWorstCases(data.sprints_in_worst_cases || []);
-      setShowSprints(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      setSprintsInWorstCases([]);
-    } finally {
-      setLoadingSprints(false);
-    }
-  };
-
-  // Group entries by player for the chart
-  const playerData = React.useMemo(() => {
-    const dataByPlayer: { [key: string]: MatchEntry[] } = {};
-    entries.forEach(entry => {
-      if (!dataByPlayer[entry.player_display_name]) {
-        dataByPlayer[entry.player_display_name] = [];
-      }
-      dataByPlayer[entry.player_display_name].push(entry);
-    });
-    // Ordenar por tiempo para cada jugador
-    Object.keys(dataByPlayer).forEach(player => {
-      dataByPlayer[player].sort((a, b) => a.centralized_elapsed_time - b.centralized_elapsed_time);
-    });
-    return dataByPlayer;
-  }, [entries]);
-
-  // Construir una lista de todos los tiempos únicos
-  const allTimes = React.useMemo(() => {
-    return Array.from(new Set(entries.map(e => e.centralized_elapsed_time))).sort((a, b) => a - b);
-  }, [entries]);
-
-  // Construir la tabla cruzada (pivot) para el gráfico
-  const chartData = React.useMemo(() => {
-    return allTimes.map(time => {
-      const row: any = { centralized_elapsed_time: time };
-      Object.keys(playerData).forEach(player => {
-        const found = playerData[player].find(e => e.centralized_elapsed_time === time);
-        row[player] = found ? found.speed : null;
-      });
-      return row;
-    });
-  }, [allTimes, playerData]);
-
-  // Serie promedio por segundo (estilo notebook), requiere >=2 jugadores por segundo
-  const avgSeries = React.useMemo(() => {
-    if (entries.length === 0) return [] as { second: number; speed: number }[];
-    const secondToSpeeds: Map<number, number[]> = new Map();
-    const secondToPlayers: Map<number, Set<string>> = new Map();
-    for (const e of entries) {
-      const sec = Math.floor(e.centralized_elapsed_time);
-      if (!secondToSpeeds.has(sec)) secondToSpeeds.set(sec, []);
-      secondToSpeeds.get(sec)!.push(e.speed);
-      if (!secondToPlayers.has(sec)) secondToPlayers.set(sec, new Set());
-      secondToPlayers.get(sec)!.add(e.player_display_name);
-    }
-    const seconds = Array.from(secondToSpeeds.keys());
-    if (seconds.length === 0) return [] as { second: number; speed: number }[];
-    const minSec = Math.min(...seconds);
-    const maxSec = Math.max(...seconds);
-    const series: { second: number; speed: number }[] = [];
-    for (let s = minSec; s <= maxSec; s++) {
-      const speeds = secondToSpeeds.get(s) || [];
-      const players = secondToPlayers.get(s) || new Set<string>();
-      if (players.size >= 2 && speeds.length > 0) {
-        const sum = speeds.reduce((a, b) => a + b, 0);
-        series.push({ second: s, speed: sum / speeds.length });
-      } else {
-        series.push({ second: s, speed: 0 });
-      }
-    }
-    return series;
-  }, [entries]);
-
-  // X-axis ticks only at PT start/end and ST start/end
-  const keyTicks = React.useMemo(() => {
-    if (!periods) return undefined;
-    const values: number[] = [];
-    const push = (v: number | undefined) => {
-      if (typeof v === 'number') values.push(v);
-    };
-    push(periods.detected_first_half_start);
-    push(periods.detected_first_half_end);
-    push(periods.detected_second_half_start);
-    push(periods.detected_second_half_end);
-    // unique & sorted
-    return Array.from(new Set(values)).sort((a, b) => a - b);
-  }, [periods]);
-
   // Convert base time (HH:MM:SS.MS) + seconds to absolute HH:MM:SS
   const derivedBaseTime = React.useMemo(() => {
     if (!entries || entries.length === 0) return null as string | null;
@@ -359,30 +208,22 @@ export default function SprintsPage() {
     return t || null;
   }, [entries]);
 
-  const toAbsoluteTime = (sec: number | undefined) => {
-    if (sec === undefined || sec === null) return "-";
-    const base = baseTime || derivedBaseTime;
-    if (!base) return "-";
-    return toAbsFromUtils(base, sec);
-  };
-
-  if (loading && !selectedTable) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
 
   return (
     <main className="p-4">
       <TopProgress active={loading || loadingEntries || loadingPeriods || loadingWorstCases || loadingSprints} />
-      <div className="sticky top-2 z-40 mb-3 flex items-center gap-2">
+      <div className="mb-3">
+        <div className="flex items-center gap-2">
         <div className="text-xl font-semibold">Sprints & Periods</div>
         <div className="flex-1" />
-        <Button onClick={handleRefresh} variant="outline">Refresh</Button>
+        <div className="hidden md:flex items-center gap-2">
+          <Button variant={activeTab==='overview'?'default':'outline'} onClick={()=>setActiveTab('overview')}>Overview</Button>
+          <Button variant={activeTab==='players'?'default':'outline'} onClick={()=>setActiveTab('players')}>Players</Button>
+          <Button variant={activeTab==='periods'?'default':'outline'} onClick={()=>setActiveTab('periods')}>Periods</Button>
+        </div>
+        </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Match Tables</CardTitle>
@@ -400,29 +241,31 @@ export default function SprintsPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {selectedTable ? `Players in ${selectedTable}` : 'Select a match to view players'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingPlayers ? (
-                <div>Loading players...</div>
-              ) : (
-                <ul className="space-y-2">
-                  {players.map((player, index) => (
-                    <li key={index} className="p-2 border rounded">
-                      {player}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+        <div className="space-y-4 md:col-span-3">
+          {activeTab === 'players' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {selectedTable ? `Players in ${selectedTable}` : 'Select a match to view players'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingPlayers ? (
+                  <div>Loading players...</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {players.map((player, index) => (
+                      <li key={index} className="p-2 border rounded">
+                        {player}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-          {selectedTable && (
+          {selectedTable && activeTab === 'overview' && (
             <Card className="col-span-2">
               <CardHeader><CardTitle>Player Speeds Over Time</CardTitle></CardHeader>
               <CardContent>
@@ -435,7 +278,7 @@ export default function SprintsPage() {
             </Card>
           )}
 
-          {selectedTable && (
+          {selectedTable && activeTab === 'overview' && (
             <Card className="col-span-2">
               <CardHeader>
                 <CardTitle>Average Speed Over Time</CardTitle>
@@ -457,7 +300,7 @@ export default function SprintsPage() {
             </Card>
           )}
 
-          {selectedTable && (
+          {selectedTable && activeTab === 'players' && (
             <Card>
               <CardHeader>
                 <CardTitle>Match Entries</CardTitle>
@@ -467,7 +310,10 @@ export default function SprintsPage() {
                   <div>Loading entries...</div>
                 ) : entries && entries.length > 0 ? (
                   <div>
-                    {showTable && (
+                    <div className="mb-4">
+                      <PlayerMiniList entries={entries} />
+                    </div>
+                    
                       <div className="overflow-x-auto max-h-[400px]">
                         <table className="min-w-full">
                           <thead className="sticky top-0 bg-white">
@@ -490,7 +336,7 @@ export default function SprintsPage() {
                           </tbody>
                         </table>
                       </div>
-                    )}
+                    
                   </div>
                 ) : (
                   <div>No entries to show</div>
@@ -499,7 +345,7 @@ export default function SprintsPage() {
             </Card>
           )}
 
-          {selectedTable && (
+          {selectedTable && activeTab === 'periods' && (
             <Card>
               <CardHeader>
                 <CardTitle>Match Periods</CardTitle>
@@ -526,7 +372,7 @@ export default function SprintsPage() {
             </Card>
           )}
 
-          {selectedTable && (
+          {selectedTable && activeTab === 'players' && (
             <Card>
               <CardHeader>
                 <CardTitle>Worst Cases Analysis</CardTitle>
