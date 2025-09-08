@@ -103,7 +103,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const [thresholds, setThresholds] = useState<{ match: number; halftime: number; kickoff: number } | null>(null);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [baseTime, setBaseTime] = useState<string | null>(null);
-  const [videoCursorSec, setVideoCursorSec] = useState<number | null>(null);
+  const [videoTimeSec, setVideoTimeSec] = useState<number>(0);
   
   // Nuevos estados para worst cases y sprints
   const [worstCases, setWorstCases] = useState<WorstCase[]>([]);
@@ -332,7 +332,21 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                         thresholds={thresholds}
                         periods={periods}
                         kickoffSpike={kickoffSpike}
-                        cursorSecond={videoCursorSec}
+                        cursorSecond={(function(){
+                          const p = periods;
+                          const kickoff = kickoffSpike ?? 0;
+                          const t = videoTimeSec;
+                          if (!p) return kickoff + t;
+                          const fhStart = (p.detected_first_half_start ?? p.manual_first_half_start ?? kickoff) as number;
+                          const fhEnd = p.detected_first_half_end ?? p.manual_first_half_end;
+                          const shStart = p.detected_second_half_start ?? p.manual_second_half_start;
+                          if (typeof fhEnd === 'number' && typeof shStart === 'number') {
+                            const firstHalfDuration = Math.max(0, fhEnd - fhStart);
+                            if (t <= firstHalfDuration) return fhStart + t;
+                            return shStart + (t - firstHalfDuration);
+                          }
+                          return fhStart + t;
+                        })()}
                       />
                     )}
                   </CardContent>
@@ -345,7 +359,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     <CardTitle>Match Video</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <VideoComponent onSecondChange={(s)=>setVideoCursorSec(s)} />
+                    <VideoComponent onSecondChange={(s)=>setVideoTimeSec(s)} />
                   </CardContent>
                 </Card>
                 <Card>
