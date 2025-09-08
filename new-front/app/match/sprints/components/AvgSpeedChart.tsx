@@ -20,9 +20,11 @@ interface AvgSpeedChartProps {
   } | null;
   kickoffSpike?: number | null;
   cursorSecond?: number | null;
+  patchedFirstHalfStart?: number | null;
+  patchedSecondHalfStart?: number | null;
 }
 
-export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, kickoffSpike, cursorSecond }: AvgSpeedChartProps) {
+export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, kickoffSpike, cursorSecond, patchedFirstHalfStart, patchedSecondHalfStart }: AvgSpeedChartProps) {
   // build avg series per second (>=2 players) in km/h
   const series = React.useMemo<AvgPoint[]>(() => {
     if (!entries || entries.length === 0) return [];
@@ -91,6 +93,12 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
           )}
           {typeof cursorSecond === 'number' && (
             <ReferenceLine x={Math.floor(cursorSecond)} stroke="#111827" strokeWidth={2} ifOverflow="extendDomain" />
+          )}
+          {typeof patchedFirstHalfStart === 'number' && (
+            <ReferenceLine x={patchedFirstHalfStart} stroke="#7c3aed" strokeDasharray="2 2" strokeWidth={2} />
+          )}
+          {typeof patchedSecondHalfStart === 'number' && (
+            <ReferenceLine x={patchedSecondHalfStart} stroke="#7c3aed" strokeDasharray="2 2" strokeWidth={2} />
           )}
           {periods && periods.detected_halftime_start !== undefined && periods.detected_halftime_end !== undefined && (
             <ReferenceArea x1={periods.detected_halftime_start} x2={periods.detected_halftime_end} fill="#E53E3E" fillOpacity={0.28} ifOverflow="extendDomain" />

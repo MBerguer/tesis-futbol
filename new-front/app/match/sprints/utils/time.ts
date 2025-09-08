@@ -36,4 +36,23 @@ export function formatDuration(start?: number, end?: number) {
   return `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}:${ss.toString().padStart(2,'0')}`;
 }
 
+export function parseMmSsToSeconds(input: string): number | null {
+  if (!input) return null;
+  const parts = input.split(":").map((p) => p.trim());
+  if (parts.length !== 2) return null;
+  const m = Number(parts[0]);
+  const s = Number(parts[1]);
+  if (!isFinite(m) || !isFinite(s)) return null;
+  if (m < 0 || s < 0 || s >= 60) return null;
+  return m * 60 + s;
+}
+
+export function formatMmSsFromSeconds(sec?: number | null): string {
+  if (sec === undefined || sec === null || !isFinite(sec)) return "";
+  const v = Math.max(0, Math.floor(sec));
+  const m = Math.floor(v / 60);
+  const s = v % 60;
+  return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+}
+
 

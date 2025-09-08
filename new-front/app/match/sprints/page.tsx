@@ -18,6 +18,8 @@ import PlayerMiniList from "./components/PlayerMiniList";
 import VideoComponent from "../videoComponent";
 import StadiumMap from "./components/StadiumMap";
 import Spinner from "./components/Spinner";
+import { Button } from "../../players/components/ui/button";
+import { toAbsoluteTime as toAbsFromUtils, formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
 
 interface MatchPlayers {
   players: string[];
@@ -104,6 +106,11 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [baseTime, setBaseTime] = useState<string | null>(null);
   const [videoTimeSec, setVideoTimeSec] = useState<number>(0);
+  const [showPatchPanel, setShowPatchPanel] = useState<boolean>(false);
+  const [patchedFirstHalfStart, setPatchedFirstHalfStart] = useState<number | null>(null);
+  const [patchedSecondHalfStart, setPatchedSecondHalfStart] = useState<number | null>(null);
+  const [patchedFirstHalfDuration, setPatchedFirstHalfDuration] = useState<number | null>(null);
+  const [patchedSecondHalfDuration, setPatchedSecondHalfDuration] = useState<number | null>(null);
   
   // Nuevos estados para worst cases y sprints
   const [worstCases, setWorstCases] = useState<WorstCase[]>([]);
@@ -194,6 +201,19 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
       .sort()[0];
     return t || null;
   }, [entries]);
+
+  // Initialize patch values whenever detected periods load/update
+  useEffect(() => {
+    if (!periods) return;
+    const fh = periods.detected_first_half_start ?? null;
+    const sh = periods.detected_second_half_start ?? null;
+    setPatchedFirstHalfStart(typeof fh === 'number' ? fh : null);
+    setPatchedSecondHalfStart(typeof sh === 'number' ? sh : null);
+    const fe = periods.detected_first_half_end ?? null;
+    setPatchedFirstHalfDuration(fh !== null && fe !== null ? Math.max(0, Math.floor(fe - fh)) : null);
+    const se = periods.detected_second_half_end ?? null;
+    setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
+  }, [periods?.detected_first_half_start, periods?.detected_second_half_start]);
 
 
   return (
@@ -310,14 +330,21 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                <Card>
+              <div className={`grid gap-4 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
+                <Card className={`${showPatchPanel ? 'md:col-span-5' : ''}`}>
                   <CardHeader>
                     <CardTitle>Average Speed Over Time
                     {loadingEntries&&(
                       <Spinner />
                     )}
                     </CardTitle>
+                    {!showPatchPanel && (
+                      <div className="ml-auto">
+                        <Button variant={'outline'} onClick={()=>setShowPatchPanel(true)}>
+                          Edit Periods
+                        </Button>
+                      </div>
+                    )}
                     <ThresholdLegend thresholds={thresholds} />
                   </CardHeader>
                   <CardContent>
@@ -336,21 +363,107 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                           const p = periods;
                           const kickoff = kickoffSpike ?? 0;
                           const t = videoTimeSec;
+                          const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
+                          const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+                          const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
                           if (!p) return kickoff + t;
-                          const fhStart = (p.detected_first_half_start ?? p.manual_first_half_start ?? kickoff) as number;
-                          const fhEnd = p.detected_first_half_end ?? p.manual_first_half_end;
-                          const shStart = p.detected_second_half_start ?? p.manual_second_half_start;
-                          if (typeof fhEnd === 'number' && typeof shStart === 'number') {
-                            const firstHalfDuration = Math.max(0, fhEnd - fhStart);
-                            if (t <= firstHalfDuration) return fhStart + t;
-                            return shStart + (t - firstHalfDuration);
+                          if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+                            const firstHalfDuration = Math.max(0, fhDurPatched);
+                            if (t <= firstHalfDuration) return fhStartPatched + t;
+                            return shStartPatched + (t - firstHalfDuration);
                           }
-                          return fhStart + t;
+                          return fhStartPatched + t;
                         })()}
+                        patchedFirstHalfStart={patchedFirstHalfStart}
+                        patchedSecondHalfStart={patchedSecondHalfStart}
                       />
                     )}
                   </CardContent>
                 </Card>
+                {showPatchPanel && (
+                  <Card className="md:col-span-1">
+                    <CardHeader>
+                      <CardTitle>Periods Editor</CardTitle>
+                      <div className="ml-auto">
+                        <Button variant={'secondary'} onClick={()=>setShowPatchPanel(false)}>Close Editor</Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {!periods ? (
+                        <div className="text-sm text-gray-600">No detected periods yet.</div>
+                      ) : (
+                        <div className="space-y-4 text-sm">
+                          <div>
+                            <div className="font-medium mb-1">Detected first half start</div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 rounded bg-zinc-100">sec: {periods.detected_first_half_start ?? '—'}</span>
+                              <span className="px-2 py-1 rounded bg-zinc-100">time: {toAbsFromUtils(baseTime || null, periods.detected_first_half_start)}</span>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-medium mb-1">Detected second half start</div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 rounded bg-zinc-100">sec: {periods.detected_second_half_start ?? '—'}</span>
+                              <span className="px-2 py-1 rounded bg-zinc-100">time: {toAbsFromUtils(baseTime || null, periods.detected_second_half_start)}</span>
+                            </div>
+                          </div>
+                          <hr />
+                          <div>
+                            <div className="font-medium mb-1">Patched first half start (sec)</div>
+                            <input
+                              type="number"
+                              className="w-full border rounded px-2 py-1"
+                              value={patchedFirstHalfStart ?? ''}
+                              onChange={(e)=>setPatchedFirstHalfStart(e.target.value === '' ? null : Number(e.target.value))}
+                            />
+                          </div>
+                          <div>
+                            <div className="font-medium mb-1">Patched second half start (sec)</div>
+                            <input
+                              type="number"
+                              className="w-full border rounded px-2 py-1"
+                              value={patchedSecondHalfStart ?? ''}
+                              onChange={(e)=>setPatchedSecondHalfStart(e.target.value === '' ? null : Number(e.target.value))}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant={'outline'} onClick={()=>{
+                              setPatchedFirstHalfStart(periods.detected_first_half_start ?? null);
+                              setPatchedSecondHalfStart(periods.detected_second_half_start ?? null);
+                              const fh = periods.detected_first_half_start ?? null;
+                              const fe = periods.detected_first_half_end ?? null;
+                              setPatchedFirstHalfDuration(fh !== null && fe !== null ? Math.max(0, Math.floor(fe - fh)) : null);
+                              const sh = periods.detected_second_half_start ?? null;
+                              const se = periods.detected_second_half_end ?? null;
+                              setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
+                            }}>Reset to detected</Button>
+                          </div>
+                          <hr />
+                          <div>
+                            <div className="font-medium mb-1">First half duration (mm:ss)</div>
+                            <input
+                              type="text"
+                              placeholder="45:00"
+                              className="w-full border rounded px-2 py-1"
+                              value={formatMmSsFromSeconds(patchedFirstHalfDuration)}
+                              onChange={(e)=> setPatchedFirstHalfDuration(parseMmSsToSeconds(e.target.value))}
+                            />
+                          </div>
+                          <div>
+                            <div className="font-medium mb-1">Second half duration (mm:ss)</div>
+                            <input
+                              type="text"
+                              placeholder="45:00"
+                              className="w-full border rounded px-2 py-1"
+                              value={formatMmSsFromSeconds(patchedSecondHalfDuration)}
+                              onChange={(e)=> setPatchedSecondHalfDuration(parseMmSsToSeconds(e.target.value))}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
