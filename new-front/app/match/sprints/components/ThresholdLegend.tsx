@@ -16,8 +16,8 @@ export default function ThresholdLegend({ thresholds }: Props) {
   );
   return (
     <div className="mt-2 flex items-center gap-4">
-      <Item color="#A0AEC0" label={`5.9 km/h`} />
-      <Item color="#CBD5E0" label={`11 km/h`} />
+      <Item color="#38ff48" label={`5.9 km/h`} />
+      <Item color="#bb00b4" label={`11 km/h`} />
       <Item color="#E53E3E" label={`20 km/h`} />
     </div>
   );

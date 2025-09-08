@@ -22,7 +22,7 @@ interface AvgSpeedChartProps {
 }
 
 export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, kickoffSpike }: AvgSpeedChartProps) {
-  // build avg series per second (>=2 players)
+  // build avg series per second (>=2 players) in km/h
   const series = React.useMemo<AvgPoint[]>(() => {
     if (!entries || entries.length === 0) return [];
     const secondToSpeeds: Map<number, number[]> = new Map();
@@ -30,6 +30,7 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
     for (const e of entries) {
       const sec = Math.floor(e.centralized_elapsed_time);
       if (!secondToSpeeds.has(sec)) secondToSpeeds.set(sec, []);
+      // Convert from m/s to km/h for charting --> * 3.6
       secondToSpeeds.get(sec)!.push(e.speed);
       if (!secondToPlayers.has(sec)) secondToPlayers.set(sec, new Set());
       secondToPlayers.get(sec)!.add(e.player_display_name);
@@ -65,9 +66,10 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
     return Array.from(new Set(v)).sort((a,b)=>a-b);
   }, [periods]);
 
-  const thresholdsMps = React.useMemo(() => {
+  // keep thresholds in km/h for display
+  const thresholdsKmh = React.useMemo(() => {
     if (!thresholds) return null;
-    return { match: thresholds.match / 3.6, halftime: thresholds.halftime / 3.6, kickoff: thresholds.kickoff / 3.6 };
+    return { match: thresholds.match, halftime: thresholds.halftime, kickoff: thresholds.kickoff };
   }, [thresholds]);
 
   return (
@@ -76,14 +78,14 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
         <LineChart data={series} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="second" ticks={ticks} tickFormatter={(s) => toAbsoluteTime(s)} />
-          <YAxis label={{ value: 'Speed', angle: -90, position: 'insideLeft' }} />
+          <YAxis label={{ value: 'Speed (km/h)', angle: -90, position: 'insideLeft' }} />
           <Tooltip labelFormatter={(l:any)=> toAbsoluteTime(l)} />
           <Legend />
-          {thresholdsMps && (
+          {thresholdsKmh && (
             <>
-              <ReferenceLine y={thresholdsMps.match} stroke="#A0AEC0" strokeDasharray="4 4" ifOverflow="extendDomain" />
-              <ReferenceLine y={thresholdsMps.halftime} stroke="#CBD5E0" strokeDasharray="4 4" ifOverflow="extendDomain" />
-              <ReferenceLine y={thresholdsMps.kickoff} stroke="#E53E3E" strokeDasharray="4 4" ifOverflow="extendDomain" />
+              <ReferenceLine y={thresholdsKmh.match} stroke="#38ff48" strokeDasharray="4 4" ifOverflow="extendDomain" />
+              <ReferenceLine y={thresholdsKmh.halftime} stroke="#bb00b4" strokeDasharray="4 4" ifOverflow="extendDomain" />
+              <ReferenceLine y={thresholdsKmh.kickoff} stroke="#E53E3E" strokeDasharray="4 4" ifOverflow="extendDomain" />
             </>
           )}
           {periods && periods.detected_halftime_start !== undefined && periods.detected_halftime_end !== undefined && (

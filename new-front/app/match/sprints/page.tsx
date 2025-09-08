@@ -290,30 +290,16 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 <div className="md:col-span-5 h-full">
                   <Card className="h-full">
                   <CardHeader>
-                    <CardTitle>Players</CardTitle>
+                    <CardTitle>Stadium Location</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {!selectedTable ? (
-                      <div className="text-sm text-gray-600">Select a match to view players.</div>
-                    ) : loadingPlayers ? (
-                      <div>Loading players...</div>
-                    ) : players.length === 0 ? (
-                      <div className="text-sm text-gray-600">No players found.</div>
-                    ) : (
-                      <ul className="space-y-2">
-                        {players.map((player, index) => (
-                          <li key={index} className="p-2 border rounded">
-                            {player}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <StadiumMap latitude={-34.6037} longitude={-58.3816} zoom={15} />
                   </CardContent>
                   </Card>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <Card>
                   <CardHeader>
                     <CardTitle>Average Speed Over Time</CardTitle>
@@ -333,26 +319,39 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     )}
                   </CardContent>
                 </Card>
+              </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Match Video</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <VideoComponent />
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Stadium Location</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {/* Example coordinates; replace with real stadium GPS */}
-                      <StadiumMap latitude={-34.6037} longitude={-58.3816} zoom={15} />
-                    </CardContent>
-                  </Card>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Match Video</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <VideoComponent />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Players</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {!selectedTable ? (
+                      <div className="text-sm text-gray-600">Select a match to view players.</div>
+                    ) : loadingPlayers ? (
+                      <div>Loading players...</div>
+                    ) : players.length === 0 ? (
+                      <div className="text-sm text-gray-600">No players found.</div>
+                    ) : (
+                      <ul className="space-y-2">
+                        {players.map((player, index) => (
+                          <li key={index} className="p-2 border rounded">
+                            {player}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             </>
           )}

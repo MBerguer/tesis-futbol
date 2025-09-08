@@ -16,11 +16,6 @@ export default function StadiumMap({ latitude, longitude, zoom = 15, styleUrl }:
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
-    // Destroy previous instance if any
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
 
     const key = process.env.NEXT_PUBLIC_MAPTILER_KEY;
     const defaultStyle = styleUrl || (key
@@ -39,6 +34,7 @@ export default function StadiumMap({ latitude, longitude, zoom = 15, styleUrl }:
 
     return () => {
       try { map.remove(); } catch {}
+      mapRef.current = null;
     };
   }, [latitude, longitude, zoom, styleUrl]);
 
