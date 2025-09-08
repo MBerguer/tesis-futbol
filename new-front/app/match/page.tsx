@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import VideoComponent from "./videoComponent";
 
 export default function Page() {
   const [selectedPlayer, setSelectedPlayer] = useState("");
+  const searchParams = useSearchParams();
+  const selectedTable = searchParams.get('table');
 
   // Add the relevant metrics for the selected player
   useEffect(() => {
@@ -52,58 +55,39 @@ export default function Page() {
     redCards: [{ player: "Jugador F", team: "Equipo A", minute: 60 }],
   };
 
-  // This will return the entire overview of a match
+  // Only render the details content. Sidebar/tabs are in layout.
   return (
-    <div className="bg-gray-100 p-4">
-      <div className="flex justify-end">
-        <button
-          onClick={() => (window.location.href = "/dashboard")}
-          className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-        >
-          Volver al Dashboard
-        </button>
-      </div>
-      <h1 className="text-2xl font-bold mb-4">Detalles del Partido</h1>
+    <div>
       <div className="flex gap-4">
         <div className="w-1/3">
           <div className="bg-white p-4 rounded shadow mb-4">
             <p className="text-lg font-semibold mb-2">
-              {matchMetadata.teamA} vs {matchMetadata.teamB}
+              Equipo A vs Equipo B
             </p>
-            <p>Fecha: {matchMetadata.date}</p>
-            <p>Ubicación: {matchMetadata.location}</p>
-            <p>Árbitro: {matchMetadata.referee}</p>
-            <p>Asistencia: {matchMetadata.attendance}</p>
+            <p>Fecha: 1 de enero de 2022</p>
+            <p>Ubicación: Nombre del Estadio</p>
+            <p>Árbitro: Juan Pérez</p>
+            <p>Asistencia: 50,000</p>
           </div>
 
           <div className="bg-white p-4 rounded shadow">
             <p className="text-lg font-semibold mb-2">
-              Resultado: {matchMetadata.teamA} {matchMetadata.result.teamAScore}{" "}
-              - {matchMetadata.teamB} {matchMetadata.result.teamBScore}
+              Resultado: 2 - 1
             </p>
             <p>Goles:</p>
             <ul className="list-disc pl-4">
-              {matchMetadata.goals.map((goal, index) => (
-                <li key={index}>
-                  {goal.player} ({goal.team}) - {goal.minute}'
-                </li>
-              ))}
+              <li>Jugador A (Equipo A) - 10'</li>
+              <li>Jugador B (Equipo B) - 20'</li>
+              <li>Jugador C (Equipo A) - 30'</li>
             </ul>
             <p>Tarjetas Amarillas:</p>
             <ul className="list-disc pl-4">
-              {matchMetadata.yellowCards.map((card, index) => (
-                <li key={index}>
-                  {card.player} ({card.team}) - {card.minute}'
-                </li>
-              ))}
+              <li>Jugador D (Equipo A) - 15'</li>
+              <li>Jugador E (Equipo B) - 25'</li>
             </ul>
             <p>Tarjetas Rojas:</p>
             <ul className="list-disc pl-4">
-              {matchMetadata.redCards.map((card, index) => (
-                <li key={index}>
-                  {card.player} ({card.team}) - {card.minute}'
-                </li>
-              ))}
+              <li>Jugador F (Equipo A) - 60'</li>
             </ul>
           </div>
         </div>
@@ -115,6 +99,7 @@ export default function Page() {
           </div>
         </div>
       </div>
+
       <div className="w-full">
         <h2 className="text-xl font-bold mb-2">Métricas del Jugador</h2>
         <select
@@ -123,7 +108,7 @@ export default function Page() {
           className="border border-gray-300 rounded px-2 py-1"
         >
           <option value="">Seleccionar Jugador</option>
-          {players.map((player) => (
+          {['Jugador A','Jugador B','Jugador C'].map((player) => (
             <option key={player} value={player}>
               {player}
             </option>
@@ -132,7 +117,6 @@ export default function Page() {
         {selectedPlayer && (
           <div className="mt-2">
             <p>Métricas para {selectedPlayer}:</p>
-            {/* Add the relevant metrics for the selected player */}
           </div>
         )}
       </div>

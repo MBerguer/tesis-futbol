@@ -1,23 +1,21 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useMatchContext } from "../../match/context";
 import { useMatchData } from "./hooks/useMatchData";
-import { Card, CardContent, CardHeader, CardTitle } from "../dashboard/components/ui/card";
-import { Button } from "../dashboard/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../players/components/ui/card";
+import { Button } from "../../players/components/ui/button";
 import PeriodsSummary from "./components/PeriodsSummary";
 import PlayersChart from "./components/PlayersChart";
 import AvgSpeedChart from "./components/AvgSpeedChart";
-import MatchSelector from "./components/MatchSelector";
+// Match selector moved to parent page
 import WorstCasesTable from "./components/WorstCasesTable";
 import SprintsTable from "./components/SprintsTable";
 import Skeleton from "./components/Skeleton";
 import TopProgress from "./components/TopProgress";
 import ThresholdLegend from "./components/ThresholdLegend";
 import PlayerMiniList from "./components/PlayerMiniList";
-
-interface MatchTable {
-  tables: string[];
-}
 
 interface MatchPlayers {
   players: string[];
@@ -67,13 +65,13 @@ interface SprintInWorstCase {
 }
 
 
-export default function SprintsPage() {
-  const [matchTables, setMatchTables] = useState<string[]>([]);
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+export default function SprintsPage({ selectedTable: selectedTableProp }: { selectedTable?: string | null }) {
+  const searchParams = useSearchParams();
+  const { reloadToken: globalReloadToken } = useMatchContext();
+  const selectedTable = selectedTableProp ?? searchParams.get('table');
   const [players, setPlayers] = useState<string[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
   const [entries, setEntries] = useState<MatchEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [periods, setPeriods] = useState<MatchPeriods | null>(null);
   const [kickoffSpike, setKickoffSpike] = useState<number | null>(null);
@@ -94,7 +92,7 @@ export default function SprintsPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'periods'>('overview');
 
   // Auto-loading data hook (must be called directly, not inside useMemo)
-  const autoData = useMatchData(API_BASE, selectedTable, reloadToken);
+  const autoData = useMatchData(API_BASE, selectedTable, reloadToken + globalReloadToken);
   const entriesAuto = autoData.entries;
   const periodsAuto = autoData.periods;
   const thresholdsAuto = autoData.thresholds;
@@ -136,7 +134,7 @@ export default function SprintsPage() {
     setBaseTime(null);
   }, [selectedTable]);
 
-  // Auto-load players whenever a table is chosen (including URL preselect)
+  // Auto-load players whenever a table is chosen
   useEffect(() => {
     if (!selectedTable) return;
     const controller = new AbortController();
@@ -158,45 +156,7 @@ export default function SprintsPage() {
     return () => controller.abort();
   }, [API_BASE, selectedTable]);
 
-  useEffect(() => {
-    const fetchMatchTables = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/match/tables`);
-        if (!response.ok) throw new Error("Failed to fetch match tables");
-        const data: MatchTable = await response.json();
-        setMatchTables(data.tables);
-        // preselect from URL or last selection
-        const params = new URLSearchParams(window.location.search);
-        const fromUrl = params.get('table');
-        const candidate = fromUrl && data.tables.includes(fromUrl) ? fromUrl : (localStorage.getItem('lastTable') || null);
-        if (candidate && data.tables.includes(candidate)) {
-          setSelectedTable(candidate);
-        } else if (fromUrl && !data.tables.includes(fromUrl)) {
-          // fallback: if URL has a table not in list yet, still set it to trigger fetch (server may allow it)
-          setSelectedTable(fromUrl);
-        }
-      } catch (err) {
-        console.error(err instanceof Error ? err.message : "An error occurred");
-      } finally { setLoading(false); }
-    };
-    fetchMatchTables();
-  }, []);
-
-  const handleTableClick = async (tableName: string) => {
-    setSelectedTable(tableName);
-    localStorage.setItem('lastTable', tableName);
-    const url = new URL(window.location.href);
-    url.searchParams.set('table', tableName);
-    window.history.replaceState({}, '', url.toString());
-    // fetch players list in background
-    try {
-      const res = await fetch(`${API_BASE}/match/table/${tableName}/players`);
-      if (res.ok) {
-        const data: MatchPlayers = await res.json();
-        setPlayers(data.players);
-      }
-    } catch {}
-  };
+  // Match selection is handled by parent component
 
   // Convert base time (HH:MM:SS.MS) + seconds to absolute HH:MM:SS
   const derivedBaseTime = React.useMemo(() => {
@@ -211,7 +171,7 @@ export default function SprintsPage() {
 
   return (
     <main className="p-4">
-      <TopProgress active={loading || loadingEntries || loadingPeriods || loadingWorstCases || loadingSprints} />
+      <TopProgress active={loadingEntries || loadingPeriods || loadingWorstCases || loadingSprints} />
       <div className="mb-3">
         <div className="flex items-center gap-2">
         <div className="text-xl font-semibold">Sprints & Periods</div>
@@ -223,25 +183,7 @@ export default function SprintsPage() {
         </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Match Tables</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading && matchTables.length === 0 ? (
-              <div className="space-y-2">
-                <Skeleton className="h-8" />
-                <Skeleton className="h-8" />
-                <Skeleton className="h-8" />
-              </div>
-            ) : (
-              <MatchSelector tables={matchTables} selected={selectedTable} onSelect={handleTableClick} />
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4 md:col-span-3">
+      <div className="space-y-4">
           {activeTab === 'players' && (
             <Card>
               <CardHeader>
@@ -406,7 +348,6 @@ export default function SprintsPage() {
               </CardContent>
             </Card>
           )}
-        </div>
       </div>
     </main>
   );
