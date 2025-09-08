@@ -134,7 +134,13 @@ pub async fn detect_match_periods_notebook(
             detected_second_half_start,
             detected_second_half_end,
             detected_halftime_start,
-            detected_halftime_end
+            detected_halftime_end,
+            manual_first_half_start,
+            manual_first_half_end,
+            manual_second_half_start,
+            manual_second_half_end,
+            manual_halftime_start,
+            manual_halftime_end
         FROM match_periods
         WHERE match_name = $1
         "#,
@@ -145,13 +151,35 @@ pub async fn detect_match_periods_notebook(
     .ok()
     .flatten();
 
+    if let Some(row) = &cached {
+        println!("Found cached periods for match {}", table_name);
+    } else {
+        println!("No cached periods found for match {}", table_name); 
+    }
+
     if let Some(row) = cached {
-        let fh_start: i32 = row.try_get("detected_first_half_start").unwrap_or(0);
-        let fh_end: i32 = row.try_get("detected_first_half_end").unwrap_or(0);
-        let sh_start: i32 = row.try_get("detected_second_half_start").unwrap_or(0);
-        let sh_end: i32 = row.try_get("detected_second_half_end").unwrap_or(0);
-        let ht_start: i32 = row.try_get("detected_halftime_start").unwrap_or(0);
-        let ht_end: i32 = row.try_get("detected_halftime_end").unwrap_or(0);
+        let det_fh_start: i32 = row.try_get("detected_first_half_start").unwrap_or(0);
+        let det_fh_end: i32 = row.try_get("detected_first_half_end").unwrap_or(0);
+        let det_sh_start: i32 = row.try_get("detected_second_half_start").unwrap_or(0);
+        let det_sh_end: i32 = row.try_get("detected_second_half_end").unwrap_or(0);
+        let det_ht_start: i32 = row.try_get("detected_halftime_start").unwrap_or(0);
+        let det_ht_end: i32 = row.try_get("detected_halftime_end").unwrap_or(0);
+
+        let man_fh_start: Option<i32> = row.try_get("manual_first_half_start").ok();
+        let man_fh_end: Option<i32> = row.try_get("manual_first_half_end").ok();
+        let man_sh_start: Option<i32> = row.try_get("manual_second_half_start").ok();
+        let man_sh_end: Option<i32> = row.try_get("manual_second_half_end").ok();
+        let man_ht_start: Option<i32> = row.try_get("manual_halftime_start").ok();
+        let man_ht_end: Option<i32> = row.try_get("manual_halftime_end").ok();
+
+        let using_manual = man_fh_start.is_some() || man_fh_end.is_some() || man_sh_start.is_some() || man_sh_end.is_some() || man_ht_start.is_some() || man_ht_end.is_some();
+
+        let fh_start = man_fh_start.unwrap_or(det_fh_start);
+        let fh_end = man_fh_end.unwrap_or(det_fh_end);
+        let sh_start = man_sh_start.unwrap_or(det_sh_start);
+        let sh_end = man_sh_end.unwrap_or(det_sh_end);
+        let ht_start = man_ht_start.unwrap_or(det_ht_start);
+        let ht_end = man_ht_end.unwrap_or(det_ht_end);
 
         if fh_start > 0 && fh_end > 0 && sh_start > 0 && sh_end > 0 && ht_start > 0 && ht_end > 0 {
             // compute base time cheaply
@@ -168,6 +196,7 @@ pub async fn detect_match_periods_notebook(
                 "detected_halftime_end": ht_end,
                 "detected_second_half_start": sh_start,
                 "detected_second_half_end": sh_end,
+                "using_manual": using_manual,
                 "base_time": base_time,
                 "kickoff_spike_sec": Value::Null,
                 "thresholds": {"match": 5.9_f64, "halftime": 11.0_f64, "kickoff": 20.0_f64}
@@ -368,6 +397,7 @@ pub async fn detect_match_periods_notebook(
         "detected_halftime_end": halftime_end,
         "detected_second_half_start": second_half_start,
         "detected_second_half_end": second_half_end,
+        "using_manual": false, // should be false, since we just detected them, and there is no possible way are not using manual periods
         "base_time": min_time_string,
         "kickoff_spike_sec": kickoff_spike_sec,
         "thresholds": {"match": velocidad_partido, "halftime": velocidad_partido_entretiempo, "kickoff": 20.0}

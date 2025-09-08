@@ -19,6 +19,7 @@ export interface MatchPeriods {
   detected_second_half_end?: number;
   detected_halftime_start?: number;
   detected_halftime_end?: number;
+  using_manual?: boolean;
 }
 
 export interface WorstCase {
@@ -91,6 +92,7 @@ export function useMatchData(apiBase: string, selectedTable: string | null, relo
             detected_second_half_end: spi(data.detected_second_half_end),
             detected_halftime_start: spi(data.detected_halftime_start),
             detected_halftime_end: spi(data.detected_halftime_end),
+            using_manual: !!data.using_manual,
           });
           setThresholds(data.thresholds || null);
           setKickoffSpike(typeof data.kickoff_spike_sec === 'number' ? data.kickoff_spike_sec : null);

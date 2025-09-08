@@ -288,6 +288,9 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                       <Spinner />
                     )}
                     </CardTitle>
+                    {!loadingPeriods && periods && (
+                      <div className="text-xs text-gray-500">{autoData.periods?.using_manual ? 'Using patched periods' : 'Using detected periods'}</div>
+                    )}
                   </CardHeader>
                   <CardContent>
                     {!selectedTable ? (
