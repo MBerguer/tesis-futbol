@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { useMatchContext } from "../../match/context";
 import { useMatchData } from "./hooks/useMatchData";
 import { Card, CardContent, CardHeader, CardTitle } from "../../players/components/ui/card";
-import { Button } from "../../players/components/ui/button";
 import PeriodsSummary from "./components/PeriodsSummary";
 import PlayersChart from "./components/PlayersChart";
 import AvgSpeedChart from "./components/AvgSpeedChart";
@@ -16,6 +15,7 @@ import Skeleton from "./components/Skeleton";
 import TopProgress from "./components/TopProgress";
 import ThresholdLegend from "./components/ThresholdLegend";
 import PlayerMiniList from "./components/PlayerMiniList";
+import VideoComponent from "../videoComponent";
 
 interface MatchPlayers {
   players: string[];
@@ -69,6 +69,29 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const searchParams = useSearchParams();
   const { reloadToken: globalReloadToken } = useMatchContext();
   const selectedTable = selectedTableProp ?? searchParams.get('table');
+  const [selectedPlayer, setSelectedPlayer] = useState<string>("");
+  const matchMetadata = {
+    teamA: "Equipo A",
+    teamB: "Equipo B",
+    date: "1 de enero de 2022",
+    location: "Nombre del Estadio",
+    referee: "Juan Pérez",
+    attendance: "50,000",
+    result: {
+      teamAScore: 2,
+      teamBScore: 1,
+    },
+    goals: [
+      { player: "Jugador A", team: "Equipo A", minute: 10 },
+      { player: "Jugador B", team: "Equipo B", minute: 20 },
+      { player: "Jugador C", team: "Equipo A", minute: 30 },
+    ],
+    yellowCards: [
+      { player: "Jugador D", team: "Equipo A", minute: 15 },
+      { player: "Jugador E", team: "Equipo B", minute: 25 },
+    ],
+    redCards: [{ player: "Jugador F", team: "Equipo A", minute: 60 }],
+  };
   const [players, setPlayers] = useState<string[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
   const [entries, setEntries] = useState<MatchEntry[]>([]);
@@ -89,7 +112,8 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'periods'>('overview');
+  const sectionParam = (searchParams.get('section') as 'overview'|'players'|'details'|null);
+  const activeTab: 'overview' | 'players' = sectionParam === 'players' ? 'players' : 'overview';
 
   // Auto-loading data hook (must be called directly, not inside useMemo)
   const autoData = useMatchData(API_BASE, selectedTable, reloadToken + globalReloadToken);
@@ -172,17 +196,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   return (
     <main className="p-4">
       <TopProgress active={loadingEntries || loadingPeriods || loadingWorstCases || loadingSprints} />
-      <div className="mb-3">
-        <div className="flex items-center gap-2">
-        <div className="text-xl font-semibold">Sprints & Periods</div>
-        <div className="flex-1" />
-        <div className="hidden md:flex items-center gap-2">
-          <Button variant={activeTab==='overview'?'default':'outline'} onClick={()=>setActiveTab('overview')}>Overview</Button>
-          <Button variant={activeTab==='players'?'default':'outline'} onClick={()=>setActiveTab('players')}>Players</Button>
-          <Button variant={activeTab==='periods'?'default':'outline'} onClick={()=>setActiveTab('periods')}>Periods</Button>
-        </div>
-        </div>
-      </div>
+      <div className="mb-3" />
       <div className="space-y-4">
           {activeTab === 'players' && (
             <Card>
@@ -207,39 +221,128 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
             </Card>
           )}
 
-          {selectedTable && activeTab === 'overview' && (
-            <Card className="col-span-2">
-              <CardHeader><CardTitle>Player Speeds Over Time</CardTitle></CardHeader>
-              <CardContent>
-                {entries.length === 0 ? (
-                  <Skeleton className="h-[500px]" />
-                ) : (
-                  <PlayersChart entries={entries} baseTime={baseTime || derivedBaseTime} />
-                )}
-              </CardContent>
-            </Card>
-          )}
+          {/* Player Speeds Over Time moved to Players tab */}
 
-          {selectedTable && activeTab === 'overview' && (
-            <Card className="col-span-2">
-              <CardHeader>
-                <CardTitle>Average Speed Over Time</CardTitle>
-                <ThresholdLegend thresholds={thresholds} />
-              </CardHeader>
-              <CardContent>
-                {entries.length === 0 || !periods ? (
-                  <Skeleton className="h-[420px]" />
-                ) : (
-                  <AvgSpeedChart
-                    entries={entries}
-                    baseTime={baseTime || derivedBaseTime}
-                    thresholds={thresholds}
-                    periods={periods}
-                    kickoffSpike={kickoffSpike}
-                  />
-                )}
-              </CardContent>
-            </Card>
+          {activeTab === 'overview' && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div className="md:col-span-3 h-full">
+                  <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle>Match Details</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {!selectedTable ? (
+                      <div className="text-sm text-gray-600">Select a match to view details.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-lg font-semibold">{matchMetadata.teamA} vs {matchMetadata.teamB}</p>
+                        <p>Date: {matchMetadata.date}</p>
+                        <p>Location: {matchMetadata.location}</p>
+                        <p>Referee: {matchMetadata.referee}</p>
+                        <p>Attendance: {matchMetadata.attendance}</p>
+                        <div className="mt-2">
+                          <p className="font-medium">Result:</p>
+                          <p>{matchMetadata.teamA} {matchMetadata.result.teamAScore} - {matchMetadata.teamB} {matchMetadata.result.teamBScore}</p>
+                          <p className="mt-1 font-medium">Goals:</p>
+                          <ul className="list-disc pl-5">
+                            {matchMetadata.goals.map((g, i)=> (
+                              <li key={i}>{g.player} ({g.team}) - {g.minute}'</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                  </Card>
+                </div>
+
+                <div className="md:col-span-4 h-full">
+                  <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle>Match Periods</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {!selectedTable ? (
+                      <div className="text-sm text-gray-600">Select a match to view periods.</div>
+                    ) : !periods ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-6" />
+                        <Skeleton className="h-6" />
+                        <Skeleton className="h-6" />
+                      </div>
+                    ) : (
+                      <PeriodsSummary
+                        baseTime={baseTime}
+                        detected_first_half_start={periods.detected_first_half_start}
+                        detected_first_half_end={periods.detected_first_half_end}
+                        detected_second_half_start={periods.detected_second_half_start}
+                        detected_second_half_end={periods.detected_second_half_end}
+                        detected_halftime_start={periods.detected_halftime_start}
+                        detected_halftime_end={periods.detected_halftime_end}
+                      />
+                    )}
+                  </CardContent>
+                  </Card>
+                </div>
+
+                <div className="md:col-span-5 h-full">
+                  <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle>Players</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {!selectedTable ? (
+                      <div className="text-sm text-gray-600">Select a match to view players.</div>
+                    ) : loadingPlayers ? (
+                      <div>Loading players...</div>
+                    ) : players.length === 0 ? (
+                      <div className="text-sm text-gray-600">No players found.</div>
+                    ) : (
+                      <ul className="space-y-2">
+                        {players.map((player, index) => (
+                          <li key={index} className="p-2 border rounded">
+                            {player}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Average Speed Over Time</CardTitle>
+                    <ThresholdLegend thresholds={thresholds} />
+                  </CardHeader>
+                  <CardContent>
+                    {entries.length === 0 || !periods ? (
+                      <Skeleton className="h-[420px]" />
+                    ) : (
+                      <AvgSpeedChart
+                        entries={entries}
+                        baseTime={baseTime || derivedBaseTime}
+                        thresholds={thresholds}
+                        periods={periods}
+                        kickoffSpike={kickoffSpike}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Match Video</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <VideoComponent />
+                  </CardContent>
+                </Card>
+              </div>
+            </>
           )}
 
           {selectedTable && activeTab === 'players' && (
@@ -287,32 +390,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
             </Card>
           )}
 
-          {selectedTable && activeTab === 'periods' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Match Periods</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!periods ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                  </div>
-                ) : (
-                  <PeriodsSummary
-                    baseTime={baseTime}
-                    detected_first_half_start={periods.detected_first_half_start}
-                    detected_first_half_end={periods.detected_first_half_end}
-                    detected_second_half_start={periods.detected_second_half_start}
-                    detected_second_half_end={periods.detected_second_half_end}
-                    detected_halftime_start={periods.detected_halftime_start}
-                    detected_halftime_end={periods.detected_halftime_end}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          )}
+          {/* Periods moved to Details page */}
 
           {selectedTable && activeTab === 'players' && (
             <Card>
@@ -344,6 +422,19 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     <h3 className="text-lg font-semibold mb-3">Sprints in Worst Cases (≥25.2 km/h)</h3>
                     <SprintsTable data={sprintsInWorstCases} />
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedTable && activeTab === 'players' && (
+            <Card className="col-span-2">
+              <CardHeader><CardTitle>Player Speeds Over Time</CardTitle></CardHeader>
+              <CardContent>
+                {entries.length === 0 ? (
+                  <Skeleton className="h-[500px]" />
+                ) : (
+                  <PlayersChart entries={entries} baseTime={baseTime || derivedBaseTime} />
                 )}
               </CardContent>
             </Card>

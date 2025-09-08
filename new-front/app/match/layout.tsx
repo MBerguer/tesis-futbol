@@ -44,16 +44,19 @@ export default function MatchLayout({ children }: { children: React.ReactNode })
     setReloadToken((x)=>x+1);
   };
 
-  const detailsHref = useMemo(() => {
-    const qp = new URLSearchParams(searchParams.toString());
-    return { pathname: "/match", query: Object.fromEntries(qp.entries()) } as any;
-  }, [searchParams]);
-  const sprintsHref = useMemo(() => {
-    const qp = new URLSearchParams(searchParams.toString());
-    return { pathname: "/match/sprints", query: Object.fromEntries(qp.entries()) } as any;
+  const section = useMemo(() => {
+    const s = searchParams.get('section');
+    if (s === 'overview' || s === 'players') return s;
+    return 'overview';
   }, [searchParams]);
 
-  const activeTab: 'details' | 'sprints' = pathname.endsWith('/sprints') ? 'sprints' : 'details';
+  const makeHref = (targetSection: 'overview' | 'players') => {
+    const qp = new URLSearchParams(searchParams.toString());
+    qp.set('section', targetSection);
+    const query = Object.fromEntries(qp.entries());
+    const path = '/match/sprints';
+    return { pathname: path, query } as any;
+  };
 
   return (
     <MatchProvider value={{
@@ -94,18 +97,8 @@ export default function MatchLayout({ children }: { children: React.ReactNode })
             <div className="text-2xl font-bold">Partido</div>
             <div className="flex-1" />
             <div className="flex items-center gap-2">
-              <Link
-                href={detailsHref}
-                className={`${activeTab==='details' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'} border px-3 py-1 rounded`}
-              >
-                Detalles
-              </Link>
-              <Link
-                href={sprintsHref}
-                className={`${activeTab==='sprints' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'} border px-3 py-1 rounded`}
-              >
-                Sprints
-              </Link>
+              <Link href={makeHref('overview')} className={`${section==='overview' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'} border px-3 py-1 rounded`}>Overview</Link>
+              <Link href={makeHref('players')} className={`${section==='players' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'} border px-3 py-1 rounded`}>Players</Link>
             </div>
           </div>
 

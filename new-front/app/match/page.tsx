@@ -3,11 +3,21 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import VideoComponent from "./videoComponent";
+import { useMatchContext } from "./context";
+import { useMatchData } from "./sprints/hooks/useMatchData";
+import PeriodsSummary from "./sprints/components/PeriodsSummary";
+import Skeleton from "./sprints/components/Skeleton";
 
 export default function Page() {
   const [selectedPlayer, setSelectedPlayer] = useState("");
   const searchParams = useSearchParams();
-  const selectedTable = searchParams.get('table');
+  const { selectedTable, reloadToken } = useMatchContext();
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  const data = useMatchData(API_BASE, selectedTable, reloadToken);
+  const periods = data.periods;
+  const baseTime = data.baseTime;
+  const loadingPeriods = data.loadingDetect;
 
   // Add the relevant metrics for the selected player
   useEffect(() => {
@@ -55,71 +65,8 @@ export default function Page() {
     redCards: [{ player: "Jugador F", team: "Equipo A", minute: 60 }],
   };
 
-  // Only render the details content. Sidebar/tabs are in layout.
+  // Details content moved into Overview in sprints page; keep page minimal or redirect
   return (
-    <div>
-      <div className="flex gap-4">
-        <div className="w-1/3">
-          <div className="bg-white p-4 rounded shadow mb-4">
-            <p className="text-lg font-semibold mb-2">
-              Equipo A vs Equipo B
-            </p>
-            <p>Fecha: 1 de enero de 2022</p>
-            <p>Ubicación: Nombre del Estadio</p>
-            <p>Árbitro: Juan Pérez</p>
-            <p>Asistencia: 50,000</p>
-          </div>
-
-          <div className="bg-white p-4 rounded shadow">
-            <p className="text-lg font-semibold mb-2">
-              Resultado: 2 - 1
-            </p>
-            <p>Goles:</p>
-            <ul className="list-disc pl-4">
-              <li>Jugador A (Equipo A) - 10'</li>
-              <li>Jugador B (Equipo B) - 20'</li>
-              <li>Jugador C (Equipo A) - 30'</li>
-            </ul>
-            <p>Tarjetas Amarillas:</p>
-            <ul className="list-disc pl-4">
-              <li>Jugador D (Equipo A) - 15'</li>
-              <li>Jugador E (Equipo B) - 25'</li>
-            </ul>
-            <p>Tarjetas Rojas:</p>
-            <ul className="list-disc pl-4">
-              <li>Jugador F (Equipo A) - 60'</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="w-2/3">
-          <div className="mt-4">
-            <h2 className="text-xl font-bold mb-2">Video del Partido</h2>
-            <VideoComponent />
-          </div>
-        </div>
-      </div>
-
-      <div className="w-full">
-        <h2 className="text-xl font-bold mb-2">Métricas del Jugador</h2>
-        <select
-          value={selectedPlayer}
-          onChange={(e) => setSelectedPlayer(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1"
-        >
-          <option value="">Seleccionar Jugador</option>
-          {['Jugador A','Jugador B','Jugador C'].map((player) => (
-            <option key={player} value={player}>
-              {player}
-            </option>
-          ))}
-        </select>
-        {selectedPlayer && (
-          <div className="mt-2">
-            <p>Métricas para {selectedPlayer}:</p>
-          </div>
-        )}
-      </div>
-    </div>
+    <div className="text-sm text-gray-600">Use the sidebar tabs to view the Overview or Players.</div>
   );
 }
