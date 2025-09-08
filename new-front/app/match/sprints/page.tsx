@@ -17,6 +17,7 @@ import ThresholdLegend from "./components/ThresholdLegend";
 import PlayerMiniList from "./components/PlayerMiniList";
 import VideoComponent from "../videoComponent";
 import StadiumMap from "./components/StadiumMap";
+import Spinner from "./components/Spinner";
 
 interface MatchPlayers {
   players: string[];
@@ -261,7 +262,11 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 <div className="md:col-span-4 h-full">
                   <Card className="h-full">
                   <CardHeader>
-                    <CardTitle>Match Periods</CardTitle>
+                    <CardTitle>Match Periods
+                    {loadingPeriods && (
+                      <Spinner />
+                    )}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     {!selectedTable ? (
@@ -293,7 +298,12 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     <CardTitle>Stadium Location</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <StadiumMap latitude={-34.6037} longitude={-58.3816} zoom={15} />
+                      <StadiumMap
+                        latitude={-34.795334}
+                        longitude={-56.147974}
+                        zoom={15}
+                        styleUrl={`https://api.maptiler.com/maps/satellite/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
+                      />
                   </CardContent>
                   </Card>
                 </div>
@@ -306,8 +316,10 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     <ThresholdLegend thresholds={thresholds} />
                   </CardHeader>
                   <CardContent>
-                    {entries.length === 0 || !periods ? (
-                      <Skeleton className="h-[420px]" />
+                    {loadingEntries || loadingPeriods ? (
+                      <Spinner />
+                    ) : entries.length === 0 || !periods ? (
+                      <div className="text-sm text-gray-600">No data to display.</div>
                     ) : (
                       <AvgSpeedChart
                         entries={entries}
@@ -327,7 +339,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     <CardTitle>Match Video</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <VideoComponent />
+                    {loadingEntries ? <Spinner /> : <VideoComponent />}
                   </CardContent>
                 </Card>
                 <Card>
@@ -338,7 +350,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     {!selectedTable ? (
                       <div className="text-sm text-gray-600">Select a match to view players.</div>
                     ) : loadingPlayers ? (
-                      <div>Loading players...</div>
+                      <Spinner />
                     ) : players.length === 0 ? (
                       <div className="text-sm text-gray-600">No players found.</div>
                     ) : (
