@@ -19,9 +19,10 @@ interface AvgSpeedChartProps {
     detected_halftime_end?: number;
   } | null;
   kickoffSpike?: number | null;
+  cursorSecond?: number | null;
 }
 
-export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, kickoffSpike }: AvgSpeedChartProps) {
+export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, kickoffSpike, cursorSecond }: AvgSpeedChartProps) {
   // build avg series per second (>=2 players) in km/h
   const series = React.useMemo<AvgPoint[]>(() => {
     if (!entries || entries.length === 0) return [];
@@ -87,6 +88,9 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
               <ReferenceLine y={thresholdsKmh.halftime} stroke="#bb00b4" strokeDasharray="4 4" ifOverflow="extendDomain" />
               <ReferenceLine y={thresholdsKmh.kickoff} stroke="#E53E3E" strokeDasharray="4 4" ifOverflow="extendDomain" />
             </>
+          )}
+          {typeof cursorSecond === 'number' && (
+            <ReferenceLine x={Math.floor(cursorSecond)} stroke="#111827" strokeWidth={2} ifOverflow="extendDomain" />
           )}
           {periods && periods.detected_halftime_start !== undefined && periods.detected_halftime_end !== undefined && (
             <ReferenceArea x1={periods.detected_halftime_start} x2={periods.detected_halftime_end} fill="#E53E3E" fillOpacity={0.28} ifOverflow="extendDomain" />

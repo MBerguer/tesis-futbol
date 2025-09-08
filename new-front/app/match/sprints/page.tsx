@@ -103,6 +103,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const [thresholds, setThresholds] = useState<{ match: number; halftime: number; kickoff: number } | null>(null);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [baseTime, setBaseTime] = useState<string | null>(null);
+  const [videoCursorSec, setVideoCursorSec] = useState<number | null>(null);
   
   // Nuevos estados para worst cases y sprints
   const [worstCases, setWorstCases] = useState<WorstCase[]>([]);
@@ -331,6 +332,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                         thresholds={thresholds}
                         periods={periods}
                         kickoffSpike={kickoffSpike}
+                        cursorSecond={videoCursorSec}
                       />
                     )}
                   </CardContent>
@@ -343,7 +345,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     <CardTitle>Match Video</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <VideoComponent />
+                    <VideoComponent onSecondChange={(s)=>setVideoCursorSec(s)} />
                   </CardContent>
                 </Card>
                 <Card>

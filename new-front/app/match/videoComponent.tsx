@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 
-export default function VideoComponent(_: {}) {
+export default function VideoComponent({ onSecondChange }: { onSecondChange?: (sec: number) => void }) {
   const videoSource =
     "https://s3.amazonaws.com/azvideotagtesting/21012876/videos/139069/Nacional%205-1%20Juventud%20Clausura%202023.mp4";
 
@@ -34,10 +34,12 @@ export default function VideoComponent(_: {}) {
       v.currentTime = currentTime;
       void v.play();
       setIsPlaying(true);
+      if (onSecondChange) onSecondChange(v.currentTime || 0);
     } else {
       v.pause();
       setIsPlaying(false);
       setCurrentTime(v.currentTime || 0);
+      if (onSecondChange) onSecondChange(v.currentTime || 0);
     }
   };
 
@@ -45,12 +47,14 @@ export default function VideoComponent(_: {}) {
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
     if (vidRef.current) vidRef.current.currentTime = time;
+    if (onSecondChange) onSecondChange(time);
   };
 
   const handleLoadedMetadata = () => {
     const v = vidRef.current;
     const d = v?.duration ?? 0;
     setDuration(isNaN(d) ? 0 : d);
+    if (onSecondChange && v) onSecondChange(v.currentTime || 0);
   };
 
   // Robustly derive duration: listen to multiple events and add a short retry loop
@@ -178,7 +182,11 @@ export default function VideoComponent(_: {}) {
           maxHeight: "100vh",
           background: "#f2f2f2",
         }}
-        onTimeUpdate={() => setCurrentTime(vidRef.current?.currentTime || 0)}
+        onTimeUpdate={() => {
+          const t = vidRef.current?.currentTime || 0;
+          setCurrentTime(t);
+          if (onSecondChange) onSecondChange(t);
+        }}
         onLoadedMetadata={handleLoadedMetadata}
       />
     </>
