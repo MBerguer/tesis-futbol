@@ -10,14 +10,10 @@ import Skeleton from "./sprints/components/Skeleton";
 
 export default function Page() {
   const [selectedPlayer, setSelectedPlayer] = useState("");
-  const searchParams = useSearchParams();
   const { selectedTable, reloadToken } = useMatchContext();
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const data = useMatchData(API_BASE, selectedTable, reloadToken);
-  const periods = data.periods;
-  const baseTime = data.baseTime;
-  const loadingPeriods = data.loadingDetect;
 
   // Add the relevant metrics for the selected player
   useEffect(() => {
@@ -38,32 +34,6 @@ export default function Page() {
       };
     }
   }, [selectedPlayer]);
-
-  const players = ["Jugador A", "Jugador B", "Jugador C"]; // Add more players to the array if needed
-
-  // Define the match metadata as a JSON object
-  const matchMetadata = {
-    teamA: "Equipo A",
-    teamB: "Equipo B",
-    date: "1 de enero de 2022",
-    location: "Nombre del Estadio",
-    referee: "Juan Pérez",
-    attendance: "50,000",
-    result: {
-      teamAScore: 2,
-      teamBScore: 1,
-    },
-    goals: [
-      { player: "Jugador A", team: "Equipo A", minute: 10 },
-      { player: "Jugador B", team: "Equipo B", minute: 20 },
-      { player: "Jugador C", team: "Equipo A", minute: 30 },
-    ],
-    yellowCards: [
-      { player: "Jugador D", team: "Equipo A", minute: 15 },
-      { player: "Jugador E", team: "Equipo B", minute: 25 },
-    ],
-    redCards: [{ player: "Jugador F", team: "Equipo A", minute: 60 }],
-  };
 
   // Details content moved into Overview in sprints page; keep page minimal or redirect
   return (

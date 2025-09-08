@@ -16,6 +16,7 @@ import TopProgress from "./components/TopProgress";
 import ThresholdLegend from "./components/ThresholdLegend";
 import PlayerMiniList from "./components/PlayerMiniList";
 import VideoComponent from "../videoComponent";
+import StadiumMap from "./components/StadiumMap";
 
 interface MatchPlayers {
   players: string[];
@@ -312,7 +313,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader>
                     <CardTitle>Average Speed Over Time</CardTitle>
@@ -333,14 +334,25 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Match Video</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <VideoComponent />
-                  </CardContent>
-                </Card>
+                <div className="grid grid-cols-1 gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Match Video</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <VideoComponent />
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Stadium Location</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {/* Example coordinates; replace with real stadium GPS */}
+                      <StadiumMap latitude={-34.6037} longitude={-58.3816} zoom={15} />
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             </>
           )}
