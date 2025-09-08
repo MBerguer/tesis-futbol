@@ -1,9 +1,20 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useMatchData } from "./hooks/useMatchData";
 import { Card, CardContent, CardHeader, CardTitle } from "../dashboard/components/ui/card";
 import { Button } from "../dashboard/components/ui/button";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
+import { formatTime, formatMatchTime, toAbsoluteTime as toAbsFromUtils, formatDuration } from './utils/time';
+import PeriodsSummary from "./components/PeriodsSummary";
+import PlayersChart from "./components/PlayersChart";
+import AvgSpeedChart from "./components/AvgSpeedChart";
+import MatchSelector from "./components/MatchSelector";
+import WorstCasesTable from "./components/WorstCasesTable";
+import SprintsTable from "./components/SprintsTable";
+import Skeleton from "./components/Skeleton";
+import TopProgress from "./components/TopProgress";
+import ThresholdLegend from "./components/ThresholdLegend";
 
 interface MatchTable {
   tables: string[];
@@ -72,6 +83,7 @@ export default function SprintsPage() {
   const [matchTables, setMatchTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [players, setPlayers] = useState<string[]>([]);
+  const [loadingPlayers, setLoadingPlayers] = useState(false);
   const [entries, setEntries] = useState<MatchEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingEntries, setLoadingEntries] = useState(false);
@@ -100,116 +112,124 @@ export default function SprintsPage() {
   const [showSprints, setShowSprints] = useState(false);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const [reloadToken, setReloadToken] = useState<number>(0);
+
+  // Auto-loading data hook (must be called directly, not inside useMemo)
+  const autoData = useMatchData(API_BASE, selectedTable, reloadToken);
+  const entriesAuto = autoData.entries;
+  const periodsAuto = autoData.periods;
+  const thresholdsAuto = autoData.thresholds;
+  const kickoffSpikeAuto = autoData.kickoffSpike;
+  const baseTimeAuto = autoData.baseTime;
+  const worstCasesAuto = autoData.worstCases;
+  const sprintsAuto = autoData.sprints;
+  const loadingDetectAuto = autoData.loadingDetect;
+  const loadingEntriesAuto = autoData.loadingEntries;
+  const loadingWorstAuto = autoData.loadingWorstCases;
+  const loadingSprintsAuto = autoData.loadingSprints;
+
+  // Bridge hook data into existing local state (minimal refactor)
+  useEffect(() => {
+    if (entriesAuto) setEntries(entriesAuto);
+    if (periodsAuto) setPeriods(periodsAuto);
+    if (thresholdsAuto) setThresholds(thresholdsAuto);
+    if (typeof kickoffSpikeAuto === 'number' || kickoffSpikeAuto === null) setKickoffSpike(kickoffSpikeAuto);
+    if (baseTimeAuto) setBaseTime(baseTimeAuto);
+    if (worstCasesAuto) { setWorstCases(worstCasesAuto); setShowWorstCases(worstCasesAuto.length > 0); }
+    if (sprintsAuto) { setSprintsInWorstCases(sprintsAuto); setShowSprints(sprintsAuto.length > 0); }
+    setLoadingEntries(loadingEntriesAuto);
+    setLoadingPeriods(loadingDetectAuto);
+    if (autoData.error) setError(autoData.error);
+  }, [entriesAuto, periodsAuto, thresholdsAuto, kickoffSpikeAuto, baseTimeAuto, worstCasesAuto, sprintsAuto, loadingEntriesAuto, loadingDetectAuto, autoData.error]);
+
+  // Clear previous data instantly on table change to show fresh skeletons
+  useEffect(() => {
+    if (!selectedTable) return;
+    setPlayers([]);
+    setLoadingPlayers(true);
+    setEntries([]);
+    setLoadingEntries(true);
+    setPeriods(null);
+    setLoadingPeriods(true);
+    setWorstCases([]);
+    setShowWorstCases(false);
+    setSprintsInWorstCases([]);
+    setShowSprints(false);
+    setKickoffSpike(null);
+    setThresholds(null);
+    setBaseTime(null);
+  }, [selectedTable]);
+
+  // Auto-load players whenever a table is chosen (including URL preselect)
+  useEffect(() => {
+    if (!selectedTable) return;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    (async () => {
+      try {
+        setLoadingPlayers(true);
+        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/players`, { signal });
+        if (res.ok) {
+          const data: MatchPlayers = await res.json();
+          setPlayers(data.players || []);
+        }
+      } catch (_) {
+        // ignore abort
+      } finally {
+        setLoadingPlayers(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [API_BASE, selectedTable]);
 
   useEffect(() => {
     const fetchMatchTables = async () => {
       try {
         const response = await fetch(`${API_BASE}/match/tables`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch match tables");
-        }
+        if (!response.ok) throw new Error("Failed to fetch match tables");
         const data: MatchTable = await response.json();
         setMatchTables(data.tables);
+        // preselect from URL or last selection
+        const params = new URLSearchParams(window.location.search);
+        const fromUrl = params.get('table');
+        const candidate = fromUrl && data.tables.includes(fromUrl) ? fromUrl : (localStorage.getItem('lastTable') || null);
+        if (candidate && data.tables.includes(candidate)) {
+          setSelectedTable(candidate);
+        } else if (fromUrl && !data.tables.includes(fromUrl)) {
+          // fallback: if URL has a table not in list yet, still set it to trigger fetch (server may allow it)
+          setSelectedTable(fromUrl);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     };
-
     fetchMatchTables();
   }, []);
 
   const handleTableClick = async (tableName: string) => {
     setSelectedTable(tableName);
-    setLoading(true);
+    localStorage.setItem('lastTable', tableName);
+    const url = new URL(window.location.href);
+    url.searchParams.set('table', tableName);
+    window.history.replaceState({}, '', url.toString());
+    // fetch players list in background
     try {
-      const response = await fetch(`${API_BASE}/match/table/${tableName}/players`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch players");
+      const res = await fetch(`${API_BASE}/match/table/${tableName}/players`);
+      if (res.ok) {
+        const data: MatchPlayers = await res.json();
+        setPlayers(data.players);
       }
-      const data: MatchPlayers = await response.json();
-      setPlayers(data.players);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setLoading(false);
-    }
+    } catch {}
   };
 
-  const handleShowEntries = async () => {
-    if (!selectedTable) return;
-    
-    setLoadingEntries(true);
-    try {
-      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/entries`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch entries");
-      }
-      const data: MatchEntries = await response.json();
-      setEntries(data.entries || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      setEntries([]);
-    } finally {
-      setLoadingEntries(false);
-    }
+  const handleRefresh = () => {
+    setReloadToken(Date.now());
   };
 
-  const handleDetectPeriods = async () => {
-    if (!selectedTable) return;
-    
-    setLoadingPeriods(true);
-    try {
-      const response = await fetch(`${API_BASE}/match/table/${selectedTable}/periods/detect-notebook`);
-      if (!response.ok) {
-        throw new Error("Failed to detect periods");
-      }
-      const data = await response.json();
-      console.log("Raw response data:", data);
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
+  // auto-load flows now; keep function only for legacy UI toggle
+  const handleShowEntries = async () => {};
 
-      // Función helper para convertir valores de manera segura
-      const safeParseInt = (value: any): number | undefined => {
-        if (value === null || value === undefined || value === "") {
-          return undefined;
-        }
-        const parsed = parseInt(String(value));
-        return isNaN(parsed) ? undefined : parsed;
-      };
-
-      // Convertir explícitamente a números y verificar
-      const processedData = {
-        match_name: data.match_name,
-        detected_first_half_start: safeParseInt(data.detected_first_half_start),
-        detected_first_half_end: safeParseInt(data.detected_first_half_end),
-        detected_second_half_start: safeParseInt(data.detected_second_half_start),
-        detected_second_half_end: safeParseInt(data.detected_second_half_end),
-        detected_halftime_start: safeParseInt(data.detected_halftime_start),
-        detected_halftime_end: safeParseInt(data.detected_halftime_end),
-        manual_first_half_start: safeParseInt(data.manual_first_half_start),
-        manual_first_half_end: safeParseInt(data.manual_first_half_end),
-        manual_second_half_start: safeParseInt(data.manual_second_half_start),
-        manual_second_half_end: safeParseInt(data.manual_second_half_end),
-        manual_halftime_start: safeParseInt(data.manual_halftime_start),
-        manual_halftime_end: safeParseInt(data.manual_halftime_end),
-      };
-      
-      console.log("Processed data with explicit parsing:", processedData);
-      setPeriods(processedData);
-      setBaseTime(typeof data.base_time === 'string' ? data.base_time : null);
-      setKickoffSpike(typeof data.kickoff_spike_sec === 'number' ? data.kickoff_spike_sec : null);
-      setThresholds(data.thresholds || null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      setPeriods(null);
-    } finally {
-      setLoadingPeriods(false);
-    }
-  };
+  const handleDetectPeriods = async () => {};
 
   const handleLoadWorstCases = async () => {
     if (!selectedTable) return;
@@ -329,36 +349,6 @@ export default function SprintsPage() {
     return Array.from(new Set(values)).sort((a, b) => a - b);
   }, [periods]);
 
-  // Función para convertir segundos a formato MM:SS
-  const formatTime = (seconds: number | undefined) => {
-    if (seconds === undefined || seconds === null) return "-";
-    
-    // Asegurarse de que estamos trabajando con un número
-    const rawSeconds = parseInt(String(seconds));
-    
-    if (isNaN(rawSeconds)) {
-      return "-";
-    }
-    
-    const totalSeconds = Math.abs(rawSeconds);
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Función para convertir segundos desde inicio del partido a formato HH:MM:SS
-  const formatMatchTime = (seconds: number | undefined) => {
-    if (seconds === undefined || seconds === null) return "-";
-    
-    const totalSeconds = Math.floor(seconds);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // Convert base time (HH:MM:SS.MS) + seconds to absolute HH:MM:SS
   const derivedBaseTime = React.useMemo(() => {
     if (!entries || entries.length === 0) return null as string | null;
@@ -373,23 +363,7 @@ export default function SprintsPage() {
     if (sec === undefined || sec === null) return "-";
     const base = baseTime || derivedBaseTime;
     if (!base) return "-";
-    const [hh, mm, ssms] = base.split(":");
-    const ssInt = parseInt((ssms || "0").split(".")[0] || '0', 10);
-    const baseSeconds = parseInt(hh || '0', 10) * 3600 + parseInt(mm || '0', 10) * 60 + ssInt;
-    const target = Math.floor(baseSeconds + Math.floor(sec));
-    const h = Math.floor(target / 3600) % 24;
-    const m = Math.floor((target % 3600) / 60);
-    const s = target % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const formatDuration = (start?: number, end?: number) => {
-    if (start === undefined || end === undefined) return "-";
-    const diff = Math.max(0, Math.floor(end - start));
-    const hh = Math.floor(diff / 3600);
-    const mm = Math.floor((diff % 3600) / 60);
-    const ss = diff % 60;
-    return `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}:${ss.toString().padStart(2,'0')}`;
+    return toAbsFromUtils(base, sec);
   };
 
   if (loading && !selectedTable) {
@@ -402,25 +376,27 @@ export default function SprintsPage() {
 
   return (
     <main className="p-4">
+      <TopProgress active={loading || loadingEntries || loadingPeriods || loadingWorstCases || loadingSprints} />
+      <div className="sticky top-2 z-40 mb-3 flex items-center gap-2">
+        <div className="text-xl font-semibold">Sprints & Periods</div>
+        <div className="flex-1" />
+        <Button onClick={handleRefresh} variant="outline">Refresh</Button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Match Tables</CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-2">
-              {matchTables.map((table, index) => (
-                <li 
-                  key={index} 
-                  className={`p-2 border rounded cursor-pointer hover:bg-gray-100 ${
-                    selectedTable === table ? 'bg-blue-100' : ''
-                  }`}
-                  onClick={() => handleTableClick(table)}
-                >
-                  {table}
-                </li>
-              ))}
-            </ul>
+            {loading && matchTables.length === 0 ? (
+              <div className="space-y-2">
+                <Skeleton className="h-8" />
+                <Skeleton className="h-8" />
+                <Skeleton className="h-8" />
+              </div>
+            ) : (
+              <MatchSelector tables={matchTables} selected={selectedTable} onSelect={handleTableClick} />
+            )}
           </CardContent>
         </Card>
 
@@ -432,7 +408,7 @@ export default function SprintsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {loadingPlayers ? (
                 <div>Loading players...</div>
               ) : (
                 <ul className="space-y-2">
@@ -446,144 +422,37 @@ export default function SprintsPage() {
             </CardContent>
           </Card>
 
-          {selectedTable && entries.length > 0 && (
+          {selectedTable && (
             <Card className="col-span-2">
-              <CardHeader>
-                <CardTitle>Player Speeds Over Time</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Player Speeds Over Time</CardTitle></CardHeader>
               <CardContent>
-                <div className="h-[500px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={chartData}
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="centralized_elapsed_time" 
-                        tickFormatter={(s) => toAbsoluteTime(s)}
-                        label={{ value: 'Clock (HH:MM:SS)', position: 'insideBottom', offset: -5 }}
-                      />
-                      <YAxis 
-                        label={{ value: 'Speed (m/s)', angle: -90, position: 'insideLeft' }}
-                      />
-                      <Tooltip labelFormatter={(l:any)=> toAbsoluteTime(l)} />
-                      <Legend />
-                      {/* Horizontal threshold lines (converted from km/h to m/s) */}
-                      {thresholdsMps && (
-                        <>
-                          <ReferenceLine y={thresholdsMps.match} stroke="#A0AEC0" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '5.9 km/h' }} />
-                          <ReferenceLine y={thresholdsMps.halftime} stroke="#CBD5E0" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '11 km/h' }} />
-                          <ReferenceLine y={thresholdsMps.kickoff} stroke="#E53E3E" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '20 km/h' }} />
-                        </>
-                      )}
-                      {/* Halftime shaded area */}
-                      {periods && periods.detected_halftime_start !== undefined && periods.detected_halftime_end !== undefined && (
-                        <ReferenceArea x1={periods.detected_halftime_start} x2={periods.detected_halftime_end} y1={0} y2={'auto'} fill="#FED7D7" fillOpacity={0.15} />
-                      )}
-                      {/* Vertical markers for PT/HT/ST */}
-                      {periods && (
-                        <>
-                          {typeof periods.detected_first_half_start === 'number' && (
-                            <ReferenceLine x={periods.detected_first_half_start} stroke="#38A169" label={{ value: 'PT Start', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_first_half_end === 'number' && (
-                            <ReferenceLine x={periods.detected_first_half_end} stroke="#2F855A" label={{ value: 'PT End', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_halftime_start === 'number' && (
-                            <ReferenceLine x={periods.detected_halftime_start} stroke="#805AD5" label={{ value: 'HT Start', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_halftime_end === 'number' && (
-                            <ReferenceLine x={periods.detected_halftime_end} stroke="#6B46C1" label={{ value: 'HT End', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_second_half_start === 'number' && (
-                            <ReferenceLine x={periods.detected_second_half_start} stroke="#3182CE" label={{ value: 'ST Start', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_second_half_end === 'number' && (
-                            <ReferenceLine x={periods.detected_second_half_end} stroke="#2B6CB0" label={{ value: 'ST End', position: 'top' }} />
-                          )}
-                        </>
-                      )}
-                      {/* Kickoff spike marker if present */}
-                      {typeof kickoffSpike === 'number' && (
-                        <ReferenceLine x={kickoffSpike} stroke="#DD6B20" strokeDasharray="3 3" label={{ value: 'Kickoff spike', position: 'top' }} />
-                      )}
-                      {Object.keys(playerData).map((player, index) => (
-                        <Line
-                          key={player}
-                          type="monotone"
-                          dataKey={player}
-                          name={player}
-                          stroke={`hsl(${index * 137.5}, 70%, 50%)`}
-                          dot={false}
-                          isAnimationActive={false}
-                          connectNulls={true}
-                        />
-                      ))}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                {entries.length === 0 ? (
+                  <Skeleton className="h-[500px]" />
+                ) : (
+                  <PlayersChart entries={entries} baseTime={baseTime || derivedBaseTime} />
+                )}
               </CardContent>
             </Card>
           )}
 
-          {selectedTable && avgSeries.length > 0 && (
+          {selectedTable && (
             <Card className="col-span-2">
               <CardHeader>
-                <CardTitle>Average Speed Over Time (Notebook-style)</CardTitle>
+                <CardTitle>Average Speed Over Time</CardTitle>
+                <ThresholdLegend thresholds={thresholds} />
               </CardHeader>
               <CardContent>
-                <div className="h-[420px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={avgSeries} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="second" ticks={keyTicks} tickFormatter={(s) => toAbsoluteTime(s)} />
-                      <YAxis label={{ value: 'Speed (m/s)', angle: -90, position: 'insideLeft' }} />
-                      <Tooltip labelFormatter={(l:any)=> toAbsoluteTime(l)} />
-                      <Legend />
-                      {/* thresholds (km/h -> m/s) */}
-                      {thresholdsMps && (
-                        <>
-                          <ReferenceLine y={thresholdsMps.match} stroke="#A0AEC0" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '5.9 km/h' }} />
-                          <ReferenceLine y={thresholdsMps.halftime} stroke="#CBD5E0" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '11 km/h' }} />
-                          <ReferenceLine y={thresholdsMps.kickoff} stroke="#E53E3E" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ position: 'right', value: '20 km/h' }} />
-                        </>
-                      )}
-                      {/* halftime band */}
-                      {periods && periods.detected_halftime_start !== undefined && periods.detected_halftime_end !== undefined && (
-                        <ReferenceArea x1={periods.detected_halftime_start} x2={periods.detected_halftime_end} fill="#E53E3E" fillOpacity={0.28} ifOverflow="extendDomain" />
-                      )}
-                      {/* PT/HT/ST markers */}
-                      {periods && (
-                        <>
-                          {typeof periods.detected_first_half_start === 'number' && (
-                            <ReferenceLine x={periods.detected_first_half_start} stroke="#38A169" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'PT Start', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_first_half_end === 'number' && (
-                            <ReferenceLine x={periods.detected_first_half_end} stroke="#2F855A" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'PT End', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_halftime_start === 'number' && (
-                            <ReferenceLine x={periods.detected_halftime_start} stroke="#805AD5" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'HT Start', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_halftime_end === 'number' && (
-                            <ReferenceLine x={periods.detected_halftime_end} stroke="#6B46C1" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'HT End', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_second_half_start === 'number' && (
-                            <ReferenceLine x={periods.detected_second_half_start} stroke="#3182CE" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'ST Start', position: 'top' }} />
-                          )}
-                          {typeof periods.detected_second_half_end === 'number' && (
-                            <ReferenceLine x={periods.detected_second_half_end} stroke="#2B6CB0" strokeWidth={6} strokeDasharray="12 8" label={{ value: 'ST End', position: 'top' }} />
-                          )}
-                        </>
-                      )}
-                      {/* kickoff spike */}
-                      {typeof kickoffSpike === 'number' && (
-                        <ReferenceLine x={kickoffSpike} stroke="#DD6B20" strokeDasharray="3 3" strokeWidth={2} label={{ value: 'Kickoff spike', position: 'top' }} />
-                      )}
-                      <Line type="monotone" dataKey="speed" name="Avg speed" stroke="#2C5282" dot={false} isAnimationActive={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                {entries.length === 0 || !periods ? (
+                  <Skeleton className="h-[420px]" />
+                ) : (
+                  <AvgSpeedChart
+                    entries={entries}
+                    baseTime={baseTime || derivedBaseTime}
+                    thresholds={thresholds}
+                    periods={periods}
+                    kickoffSpike={kickoffSpike}
+                  />
+                )}
               </CardContent>
             </Card>
           )}
@@ -594,22 +463,10 @@ export default function SprintsPage() {
                 <CardTitle>Match Entries</CardTitle>
               </CardHeader>
               <CardContent>
-                <Button 
-                  onClick={handleShowEntries}
-                  className="mb-4"
-                >
-                  Load Player First Appearances
-                </Button>
                 {loadingEntries ? (
                   <div>Loading entries...</div>
                 ) : entries && entries.length > 0 ? (
                   <div>
-                    <Button
-                      onClick={() => setShowTable(!showTable)}
-                      className="mb-4"
-                    >
-                      {showTable ? 'Hide Table Details' : 'Show Table Details'}
-                    </Button>
                     {showTable && (
                       <div className="overflow-x-auto max-h-[400px]">
                         <table className="min-w-full">
@@ -648,46 +505,23 @@ export default function SprintsPage() {
                 <CardTitle>Match Periods</CardTitle>
               </CardHeader>
               <CardContent>
-                <Button 
-                  onClick={handleDetectPeriods}
-                  className="mb-4"
-                  disabled={loadingPeriods}
-                >
-                  {loadingPeriods ? "Detecting Periods..." : "Detect Match Periods"}
-                </Button>
-
-                {periods && (
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-semibold mb-2">Primer Tiempo:</h4>
-                      <div className="ml-4 space-y-1 text-sm md:text-base">
-                        <div>[Inicio] segundos centralized elapsed: {Math.floor(periods.detected_first_half_start ?? 0)} minuto: {formatMatchTime(periods.detected_first_half_start)} (hora: {toAbsoluteTime(periods.detected_first_half_start)})</div>
-                        <div>[Fin] segundo: {Math.floor(periods.detected_first_half_end ?? 0)} minuto: {formatMatchTime(periods.detected_first_half_end)} (hora: {toAbsoluteTime(periods.detected_first_half_end)})</div>
-                        <div>Duración: {formatDuration(periods.detected_first_half_start, periods.detected_first_half_end)} minutos</div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold mb-2">Segundo Tiempo:</h4>
-                      <div className="ml-4 space-y-1 text-sm md:text-base">
-                        <div>[Inicio] segundo: {Math.floor(periods.detected_second_half_start ?? 0)} minuto: {formatMatchTime(periods.detected_second_half_start)} (hora: {toAbsoluteTime(periods.detected_second_half_start)})</div>
-                        <div>[Fin] segundo: {Math.floor(periods.detected_second_half_end ?? 0)} minuto: {formatMatchTime(periods.detected_second_half_end)} (hora: {toAbsoluteTime(periods.detected_second_half_end)})</div>
-                        <div>Duración: {formatDuration(periods.detected_second_half_start, periods.detected_second_half_end)} minutos</div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold mb-2">Entretiempo:</h4>
-                      <div className="ml-4 space-y-1 text-sm md:text-base">
-                        <div>[Inicio] segundo: {Math.floor(periods.detected_halftime_start ?? 0)} minuto: {formatMatchTime(periods.detected_halftime_start)} (hora: {toAbsoluteTime(periods.detected_halftime_start)})</div>
-                        <div>[Fin] segundo: {Math.floor(periods.detected_halftime_end ?? 0)} minuto: {formatMatchTime(periods.detected_halftime_end)} (hora: {toAbsoluteTime(periods.detected_halftime_end)})</div>
-                        <div>Duración: {formatDuration(periods.detected_halftime_start, periods.detected_halftime_end)} minutos</div>
-                      </div>
-                    </div>
+                {!periods ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
                   </div>
+                ) : (
+                  <PeriodsSummary
+                    baseTime={baseTime}
+                    detected_first_half_start={periods.detected_first_half_start}
+                    detected_first_half_end={periods.detected_first_half_end}
+                    detected_second_half_start={periods.detected_second_half_start}
+                    detected_second_half_end={periods.detected_second_half_end}
+                    detected_halftime_start={periods.detected_halftime_start}
+                    detected_halftime_end={periods.detected_halftime_end}
+                  />
                 )}
-
-                {/* Removed heavy chart for now to keep UX fast; reuse Players chart above for exploration */}
               </CardContent>
             </Card>
           )}
@@ -698,80 +532,29 @@ export default function SprintsPage() {
                 <CardTitle>Worst Cases Analysis</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex gap-4 mb-4">
-                  <Button 
-                    onClick={handleLoadWorstCases}
-                    disabled={loadingWorstCases}
-                  >
-                    {loadingWorstCases ? "Loading..." : "Load Worst Cases"}
-                  </Button>
-                  <Button 
-                    onClick={handleLoadSprints}
-                    disabled={loadingSprints}
-                  >
-                    {loadingSprints ? "Loading..." : "Load Sprints in Worst Cases"}
-                  </Button>
-                </div>
-
-                {showWorstCases && worstCases.length > 0 && (
+                {loadingWorstCases ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : showWorstCases && worstCases.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-lg font-semibold mb-3">Worst Cases (HSR ≥19.8 km/h)</h3>
-                    <div className="overflow-x-auto max-h-[400px]">
-                      <table className="min-w-full">
-                        <thead className="sticky top-0 bg-white">
-                          <tr>
-                            <th className="px-4 py-2">Player</th>
-                            <th className="px-4 py-2">Start Time</th>
-                            <th className="px-4 py-2">End Time</th>
-                            <th className="px-4 py-2">Distance (m)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {worstCases.map((worstCase, index) => (
-                            <tr key={index} className="border-t">
-                              <td className="px-4 py-2">{worstCase.player_display_name}</td>
-                              <td className="px-4 py-2">{formatMatchTime(worstCase.start_second)}</td>
-                              <td className="px-4 py-2">{formatMatchTime(worstCase.end_second)}</td>
-                              <td className="px-4 py-2">{worstCase.distance_covered.toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <WorstCasesTable data={worstCases} />
                   </div>
                 )}
 
-                {showSprints && sprintsInWorstCases.length > 0 && (
+                {loadingSprints ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : showSprints && sprintsInWorstCases.length > 0 && (
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Sprints in Worst Cases (≥25.2 km/h)</h3>
-                    <div className="overflow-x-auto max-h-[400px]">
-                      <table className="min-w-full">
-                        <thead className="sticky top-0 bg-white">
-                          <tr>
-                            <th className="px-4 py-2">Player</th>
-                            <th className="px-4 py-2">Sprint ID</th>
-                            <th className="px-4 py-2">Start Time</th>
-                            <th className="px-4 py-2">End Time</th>
-                            <th className="px-4 py-2">Min Speed</th>
-                            <th className="px-4 py-2">Max Speed</th>
-                            <th className="px-4 py-2">Distance (m)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sprintsInWorstCases.map((sprint, index) => (
-                            <tr key={index} className="border-t">
-                              <td className="px-4 py-2">{sprint.player_display_name}</td>
-                              <td className="px-4 py-2">{sprint.sprint_id}</td>
-                              <td className="px-4 py-2">{sprint.sprint_start_time}</td>
-                              <td className="px-4 py-2">{sprint.sprint_end_time}</td>
-                              <td className="px-4 py-2">{sprint.min_speed_reached_within_sprint.toFixed(2)}</td>
-                              <td className="px-4 py-2">{sprint.max_speed_reached_within_sprint.toFixed(2)}</td>
-                              <td className="px-4 py-2">{sprint.total_sprint_distance.toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <SprintsTable data={sprintsInWorstCases} />
                   </div>
                 )}
               </CardContent>
