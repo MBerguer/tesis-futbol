@@ -437,6 +437,25 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                               const se = periods.detected_second_half_end ?? null;
                               setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
                             }}>Reset to detected</Button>
+                            <Button
+                              onClick={async()=>{
+                                if (!selectedTable) return;
+                                const body = {
+                                  match_name: selectedTable,
+                                  manual_first_half_start: patchedFirstHalfStart,
+                                  manual_second_half_start: patchedSecondHalfStart,
+                                  first_half_duration_sec: patchedFirstHalfDuration,
+                                  second_half_duration_sec: patchedSecondHalfDuration,
+                                };
+                                try {
+                                  await fetch(`${API_BASE}/match/table/${selectedTable}/periods/patch`,{
+                                    method:'POST',
+                                    headers:{'Content-Type':'application/json'},
+                                    body: JSON.stringify(body)
+                                  });
+                                } catch (e) { /* ignore */ }
+                              }}
+                            >Save patched</Button>
                           </div>
                           <hr />
                           <div>

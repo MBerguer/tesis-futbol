@@ -2,6 +2,7 @@ use axum::extract::Json;
 use axum::extract::Path;
 use axum::extract::State;
 use chrono::NaiveDateTime;
+use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::Column;
 use sqlx::PgPool;
@@ -1426,5 +1427,84 @@ fn parse_interval_to_seconds(interval_str: &str) -> f64 {
     let s = parts[2].parse::<f64>().unwrap_or(0.0);
     
     h * 3600.0 + m * 60.0 + s
+}
+
+#[derive(Deserialize)]
+pub struct PatchPeriodsPayload {
+    pub match_name: Option<String>,
+    pub manual_first_half_start: Option<i32>,
+    pub manual_second_half_start: Option<i32>,
+    pub first_half_duration_sec: Option<i32>,
+    pub second_half_duration_sec: Option<i32>,
+}
+
+/// POST /match/table/:table_name/periods/patch
+/// Upserts manual (patched) starts and derived ends into match_periods without touching detected_* columns
+pub async fn patch_match_periods(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+    Json(payload): Json<PatchPeriodsPayload>,
+) -> Json<Value> {
+    let manual_first_start = payload.manual_first_half_start;
+    let manual_second_start = payload.manual_second_half_start;
+    let fh_dur = payload.first_half_duration_sec;
+    let sh_dur = payload.second_half_duration_sec;
+
+    let manual_first_end = match (manual_first_start, fh_dur) {
+        (Some(s), Some(d)) if d > 0 => Some(s + d),
+        _ => None,
+    };
+    let manual_second_end = match (manual_second_start, sh_dur) {
+        (Some(s), Some(d)) if d > 0 => Some(s + d),
+        _ => None,
+    };
+
+    // Ensure a row exists for this match and upsert only manual columns
+    let query = r#"
+        INSERT INTO match_periods (match_name)
+        VALUES ($1)
+        ON CONFLICT (match_name) DO NOTHING
+    "#;
+    let _ = sqlx::query(query)
+        .bind(&table_name)
+        .execute(&pool)
+        .await;
+
+    let update = r#"
+        UPDATE match_periods SET
+            manual_first_half_start = COALESCE($2, manual_first_half_start),
+            manual_first_half_end   = COALESCE($3, manual_first_half_end),
+            manual_second_half_start= COALESCE($4, manual_second_half_start),
+            manual_second_half_end  = COALESCE($5, manual_second_half_end),
+            updated_at = NOW()
+        WHERE match_name = $1
+        RETURNING manual_first_half_start, manual_first_half_end, manual_second_half_start, manual_second_half_end
+    "#;
+
+    let row = sqlx::query(update)
+        .bind(&table_name)
+        .bind(manual_first_start)
+        .bind(manual_first_end)
+        .bind(manual_second_start)
+        .bind(manual_second_end)
+        .fetch_one(&pool)
+        .await;
+
+    match row {
+        Ok(r) => {
+            let mfs: Option<i32> = r.try_get("manual_first_half_start").ok();
+            let mfe: Option<i32> = r.try_get("manual_first_half_end").ok();
+            let mss: Option<i32> = r.try_get("manual_second_half_start").ok();
+            let mse: Option<i32> = r.try_get("manual_second_half_end").ok();
+            Json(json!({
+                "match_name": table_name,
+                "manual_first_half_start": mfs,
+                "manual_first_half_end": mfe,
+                "manual_second_half_start": mss,
+                "manual_second_half_end": mse
+            }))
+        }
+        Err(e) => Json(json!({"error": format!("failed to patch periods: {}", e)})),
+    }
 }
 
