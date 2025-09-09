@@ -7,6 +7,7 @@ export interface MatchContextValue {
   setSelectedTable: (table: string | null) => void;
   reloadToken: number;
   reload: () => void;
+  fullWidth?: boolean;
 }
 
 const MatchContext = createContext<MatchContextValue | undefined>(undefined);

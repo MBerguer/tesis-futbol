@@ -76,7 +76,7 @@ interface SprintInWorstCase {
 
 export default function SprintsPage({ selectedTable: selectedTableProp }: { selectedTable?: string | null }) {
   const searchParams = useSearchParams();
-  const { reloadToken: globalReloadToken } = useMatchContext();
+  const { reloadToken: globalReloadToken, fullWidth } = useMatchContext();
   const selectedTable = selectedTableProp ?? searchParams.get('table');
   const [selectedPlayer, setSelectedPlayer] = useState<string>("");
   const matchMetadata = {
@@ -236,7 +236,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const togglePinned = React.useCallback((name: string) => {
     setPinnedPlayers(prev => ({ ...prev, [name]: !prev[name] }));
   }, []);
-  const [mapStacked, setMapStacked] = useState<boolean>(false);
+  const [mapStacked, setMapStacked] = useState<boolean>(true);
   const [mapBearing, setMapBearing] = useState<number>(0);
   const [showInfo, setShowInfo] = useState<boolean>(true);
   const [showAnalysis, setShowAnalysis] = useState<boolean>(true);
@@ -256,12 +256,13 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
 
 
   return (
-    <main className="p-4">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <div className={`${fullWidth ? 'w-full' : 'max-w-7xl mx-auto'} p-4 md:p-6 space-y-4`}>
       <TopProgress active={loadingEntries || loadingPeriods || loadingWorstCases || loadingSprints} />
       <div className="mb-3" />
       <div className="space-y-4">
           {activeTab === 'players' && (
-            <Card>
+            <Card className="bg-zinc-900/50 border-zinc-800">
               <CardHeader>
                 <CardTitle>
                   {selectedTable ? `Players in ${selectedTable}` : 'Select a match to view players'}
@@ -289,7 +290,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
             <>
               <button
                 onClick={()=>setShowInfo(v=>!v)}
-                className="w-full mt-2 flex items-center justify-between rounded-md border bg-gray-50 px-3 py-2 hover:bg-gray-100 transition"
+                className="w-full mt-2 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
                 aria-expanded={showInfo}
               >
                 <span className="text-base font-semibold">Match info</span>
@@ -298,7 +299,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
               <div style={{maxHeight: showInfo ? '2000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-3">
                 <div className="md:col-span-3 h-full">
-                  <Card className="h-full">
+                  <Card className="h-full bg-zinc-900/50 border-zinc-800">
                   <CardHeader>
                     <CardTitle>Details</CardTitle>
                   </CardHeader>
@@ -329,7 +330,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 </div>
 
                 <div className="md:col-span-4 h-full">
-                  <Card className="h-full">
+                  <Card className="h-full bg-zinc-900/50 border-zinc-800">
                   <CardHeader>
                     <CardTitle>Periods
                     {loadingPeriods && (
@@ -365,7 +366,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 </div>
 
                 <div className="md:col-span-5 h-full">
-                  <Card className="h-full">
+                  <Card className="h-full bg-zinc-900/50 border-zinc-800">
                   <CardHeader>
                     <CardTitle>Stadium</CardTitle>
                   </CardHeader>
@@ -383,7 +384,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
               </div>
               <button
                 onClick={()=>setShowAnalysis(v=>!v)}
-                className="w-full mt-6 flex items-center justify-between rounded-md border bg-gray-50 px-3 py-2 hover:bg-gray-100 transition"
+                className="w-full mt-6 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
                 aria-expanded={showAnalysis}
               >
                 <span className="text-base font-semibold">Analysis</span>
@@ -391,7 +392,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
               </button>
               <div style={{maxHeight: showAnalysis ? '4000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
               <div className={`grid gap-4 mt-3 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
-                <Card className={`${showPatchPanel ? 'md:col-span-5' : ''}`}>
+                <Card className={`${showPatchPanel ? 'md:col-span-5' : ''} bg-zinc-900/50 border-zinc-800`}>
                   <CardHeader>
                     <CardTitle>Average Speed Over Time
                     {loadingEntries&&(
@@ -413,35 +414,125 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     ) : entries.length === 0 || !periods ? (
                       <div className="text-sm text-gray-600">No data to display.</div>
                     ) : (
-                      <AvgSpeedChart
-                        entries={entries}
-                        baseTime={baseTime || derivedBaseTime}
-                        thresholds={thresholds}
-                        periods={periods}
-                        kickoffSpike={kickoffSpike}
-                        cursorSecond={(function(){
-                          const p = periods;
-                          const kickoff = kickoffSpike ?? 0;
-                          const t = videoTimeSec;
-                          const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
-                          const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-                          const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
-                          if (!p) return kickoff + t;
-                          if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
-                            const firstHalfDuration = Math.max(0, fhDurPatched);
-                            if (t <= firstHalfDuration) return fhStartPatched + t;
-                            return shStartPatched + (t - firstHalfDuration);
-                          }
-                          return fhStartPatched + t;
-                        })()}
-                        patchedFirstHalfStart={patchedFirstHalfStart}
-                        patchedSecondHalfStart={patchedSecondHalfStart}
-                      />
+                      <>
+                        <AvgSpeedChart
+                          entries={entries}
+                          baseTime={baseTime || derivedBaseTime}
+                          thresholds={thresholds}
+                          periods={periods}
+                          kickoffSpike={kickoffSpike}
+                          cursorSecond={(function(){
+                            const p = periods;
+                            const kickoff = kickoffSpike ?? 0;
+                            const t = videoTimeSec;
+                            const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
+                            const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+                            const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
+                            if (!p) return kickoff + t;
+                            if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+                              const firstHalfDuration = Math.max(0, fhDurPatched);
+                              if (t <= firstHalfDuration) return fhStartPatched + t;
+                              return shStartPatched + (t - firstHalfDuration);
+                            }
+                            return fhStartPatched + t;
+                          })()}
+                          patchedFirstHalfStart={patchedFirstHalfStart}
+                          patchedSecondHalfStart={patchedSecondHalfStart}
+                        />
+
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-2">
+                            {/* Automatically choose player via query params: ?yt=<id> or ?video=<url> */}
+                            <UnifiedVideo
+                              youtubeId={searchParams.get('yt')}
+                              videoUrl={searchParams.get('video')}
+                              onSecondChange={handleVideoSecondChange}
+                            />
+                          </div>
+                          <div className="p-2">
+                            <div className="h-[660px] md:h-[760px]">
+                              <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
+                                <div className="flex items-center gap-2 py-2">
+                                  <label className="text-xs text-zinc-400">Orientation</label>
+                                  <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-44" />
+                                  <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
+                                </div>
+                                <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
+                              </div>
+                              {(!selectedTable || !periods) ? (
+                                <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
+                              ) : (
+                                <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
+                                  <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
+                                    <PitchMap
+                                      points={livePositions}
+                                      styleObj={{
+                                        version: 8,
+                                        sources: {
+                                          google: {
+                                            type: 'raster',
+                                            tiles: [
+                                              `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
+                                            ],
+                                            tileSize: 256,
+                                            attribution: '© Google'
+                                          }
+                                        },
+                                        layers: [
+                                          { id: 'google', type: 'raster', source: 'google' }
+                                        ]
+                                      }}
+                                      pinned={pinnedPlayers}
+                                      onToggle={togglePinned}
+                                      heightClass={'h-full'}
+                                      heightStyle={mapStacked ? undefined : undefined}
+                                      bearing={mapBearing}
+                                    />
+                                  </div>
+                                  <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
+                                    {loadingPlayers ? (
+                                      <Spinner />
+                                    ) : players.length === 0 ? (
+                                      <div className="text-sm text-gray-600">No players found.</div>
+                                    ) : (
+                                      <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
+                                        {players.map((player, index) => {
+                                          const { base, border } = stringToColorPair(player || "");
+                                          const active = !!pinnedPlayers[player];
+                                          return (
+                                            <button
+                                              key={index}
+                                              onClick={() => togglePinned(player)}
+                                              className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
+                                              style={{
+                                                background: active ? base : '#27272a',
+                                                color: active ? '#fff' : '#d4d4d8',
+                                                padding: '3px 8px',
+                                              }}
+                                              title={player}
+                                            >
+                                              <span
+                                                className="inline-block rounded-full"
+                                                style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
+                                              />
+                                              <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </>
                     )}
                   </CardContent>
                 </Card>
                 {showPatchPanel && (
-                  <Card className="md:col-span-1">
+                  <Card className="md:col-span-1 bg-zinc-900/50 border-zinc-800">
                     <CardHeader>
                       <CardTitle>Periods Editor</CardTitle>
                       <div className="ml-auto">
@@ -545,101 +636,13 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardContent>
-                    {/* Automatically choose player via query params: ?yt=<id> or ?video=<url> */}
-                    <UnifiedVideo
-                      youtubeId={searchParams.get('yt')}
-                      videoUrl={searchParams.get('video')}
-                      onSecondChange={handleVideoSecondChange}
-                    />
-                  </CardContent>
-                </Card>
-                <Card className="md:col-span-1 md:col-span-1">
-                  <CardContent className="h-[660px] md:h-[760px]">
-                    <div className="sticky top-0 z-20 bg-white pb-2 flex items-center justify-between border-b mb-2">
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs text-gray-600">Orientation</label>
-                        <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-40" />
-                        <span className="ml-1 text-xs w-10 text-right">{mapBearing}°</span>
-                      </div>
-                      <Button variant={'outline'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
-                    </div>
-                    {(!selectedTable || !periods) ? (
-                      <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
-                    ) : (
-                      <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
-                        <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
-                          <PitchMap
-                            points={livePositions}
-                            styleObj={{
-                              version: 8,
-                              sources: {
-                                google: {
-                                  type: 'raster',
-                                  tiles: [
-                                    `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
-                                  ],
-                                  tileSize: 256,
-                                  attribution: '© Google'
-                                }
-                              },
-                              layers: [
-                                { id: 'google', type: 'raster', source: 'google' }
-                              ]
-                            }}
-                            pinned={pinnedPlayers}
-                            onToggle={togglePinned}
-                            heightClass={'h-full'}
-                            heightStyle={mapStacked ? undefined : undefined}
-                            bearing={mapBearing}
-                          />
-                        </div>
-                        <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
-                          {loadingPlayers ? (
-                            <Spinner />
-                          ) : players.length === 0 ? (
-                            <div className="text-sm text-gray-600">No players found.</div>
-                          ) : (
-                            <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
-                              {players.map((player, index) => {
-                                const { base, border } = stringToColorPair(player || "");
-                                const active = !!pinnedPlayers[player];
-                                return (
-                                  <button
-                                    key={index}
-                                    onClick={() => togglePinned(player)}
-                                    className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
-                                    style={{
-                                      background: active ? base : '#e5e7eb',
-                                      color: active ? '#fff' : '#111827',
-                                      padding: '3px 8px',
-                                    }}
-                                    title={player}
-                                  >
-                                    <span
-                                      className="inline-block rounded-full"
-                                      style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
-                                    />
-                                    <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+              
               </div>
             </>
           )}
 
           {selectedTable && activeTab === 'players' && (
-            <Card>
+            <Card className="bg-zinc-900/50 border-zinc-800">
               <CardHeader>
                 <CardTitle>Match Entries</CardTitle>
               </CardHeader>
@@ -654,7 +657,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     
                       <div className="overflow-x-auto max-h-[400px]">
                         <table className="min-w-full">
-                          <thead className="sticky top-0 bg-white">
+                          <thead className="sticky top-0 bg-zinc-950">
                             <tr>
                               <th className="px-4 py-2">Player</th>
                               <th className="px-4 py-2">Time</th>
@@ -686,7 +689,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
           {/* Periods moved to Details page */}
 
           {selectedTable && activeTab === 'players' && (
-            <Card>
+            <Card className="bg-zinc-900/50 border-zinc-800">
               <CardHeader>
                 <CardTitle>Worst Cases Analysis</CardTitle>
               </CardHeader>
@@ -721,7 +724,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
           )}
 
           {selectedTable && activeTab === 'players' && (
-            <Card className="col-span-2">
+            <Card className="col-span-2 bg-zinc-900/50 border-zinc-800">
               <CardHeader><CardTitle>Player Speeds Over Time</CardTitle></CardHeader>
               <CardContent>
                 {entries.length === 0 ? (
@@ -732,6 +735,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
               </CardContent>
             </Card>
           )}
+      </div>
       </div>
     </main>
   );

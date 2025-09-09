@@ -3,9 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "../players/components/ui/card";
 import Skeleton from "./sprints/components/Skeleton";
-import MatchSelector from "./sprints/components/MatchSelector";
+import SideNav from "./components/SideNav";
 import { MatchProvider } from "./context";
 
 export default function MatchLayout({ children }: { children: React.ReactNode }) {
@@ -16,11 +15,23 @@ export default function MatchLayout({ children }: { children: React.ReactNode })
   const [matchTables, setMatchTables] = useState<string[]>([]);
   const [loadingTables, setLoadingTables] = useState(true);
   const [reloadToken, setReloadToken] = useState<number>(0);
+  const [collapsed, setCollapsed] = useState<boolean>(false);
+  const [fullWidth, setFullWidth] = useState<boolean>(false);
 
   const selectedTable = useMemo(() => searchParams.get('table'), [searchParams]);
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
+    // restore sidebar state
+    try {
+      const v = localStorage.getItem('sidenav_collapsed');
+      if (v === '1') setCollapsed(true);
+    } catch {}
+    try {
+      const w = localStorage.getItem('content_fullwidth');
+      if (w === '1') setFullWidth(true);
+    } catch {}
+
     const fetchMatchTables = async () => {
       try {
         const res = await fetch(`${API_BASE}/match/tables`);
@@ -69,41 +80,37 @@ export default function MatchLayout({ children }: { children: React.ReactNode })
         setReloadToken((x)=>x+1);
       },
       reloadToken,
-      reload: () => setReloadToken((x)=>x+1)
+      reload: () => setReloadToken((x)=>x+1),
+      fullWidth
     }}>
-    <div className="bg-gray-100 p-4">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Match Tables</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingTables ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-8" />
-                  <Skeleton className="h-8" />
-                  <Skeleton className="h-8" />
-                </div>
-              ) : (
-                <MatchSelector tables={matchTables} selected={selectedTable} onSelect={handleTableSelect} />
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="md:col-span-3">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="text-2xl font-bold">Partido</div>
+    <div className="flex min-h-screen bg-zinc-950 text-zinc-100">
+      <SideNav
+        collapsed={collapsed}
+        onToggle={()=>{ setCollapsed(v=>{ const nv = !v; try { localStorage.setItem('sidenav_collapsed', nv ? '1' : '0'); } catch {} return nv; }); }}
+        loadingTables={loadingTables}
+        tables={matchTables}
+        selectedTable={selectedTable}
+        onSelect={handleTableSelect}
+      />
+      <div className="flex-1 min-w-0">
+        <div className={`${fullWidth ? 'w-full' : 'max-w-7xl mx-auto'} p-4 md:p-6`}>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="text-xl font-semibold">Partido</div>
             <div className="flex-1" />
             <div className="flex items-center gap-2">
-              <Link href={makeHref('overview')} className={`${section==='overview' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'} border px-3 py-1 rounded`}>Overview</Link>
-              <Link href={makeHref('players')} className={`${section==='players' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'} border px-3 py-1 rounded`}>Players</Link>
+              <button
+                onClick={() => setFullWidth(v => { const nv = !v; try { localStorage.setItem('content_fullwidth', nv ? '1' : '0'); } catch {} return nv; })}
+                className={`${fullWidth ? 'bg-zinc-800 text-zinc-100 border-zinc-700' : 'bg-zinc-900/50 text-zinc-300 border-zinc-800 hover:border-zinc-700'} border px-3 py-1.5 rounded-md text-sm`}
+                title={fullWidth ? 'Switch to centered width' : 'Expand to full width'}
+              >
+                {fullWidth ? 'Centered' : 'Full width'}
+              </button>
+              <Link href={makeHref('overview')} className={`${section==='overview' ? 'bg-zinc-800 text-zinc-100 border-zinc-700' : 'bg-zinc-900/50 text-zinc-300 border-zinc-800 hover:border-zinc-700'} border px-3 py-1.5 rounded-md text-sm`}>Overview</Link>
+              <Link href={makeHref('players')} className={`${section==='players' ? 'bg-zinc-800 text-zinc-100 border-zinc-700' : 'bg-zinc-900/50 text-zinc-300 border-zinc-800 hover:border-zinc-700'} border px-3 py-1.5 rounded-md text-sm`}>Players</Link>
             </div>
           </div>
-
-          <div className="bg-transparent">{children}</div>
         </div>
+        <div className={`${fullWidth ? 'w-full' : 'max-w-7xl mx-auto'} px-4 md:px-6`}>{children}</div>
       </div>
     </div>
     </MatchProvider>

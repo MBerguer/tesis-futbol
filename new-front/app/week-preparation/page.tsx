@@ -97,7 +97,7 @@ export default function Page() {
                 <li>
                   <a href="/match" className="text-blue-600">
                     {" "}
-                    Partido
+                    Club Nacional de futbol
                   </a>
                 </li>
               </ul>

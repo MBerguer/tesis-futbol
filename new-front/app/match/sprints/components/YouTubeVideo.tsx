@@ -137,48 +137,50 @@ export default function YouTubeVideo({
   return (
     <>
       <div className="flex">
-        <div className="w-full lg:w-2/6">
-          <span>Second in Video: {formatTime(currentTime)} / {formatTime(duration)}</span>
-        </div>
-        <div className="w-full lg:w-4/6 relative h-8 overflow-visible">
-          <input
-            className="w-full relative z-0 range-no-thumb"
-            id="videoTime"
-            type="range"
-            min="0"
-            max={duration}
-            value={currentTime}
-            onChange={(e)=>seekTo(parseFloat(e.target.value))}
-          />
-          {duration > 0 && (
-            <div className="absolute inset-0 z-20 pointer-events-none">
-              <button
-                type="button"
-                aria-label="Jump to middle"
-                onClick={() => seekTo(duration / 2)}
-                className="absolute pointer-events-auto"
-                style={{ left: `50%`, transform: "translateX(-50%)", top: 0, width: 2, height: 20, background: "#10b981" }}
-              />
-              {duration >= 2700 && (
+        <div className="sticky h-[38px] w-full h top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">        
+          <div className="w-full mt-1 relative h-8 overflow-visible">
+            <input
+              className="w-full relative z-0 range-no-thumb"
+              id="videoTime"
+              type="range"
+              min="0"
+              max={duration}
+              value={currentTime}
+              onChange={(e)=>seekTo(parseFloat(e.target.value))}
+            />
+            {duration > 0 && (
+              <div className="absolute inset-0 z-20 pointer-events-none">
                 <button
                   type="button"
-                  aria-label="Jump to 45:00"
-                  onClick={() => seekTo(2700)}
+                  aria-label="Jump to middle"
+                  onClick={() => seekTo(duration / 2)}
                   className="absolute pointer-events-auto"
-                  style={{ left: `${(2700 / duration) * 100}%`, transform: "translateX(-50%)", top: 0, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "8px solid #2C5282" }}
+                  style={{ left: `50%`, transform: "translateX(-50%)", top: 0, width: 2, height: 20, background: "#10b981" }}
                 />
-              )}
-              {duration >= 2700 && (
-                <button
-                  type="button"
-                  aria-label="Jump to 45:00 remaining"
-                  onClick={() => seekTo(duration - 2700)}
-                  className="absolute pointer-events-auto"
-                  style={{ left: `${((duration - 2700) / duration) * 100}%`, transform: "translateX(-50%)", bottom: 10, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "8px solid #ef4444" }}
-                />
-              )}
-            </div>
-          )}
+                {duration >= 2700 && (
+                  <button
+                    type="button"
+                    aria-label="Jump to 45:00"
+                    onClick={() => seekTo(2700)}
+                    className="absolute pointer-events-auto"
+                    style={{ left: `${(2700 / duration) * 100}%`, transform: "translateX(-50%)", top: 0, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "8px solid #2C5282" }}
+                  />
+                )}
+                {duration >= 2700 && (
+                  <button
+                    type="button"
+                    aria-label="Jump to 45:00 remaining"
+                    onClick={() => seekTo(duration - 2700)}
+                    className="absolute pointer-events-auto"
+                    style={{ left: `${((duration - 2700) / duration) * 100}%`, transform: "translateX(-50%)", bottom: 10, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "8px solid #ef4444" }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 py-1 w-1/4 justify-end">
+            <label className="text-xs text-zinc-400">{formatTime(currentTime)} / {formatTime(duration)}</label>                                  
+          </div>
         </div>
       </div>
       <div className="w-full aspect-video">
