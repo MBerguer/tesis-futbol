@@ -11,9 +11,10 @@ interface PitchMapProps {
   onToggle?: (name: string) => void;
   heightClass?: string; // Tailwind class to control container height
   heightStyle?: React.CSSProperties; // Inline style for precise calc heights
+  bearing?: number; // map rotation in degrees
 }
 
-export default function PitchMap({ points, styleUrl, pinned, onToggle, heightClass, heightStyle }: PitchMapProps) {
+export default function PitchMap({ points, styleUrl, pinned, onToggle, heightClass, heightStyle, bearing }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
@@ -55,6 +56,15 @@ export default function PitchMap({ points, styleUrl, pinned, onToggle, heightCla
       try { ro.disconnect(); } catch {}
     };
   }, [heightClass, heightStyle]);
+
+  // Apply bearing changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (typeof bearing === 'number' && isFinite(bearing)) {
+      try { map.setBearing(bearing); } catch {}
+    }
+  }, [bearing]);
 
   useEffect(() => {
     const map = mapRef.current;

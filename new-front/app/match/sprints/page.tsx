@@ -237,6 +237,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
     setPinnedPlayers(prev => ({ ...prev, [name]: !prev[name] }));
   }, []);
   const [mapStacked, setMapStacked] = useState<boolean>(false);
+  const [mapBearing, setMapBearing] = useState<number>(0);
 
   // Initialize patch values whenever detected periods load/update
   useEffect(() => {
@@ -555,6 +556,11 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     ) : (
                       <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
                         <div className={mapStacked ? 'flex-1 min-h-0' : 'col-span-4 h-full'}>
+                          <div className="flex items-center justify-end pb-1">
+                            <label className="text-xs text-gray-600 mr-2">Orientation</label>
+                            <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-40" />
+                            <span className="ml-2 text-xs w-10 text-right">{mapBearing}°</span>
+                          </div>
                           <PitchMap
                             points={livePositions}
                             styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
@@ -562,6 +568,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                             onToggle={togglePinned}
                             heightClass={'h-full'}
                             heightStyle={mapStacked ? undefined : undefined}
+                            bearing={mapBearing}
                           />
                         </div>
                         <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto' : 'col-span-1 h-full overflow-y-auto'}>
