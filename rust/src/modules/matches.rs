@@ -106,6 +106,88 @@ pub async fn get_match_gps_players_details() -> Json<Value> {
     }))
 }
 
+/// GET /match/table/:table_name/positions/window?center_sec=123&radius_sec=15
+/// Returns per-second positions in a rolling window around a GPS time (seconds since base)
+pub async fn get_positions_window(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+ ) -> Json<Value> {
+    let center_sec: i64 = params.get("center_sec").and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
+    let radius_sec: i64 = params.get("radius_sec").and_then(|s| s.parse::<i64>().ok()).unwrap_or(15);
+
+    println!("[positions/window] match={}, center_sec={}, radius_sec={}", table_name, center_sec, radius_sec);
+
+    // Build SQL assuming table has columns: player_display_name, time, centralized_elapsed_time, lat, lon
+    // If centralized_elapsed_time is not present, approximate via time vs min(time) as in other endpoints
+    let has_centralized_query = format!(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = '{}' AND column_name = 'centralized_elapsed_time'",
+        table_name
+    );
+    let has_cent = sqlx::query(&has_centralized_query).fetch_optional(&pool).await.ok().flatten().is_some();
+    println!("[positions/window] has_centralized_elapsed_time={}", has_cent);
+
+    let (sql, bind_center_low, bind_center_high) = if has_cent {
+        (
+            format!(
+                "SELECT player_display_name, (centralized_elapsed_time)::double precision AS sec, lat, lon FROM \"{}\" WHERE (centralized_elapsed_time)::double precision BETWEEN $1 AND $2 ORDER BY sec",
+                table_name
+            ),
+            center_sec - radius_sec,
+            center_sec + radius_sec,
+        )
+    } else {
+        // compute centralized using min(time)
+        (
+            format!(
+                "WITH base AS (SELECT MIN(time) AS min_time FROM \"{}\"),\n                 raw AS (\n                   SELECT t.player_display_name,\n                          (EXTRACT(EPOCH FROM (to_timestamp(t.time,'HH24:MI:SS.MS') - to_timestamp(b.min_time,'HH24:MI:SS.MS'))))::text AS sec,\n                          t.lat, t.lon\n                   FROM \"{}\" t CROSS JOIN base b\n                 )\n                 SELECT player_display_name, sec, lat, lon FROM raw WHERE sec::double precision BETWEEN $1 AND $2 ORDER BY sec::double precision",
+                table_name, table_name
+            ),
+            center_sec - radius_sec,
+            center_sec + radius_sec,
+        )
+    };
+
+    println!("[positions/window] SQL= {}", sql.replace('\n', " "));
+
+    let rows = match sqlx::query(&sql)
+        .bind(bind_center_low)
+        .bind(bind_center_high)
+        .fetch_all(&pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return Json(json!({"error": format!("db error: {}", e)})),
+    };
+
+    println!("[positions/window] rows_returned={}", rows.len());
+    // Debug sample
+    let mut secs_dbg: Vec<String> = Vec::new();
+    for r in rows.iter().take(10) {
+        if let Ok(s) = r.try_get::<f64,_>("sec") { secs_dbg.push(format!("{:.3}", s)); continue; }
+        if let Ok(s) = r.try_get::<String,_>("sec") { secs_dbg.push(s); }
+    }
+    if !secs_dbg.is_empty() { println!("[positions/window] sample secs(first 10)={:?}", secs_dbg); }
+
+    let data: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            // Try f64, else parse string
+            let sec_f = r.try_get::<f64,_>("sec").ok().or_else(|| {
+                r.try_get::<String,_>("sec").ok().and_then(|s| s.parse::<f64>().ok())
+            }).unwrap_or(0.0);
+            json!({
+                "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                "sec": sec_f,
+                "lat": r.try_get::<f64,_>("lat").unwrap_or(0.0),
+                "lon": r.try_get::<f64,_>("lon").unwrap_or(0.0),
+            })
+        })
+        .collect();
+
+    Json(json!({"positions": data, "center_sec": center_sec, "radius_sec": radius_sec}))
+ }
+
 /// Detalle de períodos detectados replicando exactamente la lógica del notebook
 /// Endpoint: GET /match/table/:table_name/periods/detect-notebook
 ///

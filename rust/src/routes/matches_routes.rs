@@ -36,5 +36,9 @@ pub fn matches_routes(pool: PgPool) -> Router {
             "/table/:table_name/sprints-in-worst-cases",
             get(matches::get_sprints_in_worst_cases),
         )
+        .route(
+            "/table/:table_name/positions/window",
+            get(matches::get_positions_window),
+        )
         .with_state(pool)
 }

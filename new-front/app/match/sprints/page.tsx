@@ -19,9 +19,11 @@ import VideoComponent from "../videoComponent";
 import YouTubeVideo from "./components/YouTubeVideo";
 import UnifiedVideo from "./components/UnifiedVideo";
 import StadiumMap from "./components/StadiumMap";
+import PitchMap from "./components/PitchMap";
 import Spinner from "./components/Spinner";
 import { Button } from "../../players/components/ui/button";
 import { toAbsoluteTime as toAbsFromUtils, formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
+import { usePositionsWindow } from "./hooks/usePositionsWindow";
 
 interface MatchPlayers {
   players: string[];
@@ -204,6 +206,30 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
       .sort()[0];
     return t || null;
   }, [entries]);
+  // GPS cursor second (same logic used for AvgSpeedChart) to drive live positions window
+  const gpsCursorSecond = React.useMemo(() => {
+    const p = periods;
+    const kickoff = kickoffSpike ?? 0;
+    const t = videoTimeSec;
+    const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
+    const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+    const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
+    if (!p) return kickoff + t;
+    if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+      const firstHalfDuration = Math.max(0, fhDurPatched);
+      if (t <= firstHalfDuration) return fhStartPatched + t;
+      return shStartPatched + (t - firstHalfDuration);
+    }
+    return fhStartPatched + t;
+  }, [periods, kickoffSpike, videoTimeSec, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration]);
+
+  const { snapshot: livePositions, loading: loadingPositions } = usePositionsWindow(
+    API_BASE,
+    selectedTable || null,
+    gpsCursorSecond,
+    15,
+    400,
+  );
 
   // Initialize patch values whenever detected periods load/update
   useEffect(() => {
@@ -524,6 +550,21 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                           </li>
                         ))}
                       </ul>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Live Player Positions (±15s window) {loadingPositions && <Spinner />}</CardTitle>                    
+                  </CardHeader>
+                  <CardContent>
+                    {(!selectedTable || !periods) ? (
+                      <div className="text-sm text-gray-600">Select a match to view live positions.</div>
+                    ) : (
+                      <PitchMap
+                        points={livePositions}
+                        styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
+                      />
                     )}
                   </CardContent>
                 </Card>
