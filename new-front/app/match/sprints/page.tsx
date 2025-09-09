@@ -236,6 +236,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const togglePinned = React.useCallback((name: string) => {
     setPinnedPlayers(prev => ({ ...prev, [name]: !prev[name] }));
   }, []);
+  const [mapStacked, setMapStacked] = useState<boolean>(false);
 
   // Initialize patch values whenever detected periods load/update
   useEffect(() => {
@@ -289,7 +290,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                   <CardHeader>
                     <CardTitle>Match Details</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="h-[660px] md:h-[760px]">
                     {!selectedTable ? (
                       <div className="text-sm text-gray-600">Select a match to view details.</div>
                     ) : (
@@ -537,60 +538,66 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     />
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="md:col-span-1 md:col-span-1">
                   <CardHeader>
-                    <CardTitle>Players</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-2">
-                    {!selectedTable ? (
-                      <div className="text-sm text-gray-600">Select a match to view players.</div>
-                    ) : loadingPlayers ? (
-                      <Spinner />
-                    ) : players.length === 0 ? (
-                      <div className="text-sm text-gray-600">No players found.</div>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {players.map((player, index) => {
-                          const { base, border } = stringToColorPair(player || "");
-                          const active = !!pinnedPlayers[player];
-                          return (
-                            <button
-                              key={index}
-                              onClick={() => togglePinned(player)}
-                              className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
-                              style={{
-                                background: active ? base : '#e5e7eb',
-                                color: active ? '#fff' : '#111827',
-                                padding: '3px 8px',
-                              }}
-                              title={player}
-                            >
-                              <span
-                                className="inline-block rounded-full"
-                                style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
-                              />
-                              <span className="truncate max-w-[120px]">{player}</span>
-                            </button>
-                          );
-                        })}
+                    <div className="flex items-center gap-2">
+                      <CardTitle>Players & Live Positions {loadingPositions && <Spinner />}</CardTitle>
+                      <div className="ml-auto">
+                        <Button variant={'outline'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>
+                          Toggle layout
+                        </Button>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-                <Card className="md:col-span-2">
-                  <CardHeader>
-                    <CardTitle>Live Player Positions (±15s window) {loadingPositions && <Spinner />}</CardTitle>                    
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {(!selectedTable || !periods) ? (
-                      <div className="text-sm text-gray-600">Select a match to view live positions.</div>
+                      <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
                     ) : (
-                      <PitchMap
-                        points={livePositions}
-                        styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
-                        pinned={pinnedPlayers}
-                        onToggle={togglePinned}
-                      />
+                      <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
+                        <div className={mapStacked ? 'flex-1 min-h-0' : 'col-span-4 h-full'}>
+                          <PitchMap
+                            points={livePositions}
+                            styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
+                            pinned={pinnedPlayers}
+                            onToggle={togglePinned}
+                            heightClass={'h-full'}
+                            heightStyle={mapStacked ? undefined : undefined}
+                          />
+                        </div>
+                        <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto' : 'col-span-1 h-full overflow-y-auto'}>
+                          {loadingPlayers ? (
+                            <Spinner />
+                          ) : players.length === 0 ? (
+                            <div className="text-sm text-gray-600">No players found.</div>
+                          ) : (
+                            <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
+                              {players.map((player, index) => {
+                                const { base, border } = stringToColorPair(player || "");
+                                const active = !!pinnedPlayers[player];
+                                return (
+                                  <button
+                                    key={index}
+                                    onClick={() => togglePinned(player)}
+                                    className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
+                                    style={{
+                                      background: active ? base : '#e5e7eb',
+                                      color: active ? '#fff' : '#111827',
+                                      padding: '3px 8px',
+                                    }}
+                                    title={player}
+                                  >
+                                    <span
+                                      className="inline-block rounded-full"
+                                      style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
+                                    />
+                                    <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </CardContent>
                 </Card>

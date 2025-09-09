@@ -9,9 +9,11 @@ interface PitchMapProps {
   styleUrl?: string;
   pinned?: Record<string, boolean>;
   onToggle?: (name: string) => void;
+  heightClass?: string; // Tailwind class to control container height
+  heightStyle?: React.CSSProperties; // Inline style for precise calc heights
 }
 
-export default function PitchMap({ points, styleUrl, pinned, onToggle }: PitchMapProps) {
+export default function PitchMap({ points, styleUrl, pinned, onToggle, heightClass, heightStyle }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
@@ -32,6 +34,27 @@ export default function PitchMap({ points, styleUrl, pinned, onToggle }: PitchMa
       markersRef.current = new Map();
     };
   }, [styleUrl]);
+
+  // Ensure map resizes when container size/layout changes
+  useEffect(() => {
+    const map = mapRef.current;
+    const el = containerRef.current;
+    if (!map || !el) return;
+    // immediate resize after layout change and reattach to ensure correct size
+    try {
+      map.resize();
+      // Workaround: briefly set a timeout to resize again after DOM paints
+      setTimeout(() => { try { map.resize(); } catch {} }, 0);
+    } catch {}
+    // observe future resizes
+    const ro = new ResizeObserver(() => {
+      try { map.resize(); } catch {}
+    });
+    ro.observe(el);
+    return () => {
+      try { ro.disconnect(); } catch {}
+    };
+  }, [heightClass, heightStyle]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -105,7 +128,13 @@ export default function PitchMap({ points, styleUrl, pinned, onToggle }: PitchMa
     });
   }, [pinned]);
 
-  return <div ref={containerRef} className="w-full h-[300px]" />;
+  return (
+    <div
+      ref={containerRef}
+      className={`w-full ${heightClass || 'h-full'}`}
+      style={{ minHeight: '420px', ...(heightStyle || {}) }}
+    />
+  );
 }
 
 
