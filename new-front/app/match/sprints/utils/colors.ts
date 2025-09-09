@@ -5,7 +5,8 @@ export function stringToColor(input: string, { s = 70, l = 50 }: { s?: number; l
     hash = (hash << 5) - hash + input.charCodeAt(i);
     hash |= 0;
   }
-  const hue = Math.abs(hash) % 360;
+  // Limit palette to blue (≈210deg) through red (≈360/0deg)
+  const hue = 210 + (Math.abs(hash) % 150); // range [210, 360)
   return `hsl(${hue}, ${s}%, ${l}%)`;
 }
 

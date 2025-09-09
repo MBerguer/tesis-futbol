@@ -231,6 +231,12 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
     15,
   );
 
+  // Pinned popups shared between list and map
+  const [pinnedPlayers, setPinnedPlayers] = useState<Record<string, boolean>>({});
+  const togglePinned = React.useCallback((name: string) => {
+    setPinnedPlayers(prev => ({ ...prev, [name]: !prev[name] }));
+  }, []);
+
   // Initialize patch values whenever detected periods load/update
   useEffect(() => {
     if (!periods) return;
@@ -535,7 +541,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                   <CardHeader>
                     <CardTitle>Players</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-2">
                     {!selectedTable ? (
                       <div className="text-sm text-gray-600">Select a match to view players.</div>
                     ) : loadingPlayers ? (
@@ -543,17 +549,31 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     ) : players.length === 0 ? (
                       <div className="text-sm text-gray-600">No players found.</div>
                     ) : (
-                      <ul className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
                         {players.map((player, index) => {
                           const { base, border } = stringToColorPair(player || "");
+                          const active = !!pinnedPlayers[player];
                           return (
-                            <li key={index} className="p-2 border rounded flex items-center gap-2" style={{ borderColor: border }}>
-                              <span className="inline-block rounded-full" style={{ width: 10, height: 10, background: base, border: `2px solid ${border}` }} />
-                              <span>{player}</span>
-                            </li>
+                            <button
+                              key={index}
+                              onClick={() => togglePinned(player)}
+                              className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
+                              style={{
+                                background: active ? base : '#e5e7eb',
+                                color: active ? '#fff' : '#111827',
+                                padding: '3px 8px',
+                              }}
+                              title={player}
+                            >
+                              <span
+                                className="inline-block rounded-full"
+                                style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
+                              />
+                              <span className="truncate max-w-[120px]">{player}</span>
+                            </button>
                           );
                         })}
-                      </ul>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
@@ -568,6 +588,8 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                       <PitchMap
                         points={livePositions}
                         styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
+                        pinned={pinnedPlayers}
+                        onToggle={togglePinned}
                       />
                     )}
                   </CardContent>

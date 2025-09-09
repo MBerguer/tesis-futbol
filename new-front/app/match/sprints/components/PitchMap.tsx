@@ -7,13 +7,14 @@ import { stringToColorPair } from "../utils/colors";
 interface PitchMapProps {
   points: PositionPoint[];
   styleUrl?: string;
+  pinned?: Record<string, boolean>;
+  onToggle?: (name: string) => void;
 }
 
-export default function PitchMap({ points, styleUrl }: PitchMapProps) {
+export default function PitchMap({ points, styleUrl, pinned, onToggle }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
-  const pinnedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -64,23 +65,20 @@ export default function PitchMap({ points, styleUrl }: PitchMapProps) {
           const ll = rec!.marker.getLngLat();
           rec!.popup.setLngLat([ll.lng, ll.lat]).addTo(map);
         };
-        const hide = () => { if (!pinnedRef.current.has(name)) { try { rec!.popup.remove(); } catch {} } };
+        const hide = () => { if (!pinned || !pinned[name]) { try { rec!.popup.remove(); } catch {} } };
 
         const ring = border.startsWith('hsl(') ? border.replace('hsl(', 'hsla(').replace(')', ', 0.35)') : border;
         const baseShadow = '0 0 0 2px rgba(0,0,0,0.15)';
         el.addEventListener('mouseenter', () => { el.style.boxShadow = `${baseShadow}, 0 0 0 6px ${ring}`; show(); });
         el.addEventListener('mouseleave', () => { el.style.boxShadow = baseShadow; hide(); });
-        el.addEventListener('click', () => {
-          if (pinnedRef.current.has(name)) { pinnedRef.current.delete(name); try { rec!.popup.remove(); } catch {} }
-          else { pinnedRef.current.add(name); show(); }
-        });
+        el.addEventListener('click', () => { onToggle && onToggle(name); });
 
-        if (pinnedRef.current.has(name)) show();
+        if (pinned && pinned[name]) show();
       }
 
       // update position for current snapshot
       rec.marker.setLngLat([p.lon, p.lat]);
-      if (pinnedRef.current.has(name)) rec.popup.setLngLat([p.lon, p.lat]);
+      if (pinned && pinned[name]) rec.popup.setLngLat([p.lon, p.lat]);
     }
 
     // Remove markers not present
@@ -92,6 +90,20 @@ export default function PitchMap({ points, styleUrl }: PitchMapProps) {
       }
     }
   }, [points]);
+
+  // Reflect external pinned changes on already-created markers
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !pinned) return;
+    Array.from(markersRef.current.entries()).forEach(([name, rec]) => {
+      if (pinned[name]) {
+        const ll = rec.marker.getLngLat();
+        rec.popup.setLngLat([ll.lng, ll.lat]).addTo(map);
+      } else {
+        try { rec.popup.remove(); } catch {}
+      }
+    });
+  }, [pinned]);
 
   return <div ref={containerRef} className="w-full h-[300px]" />;
 }
