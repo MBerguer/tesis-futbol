@@ -287,12 +287,16 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
 
           {activeTab === 'overview' && (
             <>
-              <div className="flex items-center justify-between mt-2">
-                <h2 className="text-xl font-semibold">Match info</h2>
-                <Button variant={'outline'} size={'sm'} onClick={()=>setShowInfo(v=>!v)}>{showInfo ? 'Collapse' : 'Expand'}</Button>
-              </div>
-              {showInfo && (
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+              <button
+                onClick={()=>setShowInfo(v=>!v)}
+                className="w-full mt-2 flex items-center justify-between rounded-md border bg-gray-50 px-3 py-2 hover:bg-gray-100 transition"
+                aria-expanded={showInfo}
+              >
+                <span className="text-base font-semibold">Match info</span>
+                <svg className={`w-4 h-4 ml-3 transition-transform ${showInfo ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+              </button>
+              <div style={{maxHeight: showInfo ? '2000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-3">
                 <div className="md:col-span-3 h-full">
                   <Card className="h-full">
                   <CardHeader>
@@ -376,14 +380,17 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                   </Card>
                 </div>
               </div>
-              )}
-              <div className="flex items-center justify-between mt-6">
-                <h2 className="text-xl font-semibold">Analysis</h2>
-                <Button variant={'outline'} size={'sm'} onClick={()=>setShowAnalysis(v=>!v)}>{showAnalysis ? 'Collapse' : 'Expand'}</Button>
               </div>
-              {showAnalysis && (
-                <>
-              <div className={`grid gap-4 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
+              <button
+                onClick={()=>setShowAnalysis(v=>!v)}
+                className="w-full mt-6 flex items-center justify-between rounded-md border bg-gray-50 px-3 py-2 hover:bg-gray-100 transition"
+                aria-expanded={showAnalysis}
+              >
+                <span className="text-base font-semibold">Analysis</span>
+                <svg className={`w-4 h-4 ml-3 transition-transform ${showAnalysis ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+              </button>
+              <div style={{maxHeight: showAnalysis ? '4000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
+              <div className={`grid gap-4 mt-3 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
                 <Card className={`${showPatchPanel ? 'md:col-span-5' : ''}`}>
                   <CardHeader>
                     <CardTitle>Average Speed Over Time
@@ -551,7 +558,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 </Card>
                 <Card className="md:col-span-1 md:col-span-1">
                   <CardContent className="h-[660px] md:h-[760px]">
-                    <div className="sticky top-0 z-20 bg-white pb-2 flex items-center justify-between">
+                    <div className="sticky top-0 z-20 bg-white pb-2 flex items-center justify-between border-b mb-2">
                       <div className="flex items-center gap-2">
                         <label className="text-xs text-gray-600">Orientation</label>
                         <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-40" />
@@ -627,8 +634,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                   </CardContent>
                 </Card>
               </div>
-                </>
-              )}
+              </div>
             </>
           )}
 
