@@ -33,6 +33,10 @@
   pointer-events: none;
 }
 
+/* Remove default MapLibre popup chrome spacing */
+.maplibregl-popup.no-chrome .maplibregl-popup-content { padding: 0; border-radius: 6px; }
+.maplibregl-popup.no-chrome .maplibregl-popup-tip { display: none; }
+
 /* Ensure WebKit uses our styling (keeps native track, hides thumb) */
 .range-no-thumb {
   -webkit-tap-highlight-color: transparent;

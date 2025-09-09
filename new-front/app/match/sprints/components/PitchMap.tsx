@@ -12,7 +12,8 @@ interface PitchMapProps {
 export default function PitchMap({ points, styleUrl }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
+  const pinnedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -26,31 +27,69 @@ export default function PitchMap({ points, styleUrl }: PitchMapProps) {
       });
     }
     return () => {
-      markersRef.current.forEach(m => m.remove());
-      markersRef.current = [];
+      markersRef.current.forEach(({ marker, popup }) => { try { popup.remove(); } catch {} marker.remove(); });
+      markersRef.current = new Map();
     };
   }, [styleUrl]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    // Clear old markers
-    markersRef.current.forEach(m => m.remove());
-    markersRef.current = [];
-    // Add current markers
+    const present = new Set<string>();
+
     for (const p of points) {
-      const { base, border } = stringToColorPair(p.player_display_name || "");
-      const el = document.createElement('div');
-      el.className = 'rounded-full';
-      el.style.width = '10px';
-      el.style.height = '10px';
-      el.style.background = base;
-      el.style.border = `2px solid ${border}`;
-      el.style.boxShadow = '0 0 0 2px rgba(0,0,0,0.15)';
-      const mk = new maplibregl.Marker({ element: el })
-        .setLngLat([p.lon, p.lat])
-        .addTo(map);
-      markersRef.current.push(mk);
+      const name = p.player_display_name || '';
+      present.add(name);
+      let rec = markersRef.current.get(name);
+      const { base, border } = stringToColorPair(name);
+
+      if (!rec) {
+        const el = document.createElement('div');
+        el.className = 'rounded-full';
+        el.style.width = '10px';
+        el.style.height = '10px';
+        el.style.background = base;
+        el.style.border = `2px solid ${border}`;
+        el.style.boxShadow = '0 0 0 2px rgba(0,0,0,0.15)';
+        el.style.cursor = 'pointer';
+
+        const marker = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map);
+        const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: [0, 14], anchor: 'top', className: 'no-chrome' })
+          .setHTML(`<div style="background:#fff;border:1px solid ${border};padding:2px 6px;border-radius:6px;white-space:nowrap;font-size:12px;">${name}</div>`);
+
+        rec = { marker, popup };
+        markersRef.current.set(name, rec);
+
+        const show = () => {
+          const ll = rec!.marker.getLngLat();
+          rec!.popup.setLngLat([ll.lng, ll.lat]).addTo(map);
+        };
+        const hide = () => { if (!pinnedRef.current.has(name)) { try { rec!.popup.remove(); } catch {} } };
+
+        const ring = border.startsWith('hsl(') ? border.replace('hsl(', 'hsla(').replace(')', ', 0.35)') : border;
+        const baseShadow = '0 0 0 2px rgba(0,0,0,0.15)';
+        el.addEventListener('mouseenter', () => { el.style.boxShadow = `${baseShadow}, 0 0 0 6px ${ring}`; show(); });
+        el.addEventListener('mouseleave', () => { el.style.boxShadow = baseShadow; hide(); });
+        el.addEventListener('click', () => {
+          if (pinnedRef.current.has(name)) { pinnedRef.current.delete(name); try { rec!.popup.remove(); } catch {} }
+          else { pinnedRef.current.add(name); show(); }
+        });
+
+        if (pinnedRef.current.has(name)) show();
+      }
+
+      // update position for current snapshot
+      rec.marker.setLngLat([p.lon, p.lat]);
+      if (pinnedRef.current.has(name)) rec.popup.setLngLat([p.lon, p.lat]);
+    }
+
+    // Remove markers not present
+    for (const [name, rec] of Array.from(markersRef.current.entries())) {
+      if (!present.has(name)) {
+        try { rec.popup.remove(); } catch {}
+        rec.marker.remove();
+        markersRef.current.delete(name);
+      }
     }
   }, [points]);
 
