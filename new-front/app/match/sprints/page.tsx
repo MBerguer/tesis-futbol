@@ -16,6 +16,8 @@ import TopProgress from "./components/TopProgress";
 import ThresholdLegend from "./components/ThresholdLegend";
 import PlayerMiniList from "./components/PlayerMiniList";
 import VideoComponent from "../videoComponent";
+import YouTubeVideo from "./components/YouTubeVideo";
+import UnifiedVideo from "./components/UnifiedVideo";
 import StadiumMap from "./components/StadiumMap";
 import Spinner from "./components/Spinner";
 import { Button } from "../../players/components/ui/button";
@@ -106,6 +108,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [baseTime, setBaseTime] = useState<string | null>(null);
   const [videoTimeSec, setVideoTimeSec] = useState<number>(0);
+  const handleVideoSecondChange = React.useCallback((s: number)=> setVideoTimeSec(s), []);
   const [showPatchPanel, setShowPatchPanel] = useState<boolean>(false);
   const [patchedFirstHalfStart, setPatchedFirstHalfStart] = useState<number | null>(null);
   const [patchedSecondHalfStart, setPatchedSecondHalfStart] = useState<number | null>(null);
@@ -494,7 +497,12 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     <CardTitle>Match Video</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <VideoComponent onSecondChange={(s)=>setVideoTimeSec(s)} />
+                    {/* Automatically choose player via query params: ?yt=<id> or ?video=<url> */}
+                    <UnifiedVideo
+                      youtubeId={searchParams.get('yt')}
+                      videoUrl={searchParams.get('video')}
+                      onSecondChange={handleVideoSecondChange}
+                    />
                   </CardContent>
                 </Card>
                 <Card>
