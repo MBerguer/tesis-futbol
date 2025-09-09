@@ -238,6 +238,8 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   }, []);
   const [mapStacked, setMapStacked] = useState<boolean>(false);
   const [mapBearing, setMapBearing] = useState<number>(0);
+  const [showInfo, setShowInfo] = useState<boolean>(true);
+  const [showAnalysis, setShowAnalysis] = useState<boolean>(true);
 
   // Initialize patch values whenever detected periods load/update
   useEffect(() => {
@@ -285,11 +287,16 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
 
           {activeTab === 'overview' && (
             <>
+              <div className="flex items-center justify-between mt-2">
+                <h2 className="text-xl font-semibold">Match info</h2>
+                <Button variant={'outline'} size={'sm'} onClick={()=>setShowInfo(v=>!v)}>{showInfo ? 'Collapse' : 'Expand'}</Button>
+              </div>
+              {showInfo && (
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                 <div className="md:col-span-3 h-full">
                   <Card className="h-full">
                   <CardHeader>
-                    <CardTitle>Match Details</CardTitle>
+                    <CardTitle>Details</CardTitle>
                   </CardHeader>
                   <CardContent className="h-[660px] md:h-[760px]">
                     {!selectedTable ? (
@@ -320,7 +327,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 <div className="md:col-span-4 h-full">
                   <Card className="h-full">
                   <CardHeader>
-                    <CardTitle>Match Periods
+                    <CardTitle>Periods
                     {loadingPeriods && (
                       <Spinner />
                     )}
@@ -356,20 +363,26 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                 <div className="md:col-span-5 h-full">
                   <Card className="h-full">
                   <CardHeader>
-                    <CardTitle>Stadium Location</CardTitle>
+                    <CardTitle>Stadium</CardTitle>
                   </CardHeader>
                   <CardContent>
                       <StadiumMap
                         latitude={-34.795334}
                         longitude={-56.147974}
                         zoom={15}
-                        styleUrl={`https://api.maptiler.com/maps/satellite/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
+                        styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
                       />
                   </CardContent>
                   </Card>
                 </div>
               </div>
-
+              )}
+              <div className="flex items-center justify-between mt-6">
+                <h2 className="text-xl font-semibold">Analysis</h2>
+                <Button variant={'outline'} size={'sm'} onClick={()=>setShowAnalysis(v=>!v)}>{showAnalysis ? 'Collapse' : 'Expand'}</Button>
+              </div>
+              {showAnalysis && (
+                <>
               <div className={`grid gap-4 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
                 <Card className={`${showPatchPanel ? 'md:col-span-5' : ''}`}>
                   <CardHeader>
@@ -527,9 +540,6 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Match Video</CardTitle>
-                  </CardHeader>
                   <CardContent>
                     {/* Automatically choose player via query params: ?yt=<id> or ?video=<url> */}
                     <UnifiedVideo
@@ -540,30 +550,38 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                   </CardContent>
                 </Card>
                 <Card className="md:col-span-1 md:col-span-1">
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <CardTitle>Players & Live Positions {loadingPositions && <Spinner />}</CardTitle>
-                      <div className="ml-auto">
-                        <Button variant={'outline'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>
-                          Toggle layout
-                        </Button>
+                  <CardContent className="h-[660px] md:h-[760px]">
+                    <div className="sticky top-0 z-20 bg-white pb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-600">Orientation</label>
+                        <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-40" />
+                        <span className="ml-1 text-xs w-10 text-right">{mapBearing}°</span>
                       </div>
+                      <Button variant={'outline'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
                     </div>
-                  </CardHeader>
-                  <CardContent>
                     {(!selectedTable || !periods) ? (
                       <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
                     ) : (
                       <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
-                        <div className={mapStacked ? 'flex-1 min-h-0' : 'col-span-4 h-full'}>
-                          <div className="flex items-center justify-end pb-1">
-                            <label className="text-xs text-gray-600 mr-2">Orientation</label>
-                            <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-40" />
-                            <span className="ml-2 text-xs w-10 text-right">{mapBearing}°</span>
-                          </div>
+                        <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
                           <PitchMap
                             points={livePositions}
-                            styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
+                            styleObj={{
+                              version: 8,
+                              sources: {
+                                google: {
+                                  type: 'raster',
+                                  tiles: [
+                                    `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
+                                  ],
+                                  tileSize: 256,
+                                  attribution: '© Google'
+                                }
+                              },
+                              layers: [
+                                { id: 'google', type: 'raster', source: 'google' }
+                              ]
+                            }}
                             pinned={pinnedPlayers}
                             onToggle={togglePinned}
                             heightClass={'h-full'}
@@ -571,7 +589,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                             bearing={mapBearing}
                           />
                         </div>
-                        <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto' : 'col-span-1 h-full overflow-y-auto'}>
+                        <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
                           {loadingPlayers ? (
                             <Spinner />
                           ) : players.length === 0 ? (
@@ -609,6 +627,8 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                   </CardContent>
                 </Card>
               </div>
+                </>
+              )}
             </>
           )}
 

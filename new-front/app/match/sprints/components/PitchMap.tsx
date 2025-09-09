@@ -7,6 +7,7 @@ import { stringToColorPair } from "../utils/colors";
 interface PitchMapProps {
   points: PositionPoint[];
   styleUrl?: string;
+  styleObj?: any;
   pinned?: Record<string, boolean>;
   onToggle?: (name: string) => void;
   heightClass?: string; // Tailwind class to control container height
@@ -14,7 +15,7 @@ interface PitchMapProps {
   bearing?: number; // map rotation in degrees
 }
 
-export default function PitchMap({ points, styleUrl, pinned, onToggle, heightClass, heightStyle, bearing }: PitchMapProps) {
+export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
@@ -24,7 +25,7 @@ export default function PitchMap({ points, styleUrl, pinned, onToggle, heightCla
     if (!mapRef.current) {
       mapRef.current = new maplibregl.Map({
         container: containerRef.current,
-        style: styleUrl || `https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`,
+        style: styleObj || styleUrl || `https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`,
         center: [-56.147974, -34.795334],
         zoom: 17,
         interactive: true,
@@ -34,7 +35,7 @@ export default function PitchMap({ points, styleUrl, pinned, onToggle, heightCla
       markersRef.current.forEach(({ marker, popup }) => { try { popup.remove(); } catch {} marker.remove(); });
       markersRef.current = new Map();
     };
-  }, [styleUrl]);
+  }, [styleUrl, styleObj]);
 
   // Ensure map resizes when container size/layout changes
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function PitchMap({ points, styleUrl, pinned, onToggle, heightCla
         el.style.height = '10px';
         el.style.background = base;
         el.style.border = `2px solid ${border}`;
-        el.style.boxShadow = '0 0 0 2px rgba(0,0,0,0.15)';
+        el.style.boxShadow = '0 0 0 2px rgba(0,0,0,0.35), 0 0 6px rgba(255,255,255,0.5)';
         el.style.cursor = 'pointer';
 
         const marker = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map);
