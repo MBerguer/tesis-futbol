@@ -2,6 +2,7 @@
 import React, { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import type { PositionPoint } from "../hooks/usePositionsWindow";
+import { stringToColorPair } from "../utils/colors";
 
 interface PitchMapProps {
   points: PositionPoint[];
@@ -38,11 +39,14 @@ export default function PitchMap({ points, styleUrl }: PitchMapProps) {
     markersRef.current = [];
     // Add current markers
     for (const p of points) {
+      const { base, border } = stringToColorPair(p.player_display_name || "");
       const el = document.createElement('div');
-      el.className = 'rounded-full bg-emerald-500 border border-white';
+      el.className = 'rounded-full';
       el.style.width = '10px';
       el.style.height = '10px';
-      el.style.boxShadow = '0 0 0 2px rgba(0,0,0,0.2)';
+      el.style.background = base;
+      el.style.border = `2px solid ${border}`;
+      el.style.boxShadow = '0 0 0 2px rgba(0,0,0,0.15)';
       const mk = new maplibregl.Marker({ element: el })
         .setLngLat([p.lon, p.lat])
         .addTo(map);

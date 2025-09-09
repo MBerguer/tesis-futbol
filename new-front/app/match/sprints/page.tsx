@@ -24,6 +24,7 @@ import Spinner from "./components/Spinner";
 import { Button } from "../../players/components/ui/button";
 import { toAbsoluteTime as toAbsFromUtils, formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
 import { usePositionsWindow } from "./hooks/usePositionsWindow";
+import { stringToColorPair } from "./utils/colors";
 
 interface MatchPlayers {
   players: string[];
@@ -228,7 +229,6 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
     selectedTable || null,
     gpsCursorSecond,
     15,
-    400,
   );
 
   // Initialize patch values whenever detected periods load/update
@@ -544,11 +544,15 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                       <div className="text-sm text-gray-600">No players found.</div>
                     ) : (
                       <ul className="space-y-2">
-                        {players.map((player, index) => (
-                          <li key={index} className="p-2 border rounded">
-                            {player}
-                          </li>
-                        ))}
+                        {players.map((player, index) => {
+                          const { base, border } = stringToColorPair(player || "");
+                          return (
+                            <li key={index} className="p-2 border rounded flex items-center gap-2" style={{ borderColor: border }}>
+                              <span className="inline-block rounded-full" style={{ width: 10, height: 10, background: base, border: `2px solid ${border}` }} />
+                              <span>{player}</span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </CardContent>

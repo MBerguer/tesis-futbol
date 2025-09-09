@@ -116,7 +116,7 @@ pub async fn get_positions_window(
     let center_sec: i64 = params.get("center_sec").and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
     let radius_sec: i64 = params.get("radius_sec").and_then(|s| s.parse::<i64>().ok()).unwrap_or(15);
 
-    println!("[positions/window] match={}, center_sec={}, radius_sec={}", table_name, center_sec, radius_sec);
+    // logging removed
 
     // Build SQL assuming table has columns: player_display_name, time, centralized_elapsed_time, lat, lon
     // If centralized_elapsed_time is not present, approximate via time vs min(time) as in other endpoints
@@ -125,7 +125,7 @@ pub async fn get_positions_window(
         table_name
     );
     let has_cent = sqlx::query(&has_centralized_query).fetch_optional(&pool).await.ok().flatten().is_some();
-    println!("[positions/window] has_centralized_elapsed_time={}", has_cent);
+    // logging removed
 
     let (sql, bind_center_low, bind_center_high) = if has_cent {
         (
@@ -148,7 +148,7 @@ pub async fn get_positions_window(
         )
     };
 
-    println!("[positions/window] SQL= {}", sql.replace('\n', " "));
+    // logging removed
 
     let rows = match sqlx::query(&sql)
         .bind(bind_center_low)
@@ -161,14 +161,7 @@ pub async fn get_positions_window(
         Err(e) => return Json(json!({"error": format!("db error: {}", e)})),
     };
 
-    println!("[positions/window] rows_returned={}", rows.len());
-    // Debug sample
-    let mut secs_dbg: Vec<String> = Vec::new();
-    for r in rows.iter().take(10) {
-        if let Ok(s) = r.try_get::<f64,_>("sec") { secs_dbg.push(format!("{:.3}", s)); continue; }
-        if let Ok(s) = r.try_get::<String,_>("sec") { secs_dbg.push(s); }
-    }
-    if !secs_dbg.is_empty() { println!("[positions/window] sample secs(first 10)={:?}", secs_dbg); }
+    // logging removed
 
     let data: Vec<Value> = rows
         .into_iter()
