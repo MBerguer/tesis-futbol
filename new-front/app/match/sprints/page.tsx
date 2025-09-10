@@ -15,6 +15,7 @@ import Skeleton from "./components/Skeleton";
 import TopProgress from "./components/TopProgress";
 import ThresholdLegend from "./components/ThresholdLegend";
 import PlayerMiniList from "./components/PlayerMiniList";
+import PlayerDetailCard from "./components/PlayerDetailCard";
 import VideoComponent from "../videoComponent";
 import YouTubeVideo from "./components/YouTubeVideo";
 import UnifiedVideo from "./components/UnifiedVideo";
@@ -653,54 +654,27 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
           )}
 
           {selectedTable && activeTab === 'players' && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
-              <Card className="md:col-span-1 bg-zinc-900/50 border-zinc-800">
-                <CardHeader>
-                  <CardTitle>Individual Player's Speeds</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {loadingEntries ? (
-                    <div>Loading entries...</div>
-                  ) : entries && entries.length > 0 ? (
-                    <PlayerMiniList entries={entries} highlightedPlayer={hoverPlayer} onHover={setHoverPlayer} singleColumn highlights={playerHighlights} />
-                  ) : (
-                    <div>No entries to show</div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="md:col-span-3 bg-zinc-900/50 border-zinc-800">
-                <CardHeader>
-                  <CardTitle>Worst Cases Analysis</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {loadingWorstCases ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-6" />
-                      <Skeleton className="h-6" />
-                      <Skeleton className="h-6" />
-                    </div>
-                  ) : showWorstCases && worstCases.length > 0 && (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold mb-3">Worst Cases (HSR ≥19.8 km/h)</h3>
-                      <WorstCasesTable data={worstCases} highlightedPlayer={hoverPlayer} />
-                    </div>
-                  )}
-
-                  {loadingSprints ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-6" />
-                      <Skeleton className="h-6" />
-                      <Skeleton className="h-6" />
-                    </div>
-                  ) : showSprints && sprintsInWorstCases.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3">Sprints in Worst Cases (≥25.2 km/h)</h3>
-                      <SprintsTable data={sprintsInWorstCases} highlightedPlayer={hoverPlayer} />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+            <div className="grid gap-4 items-start">
+              <div className="md:col-span-3 space-y-3">
+                {(() => {
+                  const norm = (s: string) => (s||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').toLowerCase();
+                  const byPlayer: Record<string, typeof entries> = {} as any;
+                  entries.forEach(e => { (byPlayer[e.player_display_name] ||= []).push(e); });
+                  Object.keys(byPlayer).forEach(k => byPlayer[k].sort((a,b)=>a.centralized_elapsed_time-b.centralized_elapsed_time));
+                  const sprintByPlayer: Record<string, typeof sprintsInWorstCases> = {} as any;
+                  sprintsInWorstCases.forEach(s => { (sprintByPlayer[s.player_display_name] ||= []).push(s); });
+                  const order = Object.keys(byPlayer);
+                  return order.map(p => (
+                    <PlayerDetailCard
+                      key={p}
+                      name={p}
+                      entries={byPlayer[p]}
+                      windows={playerHighlights[norm(p)]}
+                      sprints={sprintByPlayer[p]}
+                    />
+                  ));
+                })()}
+              </div>
             </div>
           )}
 

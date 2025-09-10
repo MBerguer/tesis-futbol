@@ -31,6 +31,7 @@ export default function SprintsTable({ data, highlightedPlayer }: SprintsTablePr
           .join('')
           .slice(0, 2)
           .toUpperCase();
+        const durationSec = Math.max(0, Math.round((s.end_second ?? 0) - (s.start_second ?? 0)));
         return (
           <div key={i} className={`flex items-center justify-between rounded-md border px-3 py-2 hover:border-zinc-700 ${highlightedPlayer===s.player_display_name ? 'border-sky-500 bg-zinc-900/60' : 'border-zinc-800 bg-zinc-900/40'}`}>
             <div className="flex items-center gap-3">
@@ -41,8 +42,7 @@ export default function SprintsTable({ data, highlightedPlayer }: SprintsTablePr
             </div>
             <div className="flex items-center gap-4 text-xs text-zinc-300">
               <div><span className="text-zinc-500">Sprint:</span> {s.sprint_id}</div>
-              <div><span className="text-zinc-500">Start:</span> {s.sprint_start_time}</div>
-              <div><span className="text-zinc-500">End:</span> {s.sprint_end_time}</div>
+              <div><span className="text-zinc-500">Duration:</span> {durationSec} s</div>
               <div><span className="text-zinc-500">Min:</span> {s.min_speed_reached_within_sprint.toFixed(2)}</div>
               <div><span className="text-zinc-500">Max:</span> {s.max_speed_reached_within_sprint.toFixed(2)}</div>
               <div className="min-w-[120px] text-right"><span className="text-zinc-500">Dist:</span> {s.total_sprint_distance.toFixed(2)} m</div>
