@@ -143,12 +143,12 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
     };
     const derived = (entries && entries.length > 0) ? entries.map(e=>e.time).filter(Boolean).sort()[0] : null;
     const baseOffset = parseTimeToSec(baseTime || derived || null);
-    const map: Record<string, Array<{start:number; end:number}>> = {};
+    const map: Record<string, Array<{start:number; end:number; distance?: number}>> = {};
     for (const wc of worstCases) {
       const key = norm(wc.player_display_name || '');
       const start = (wc.start_second || 0) - baseOffset;
       const end = (wc.end_second || 0) - baseOffset;
-      (map[key] ||= []).push({ start, end });
+      (map[key] ||= []).push({ start, end, distance: wc.distance_covered });
     }
     return map;
   }, [worstCases, baseTime, entries]);

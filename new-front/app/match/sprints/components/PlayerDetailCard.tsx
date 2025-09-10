@@ -24,16 +24,16 @@ export default function PlayerDetailCard({
 }: {
   name: string;
   entries: MiniEntry[];
-  windows?: Array<{ start: number; end: number }>;
+  windows?: Array<{ start: number; end: number; distance?: number }>;
   sprints?: SprintItem[];
 }) {
   const initials = React.useMemo(() => name.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase(), [name]);
   const normWindows = React.useMemo(() => {
-    if (!entries || entries.length === 0) return [] as Array<{start:number; end:number}>;
+    if (!entries || entries.length === 0) return [] as Array<{start:number; end:number; distance?: number}>;
     const minX = entries[0].centralized_elapsed_time;
     const maxX = entries[entries.length-1].centralized_elapsed_time;
     return (windows || [])
-      .map(w=>({ start: Math.max(minX, w.start), end: Math.min(maxX, w.end) }))
+      .map(w=>({ start: Math.max(minX, w.start), end: Math.min(maxX, w.end), distance: w.distance }))
       .filter(w=>w.start < w.end);
   }, [entries, windows]);
 
@@ -82,9 +82,15 @@ export default function PlayerDetailCard({
               <div className="text-zinc-200 text-base mb-1">Worst Cases (≥19.8)</div>
               <div className="flex flex-wrap gap-1.5">
                 {normWindows.map((w, i)=> (
+                  <>
                   <span key={i} className="inline-flex items-center rounded-md font-bold text-base bg-pink-900/50 px-1.5 py-0.5">
-                    {formatSoccer(w.start)} – {formatSoccer(w.end)}
-                  </span>
+                    Time: {formatSoccer(w.start)} – {formatSoccer(w.end)}
+                    </span>
+                  <span key={i} className="inline-flex items-center rounded-md font-bold text-base bg-green-900/50 px-1.5 py-0.5">                  
+                  {typeof w.distance === 'number' ? (
+                    <> {" "}Distance: {w.distance.toFixed(2)} m</>
+                  ) : null}
+                </span></>
                 ))}
               </div>
             </div>
