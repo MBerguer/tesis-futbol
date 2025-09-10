@@ -126,6 +126,31 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const [showWorstCases, setShowWorstCases] = useState(false);
   const [showSprints, setShowSprints] = useState(false);
   const [hoverPlayer, setHoverPlayer] = useState<string | null>(null);
+  // derivedBaseTime must be declared above; move memo below its declaration
+  let playerHighlights = React.useMemo(()=>{
+    const norm = (s: string) => (s||'').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .replace(/\s+/g,' ')
+      .toLowerCase();
+    const parseTimeToSec = (t?: string | null) => {
+      if (!t) return 0;
+      const m = t.match(/^(\d{2}):(\d{2}):(\d{2})(?:[\.,](\d+))?/);
+      if (!m) return 0;
+      const h = parseInt(m[1]||'0',10); const mi = parseInt(m[2]||'0',10); const s = parseInt(m[3]||'0',10);
+      return h*3600 + mi*60 + s;
+    };
+    const derived = (entries && entries.length > 0) ? entries.map(e=>e.time).filter(Boolean).sort()[0] : null;
+    const baseOffset = parseTimeToSec(baseTime || derived || null);
+    const map: Record<string, Array<{start:number; end:number}>> = {};
+    for (const wc of worstCases) {
+      const key = norm(wc.player_display_name || '');
+      const start = (wc.start_second || 0) - baseOffset;
+      const end = (wc.end_second || 0) - baseOffset;
+      (map[key] ||= []).push({ start, end });
+    }
+    return map;
+  }, [worstCases, baseTime, entries]);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
@@ -637,7 +662,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                   {loadingEntries ? (
                     <div>Loading entries...</div>
                   ) : entries && entries.length > 0 ? (
-                    <PlayerMiniList entries={entries} highlightedPlayer={hoverPlayer} onHover={setHoverPlayer} singleColumn />
+                    <PlayerMiniList entries={entries} highlightedPlayer={hoverPlayer} onHover={setHoverPlayer} singleColumn highlights={playerHighlights} />
                   ) : (
                     <div>No entries to show</div>
                   )}
