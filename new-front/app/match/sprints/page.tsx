@@ -125,6 +125,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const [loadingSprints, setLoadingSprints] = useState(false);
   const [showWorstCases, setShowWorstCases] = useState(false);
   const [showSprints, setShowSprints] = useState(false);
+  const [hoverPlayer, setHoverPlayer] = useState<string | null>(null);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
@@ -627,59 +628,55 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
           )}
 
           {selectedTable && activeTab === 'players' && (
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <CardTitle>Individual Player's Speeds</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingEntries ? (
-                  <div>Loading entries...</div>
-                ) : entries && entries.length > 0 ? (
-                  <div>
-                    <div className="mb-4">
-                      <PlayerMiniList entries={entries} />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+              <Card className="md:col-span-1 bg-zinc-900/50 border-zinc-800">
+                <CardHeader>
+                  <CardTitle>Individual Player's Speeds</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loadingEntries ? (
+                    <div>Loading entries...</div>
+                  ) : entries && entries.length > 0 ? (
+                    <PlayerMiniList entries={entries} highlightedPlayer={hoverPlayer} onHover={setHoverPlayer} singleColumn />
+                  ) : (
+                    <div>No entries to show</div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-3 bg-zinc-900/50 border-zinc-800">
+                <CardHeader>
+                  <CardTitle>Worst Cases Analysis</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loadingWorstCases ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-6" />
+                      <Skeleton className="h-6" />
+                      <Skeleton className="h-6" />
                     </div>
-                  </div>
-                ) : (
-                  <div>No entries to show</div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                  ) : showWorstCases && worstCases.length > 0 && (
+                    <div className="mb-6">
+                      <h3 className="text-lg font-semibold mb-3">Worst Cases (HSR ≥19.8 km/h)</h3>
+                      <WorstCasesTable data={worstCases} highlightedPlayer={hoverPlayer} />
+                    </div>
+                  )}
 
-          {selectedTable && activeTab === 'players' && (
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <CardTitle>Worst Cases Analysis</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingWorstCases ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                  </div>
-                ) : showWorstCases && worstCases.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold mb-3">Worst Cases (HSR ≥19.8 km/h)</h3>
-                    <WorstCasesTable data={worstCases} />
-                  </div>
-                )}
-
-                {loadingSprints ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                  </div>
-                ) : showSprints && sprintsInWorstCases.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">Sprints in Worst Cases (≥25.2 km/h)</h3>
-                    <SprintsTable data={sprintsInWorstCases} />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  {loadingSprints ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-6" />
+                      <Skeleton className="h-6" />
+                      <Skeleton className="h-6" />
+                    </div>
+                  ) : showSprints && sprintsInWorstCases.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3">Sprints in Worst Cases (≥25.2 km/h)</h3>
+                      <SprintsTable data={sprintsInWorstCases} highlightedPlayer={hoverPlayer} />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {selectedTable && activeTab === 'players' && (

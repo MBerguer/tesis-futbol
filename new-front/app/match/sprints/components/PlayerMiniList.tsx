@@ -9,9 +9,10 @@ interface Props {
   entries: MiniEntry[];
   highlightedPlayer?: string | null;
   onHover?: (player: string | null) => void;
+  singleColumn?: boolean;
 }
 
-export default function PlayerMiniList({ entries, highlightedPlayer, onHover }: Props) {
+export default function PlayerMiniList({ entries, highlightedPlayer, onHover, singleColumn }: Props) {
   const byPlayer = React.useMemo(() => {
     const m: Record<string, MiniEntry[]> = {};
     for (const e of entries) {
@@ -23,7 +24,7 @@ export default function PlayerMiniList({ entries, highlightedPlayer, onHover }: 
   const players = Object.keys(byPlayer);
   if (players.length === 0) return <div className="text-sm text-zinc-500">No players</div>;
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className={`grid gap-3 ${singleColumn ? '' : 'sm:grid-cols-2'}`}>
       {players.map((p) => (
         <div
           key={p}

@@ -17,9 +17,10 @@ export interface SprintInWorstCase {
 
 interface SprintsTableProps {
   data: SprintInWorstCase[];
+  highlightedPlayer?: string | null;
 }
 
-export default function SprintsTable({ data }: SprintsTableProps) {
+export default function SprintsTable({ data, highlightedPlayer }: SprintsTableProps) {
   if (!data || data.length === 0) return <div>No sprints</div>;
   return (
     <div className="space-y-2">
@@ -31,7 +32,7 @@ export default function SprintsTable({ data }: SprintsTableProps) {
           .slice(0, 2)
           .toUpperCase();
         return (
-          <div key={i} className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 hover:border-zinc-700">
+          <div key={i} className={`flex items-center justify-between rounded-md border px-3 py-2 hover:border-zinc-700 ${highlightedPlayer===s.player_display_name ? 'border-sky-500 bg-zinc-900/60' : 'border-zinc-800 bg-zinc-900/40'}`}>
             <div className="flex items-center gap-3">
               <div className="h-7 w-7 rounded-full bg-zinc-800 text-zinc-300 grid place-items-center text-xs font-medium">
                 {initials}
