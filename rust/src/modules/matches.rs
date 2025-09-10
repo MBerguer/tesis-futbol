@@ -118,7 +118,7 @@ pub async fn get_positions_window(
 
     // logging removed
 
-    // Build SQL assuming table has columns: player_display_name, time, centralized_elapsed_time, lat, lon
+    // Build SQL assuming table has columns: player_display_name, time, centralized_elapsed_time, lat, lon, speed
     // If centralized_elapsed_time is not present, approximate via time vs min(time) as in other endpoints
     let has_centralized_query = format!(
         "SELECT column_name FROM information_schema.columns WHERE table_name = '{}' AND column_name = 'centralized_elapsed_time'",
@@ -130,7 +130,7 @@ pub async fn get_positions_window(
     let (sql, bind_center_low, bind_center_high) = if has_cent {
         (
             format!(
-                "WITH mp AS (\n                   SELECT detected_first_half_start::double precision AS d1,\n                          detected_second_half_start::double precision AS d2,\n                          manual_first_half_start::double precision   AS m1,\n                          manual_second_half_start::double precision  AS m2\n                   FROM match_periods WHERE match_name = $3\n                 ),\n                 src AS (\n                   SELECT t.player_display_name, (t.centralized_elapsed_time)::double precision AS sec0, t.lat, t.lon FROM \"{}\" t\n                 ),\n                 adj AS (\n                   SELECT s.player_display_name,\n                          s.lat, s.lon,\n                          s.sec0 + CASE WHEN s.sec0 < COALESCE(mp.d2, 9e9) THEN COALESCE(mp.d1 - mp.m1, 0) ELSE COALESCE(mp.d2 - mp.m2, 0) END AS sec\n                   FROM src s, mp\n                 )\n                 SELECT player_display_name, sec, lat, lon FROM adj WHERE sec BETWEEN $1 AND $2 ORDER BY sec",
+                "WITH mp AS (\n                   SELECT detected_first_half_start::double precision AS d1,\n                          detected_second_half_start::double precision AS d2,\n                          manual_first_half_start::double precision   AS m1,\n                          manual_second_half_start::double precision  AS m2\n                   FROM match_periods WHERE match_name = $3\n                 ),\n                 src AS (\n                   SELECT t.player_display_name, (t.centralized_elapsed_time)::double precision AS sec0, t.lat, t.lon, t.speed FROM \"{}\" t\n                 ),\n                 adj AS (\n                   SELECT s.player_display_name,\n                          s.lat, s.lon, s.speed,\n                          s.sec0 + CASE WHEN s.sec0 < COALESCE(mp.d2, 9e9) THEN COALESCE(mp.d1 - mp.m1, 0) ELSE COALESCE(mp.d2 - mp.m2, 0) END AS sec\n                   FROM src s, mp\n                 )\n                 SELECT player_display_name, sec, lat, lon, speed FROM adj WHERE sec BETWEEN $1 AND $2 ORDER BY sec",
                 table_name
             ),
             center_sec - radius_sec,
@@ -140,7 +140,7 @@ pub async fn get_positions_window(
         // compute centralized using min(time)
         (
             format!(
-                "WITH base AS (SELECT MIN(time) AS min_time FROM \"{}\"),\n                 mp AS (\n                   SELECT detected_first_half_start::double precision AS d1,\n                          detected_second_half_start::double precision AS d2,\n                          manual_first_half_start::double precision   AS m1,\n                          manual_second_half_start::double precision  AS m2\n                   FROM match_periods WHERE match_name = $3\n                 ),\n                 raw AS (\n                   SELECT t.player_display_name,\n                          EXTRACT(EPOCH FROM (to_timestamp(t.time,'HH24:MI:SS.MS') - to_timestamp(b.min_time,'HH24:MI:SS.MS'))) AS sec0,\n                          t.lat, t.lon\n                   FROM \"{}\" t CROSS JOIN base b\n                 ),\n                 adj AS (\n                   SELECT r.player_display_name, r.lat, r.lon,\n                          r.sec0 + CASE WHEN r.sec0 < COALESCE(mp.d2, 9e9) THEN COALESCE(mp.d1 - mp.m1, 0) ELSE COALESCE(mp.d2 - mp.m2, 0) END AS sec\n                   FROM raw r, mp\n                 )\n                 SELECT player_display_name, sec, lat, lon FROM adj WHERE sec BETWEEN $1 AND $2 ORDER BY sec",
+                "WITH base AS (SELECT MIN(time) AS min_time FROM \"{}\"),\n                 mp AS (\n                   SELECT detected_first_half_start::double precision AS d1,\n                          detected_second_half_start::double precision AS d2,\n                          manual_first_half_start::double precision   AS m1,\n                          manual_second_half_start::double precision  AS m2\n                   FROM match_periods WHERE match_name = $3\n                 ),\n                 raw AS (\n                   SELECT t.player_display_name,\n                          EXTRACT(EPOCH FROM (to_timestamp(t.time,'HH24:MI:SS.MS') - to_timestamp(b.min_time,'HH24:MI:SS.MS'))) AS sec0,\n                          t.lat, t.lon, t.speed\n                   FROM \"{}\" t CROSS JOIN base b\n                 ),\n                 adj AS (\n                   SELECT r.player_display_name, r.lat, r.lon, r.speed,\n                          r.sec0 + CASE WHEN r.sec0 < COALESCE(mp.d2, 9e9) THEN COALESCE(mp.d1 - mp.m1, 0) ELSE COALESCE(mp.d2 - mp.m2, 0) END AS sec\n                   FROM raw r, mp\n                 )\n                 SELECT player_display_name, sec, lat, lon, speed FROM adj WHERE sec BETWEEN $1 AND $2 ORDER BY sec",
                 table_name, table_name
             ),
             center_sec - radius_sec,
@@ -172,6 +172,7 @@ pub async fn get_positions_window(
                 "sec": sec_f,
                 "lat": r.try_get::<f64,_>("lat").unwrap_or(0.0),
                 "lon": r.try_get::<f64,_>("lon").unwrap_or(0.0),
+                "speed": r.try_get::<f64,_>("speed").unwrap_or(0.0),
             })
         })
         .collect();

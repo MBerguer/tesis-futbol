@@ -6,6 +6,7 @@ export interface PositionPoint {
   sec: number;
   lat: number;
   lon: number;
+  speed?: number; // km/h from API
 }
 
 export function usePositionsWindow(

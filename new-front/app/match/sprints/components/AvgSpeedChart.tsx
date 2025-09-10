@@ -95,7 +95,7 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
 
   return (
     <div className="h-[340px]">
-      <div className="flex justify-end mb-1">
+      <div className="flex justify-start mb-1">
         {xDomain ? (
           <button onClick={resetZoom} className="text-xs px-2 py-1 rounded border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 text-zinc-300">Reset zoom</button>
         ) : null}

@@ -394,18 +394,21 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
               <div className={`grid gap-4 mt-3 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
                 <Card className={`${showPatchPanel ? 'md:col-span-5' : ''} bg-zinc-900/50 border-zinc-800`}>
                   <CardHeader>
-                    <CardTitle>Average Speed Over Time
-                    {loadingEntries&&(
-                      <Spinner />
-                    )}
-                    </CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      Average Speed Over Time
+                      {loadingEntries&&(
+                        <Spinner />
+                      )}
+
                     {!showPatchPanel && (
-                      <div className="ml-auto">
+                      <div className="ml-auto justify-end">
                         <Button variant={'outline'} onClick={()=>setShowPatchPanel(true)}>
                           Edit Periods
                         </Button>
                       </div>
                     )}
+                    </CardTitle>
+                    
                     <div className="ml-auto">
                       <div className="relative" style={{ height: 0 }}>
                         <div className="absolute right-3 -top-4">
