@@ -29,7 +29,7 @@ export default function PlayerDetailCard({
 }) {
   const initials = React.useMemo(() => name.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase(), [name]);
   const normWindows = React.useMemo(() => {
-    if (!entries || entries.length === 0) return [] as Array<{start:number; end:number; distance?: number}>;
+    if (!entries || entries.length === 0) return [] as Array<{start:number; end:number; distance?: number, start_adj: number, end_adj: number}>;
     const minX = entries[0].centralized_elapsed_time;
     const maxX = entries[entries.length-1].centralized_elapsed_time;
     return (windows || [])
