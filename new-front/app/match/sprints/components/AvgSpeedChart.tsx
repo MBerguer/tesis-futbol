@@ -76,22 +76,49 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
     return { match: thresholds.match, halftime: thresholds.halftime, kickoff: thresholds.kickoff };
   }, [thresholds]);
 
+  // Zoom state and selection
+  const [xDomain, setXDomain] = React.useState<[number, number] | null>(null);
+  const [refLeft, setRefLeft] = React.useState<number | null>(null);
+  const [refRight, setRefRight] = React.useState<number | null>(null);
+  const resetZoom = () => setXDomain(null);
+  const onMouseDown = (e: any) => { if (e && typeof e.activeLabel === 'number') setRefLeft(e.activeLabel); };
+  const onMouseMove = (e: any) => { if (refLeft !== null && e && typeof e.activeLabel === 'number') setRefRight(e.activeLabel); };
+  const onMouseUp = () => {
+    if (refLeft === null || refRight === null) { setRefLeft(null); setRefRight(null); return; }
+    let left = Math.floor(refLeft);
+    let right = Math.floor(refRight);
+    if (left === right) { setRefLeft(null); setRefRight(null); return; }
+    if (left > right) { const t = left; left = right; right = t; }
+    setXDomain([left, right]);
+    setRefLeft(null); setRefRight(null);
+  };
+
   return (
-    <div className="h-[320px]">
+    <div className="h-[340px]">
+      <div className="flex justify-end mb-1">
+        {xDomain ? (
+          <button onClick={resetZoom} className="text-xs px-2 py-1 rounded border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 text-zinc-300">Reset zoom</button>
+        ) : null}
+      </div>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={series} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+        <AreaChart
+          data={series}
+          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+        >
           <defs>
             <linearGradient id="avgFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#6366f1" stopOpacity={0.5} />
               <stop offset="100%" stopColor="#a5b4fc" stopOpacity={0.4} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#27272a" />
-          <XAxis dataKey="second" ticks={ticks} tickFormatter={(s) => toAbsoluteTime(s)} tick={{ fontSize: 12, fill: '#a1a1aa' }} stroke="#3f3f46" />
+          <XAxis type="number" dataKey="second" domain={xDomain ? xDomain : ['auto', 'auto']} allowDataOverflow ticks={ticks} tickFormatter={(s) => toAbsoluteTime(s)} tick={{ fontSize: 12, fill: '#a1a1aa' }} stroke="#3f3f46" />
           <YAxis domain={[0, 'auto']} label={{ value: 'Speed (km/h)', angle: -90, position: 'insideLeft', fill: '#a1a1aa' }} tick={{ fontSize: 12, fill: '#a1a1aa' }} stroke="#3f3f46" />
           <Tooltip labelFormatter={(l:any)=> toAbsoluteTime(l)} contentStyle={{ background: '#0a0a0a', border: '1px solid #27272a', borderRadius: 8 }} labelStyle={{ color: '#e4e4e7' }} itemStyle={{ color: '#e4e4e7' }} />
           <Legend wrapperStyle={{ color: '#a1a1aa' }} iconType="line" />
-          <Area type="monotone" dataKey="speed" stroke="#a5b4fc" strokeWidth={1.5} fill="url(#avgFill)" connectNulls isAnimationActive={false} />
+          <Area type="monotone" dataKey="speed" name="Team Average Speed" stroke="#a5b4fc" strokeWidth={1.5} fill="url(#avgFill)" connectNulls isAnimationActive={false} />
 
           {thresholdsKmh && (
             <>
@@ -128,6 +155,9 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
           {typeof kickoffSpike === 'number' && (
             <ReferenceLine x={kickoffSpike} stroke="#a1a1aa" strokeWidth={2} label={{ value: 'Kickoff spike', position: 'top' }} />
           )}          
+          {refLeft !== null && refRight !== null && (
+            <ReferenceArea x1={refLeft} x2={refRight} fill="#6366f1" fillOpacity={0.15} />
+          )}
         </AreaChart>
       </ResponsiveContainer>
 

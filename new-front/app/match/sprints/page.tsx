@@ -406,7 +406,13 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                         </Button>
                       </div>
                     )}
-                    <ThresholdLegend thresholds={thresholds} />
+                    <div className="ml-auto">
+                      <div className="relative" style={{ height: 0 }}>
+                        <div className="absolute right-3 -top-4">
+                          <ThresholdLegend thresholds={thresholds} inChart vertical className="min-w-[300px]" />
+                        </div>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {loadingEntries ? (                      

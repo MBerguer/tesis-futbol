@@ -138,9 +138,9 @@ export default function YouTubeVideo({
     <>
       <div className="flex">
         <div className="sticky h-[38px] w-full h top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">        
-          <div className="w-full mt-1 relative h-8 overflow-visible">
+          <div className="w-full mt-2 relative h-8 overflow-visible">
             <input
-              className="w-full relative z-0 range-no-thumb"
+              className="w-full relative z-0"
               id="videoTime"
               type="range"
               min="0"
@@ -163,7 +163,7 @@ export default function YouTubeVideo({
                     aria-label="Jump to 45:00"
                     onClick={() => seekTo(2700)}
                     className="absolute pointer-events-auto"
-                    style={{ left: `${(2700 / duration) * 100}%`, transform: "translateX(-50%)", top: 0, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "8px solid #2C5282" }}
+                    style={{ left: `${(2700 / duration) * 100}%`, transform: "translateX(-50%)", top: 0, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "8px solid #F0F" }}
                   />
                 )}
                 {duration >= 2700 && (
