@@ -143,15 +143,26 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
     };
     const derived = (entries && entries.length > 0) ? entries.map(e=>e.time).filter(Boolean).sort()[0] : null;
     const baseOffset = parseTimeToSec(baseTime || derived || null);
-    const map: Record<string, Array<{start:number; end:number; distance?: number}>> = {};
+
+    // Halftime adjustment like the cursor/video mapping
+    const halftimeStart = (periods?.detected_first_half_end?? periods?.detected_halftime_start) ?? null;
+    const halftimeEnd = (periods?.detected_second_half_start ?? periods?.detected_halftime_end) ?? null;
+    const halftimeDuration = (halftimeStart !== null && halftimeEnd !== null) ? Math.max(0, halftimeEnd - halftimeStart) : 0;
+
+    const map: Record<string, Array<{start:number; end:number; distance?: number, start_adj: number, end_adj: number}>> = {};
     for (const wc of worstCases) {
       const key = norm(wc.player_display_name || '');
       const start = (wc.start_second || 0) - baseOffset;
       const end = (wc.end_second || 0) - baseOffset;
-      (map[key] ||= []).push({ start, end, distance: wc.distance_covered });
+      const startAbs = wc.start_second || 0;
+      const endAbs = wc.end_second || 0;
+      const halftimeAdj = (halftimeEnd !== null && startAbs >= halftimeEnd) ? halftimeDuration : 0;
+      const start_adj = (startAbs - baseOffset) - halftimeAdj;
+      const end_adj = (endAbs - baseOffset) - halftimeAdj;
+      (map[key] ||= []).push({ start, end, distance: wc.distance_covered, start_adj, end_adj });
     }
     return map;
-  }, [worstCases, baseTime, entries]);
+  }, [worstCases, baseTime, entries, periods]);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);

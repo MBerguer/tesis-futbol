@@ -24,7 +24,7 @@ export default function PlayerDetailCard({
 }: {
   name: string;
   entries: MiniEntry[];
-  windows?: Array<{ start: number; end: number; distance?: number }>;
+  windows?: Array<{ start: number; end: number; distance?: number, start_adj: number, end_adj: number }>;
   sprints?: SprintItem[];
 }) {
   const initials = React.useMemo(() => name.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase(), [name]);
@@ -33,7 +33,7 @@ export default function PlayerDetailCard({
     const minX = entries[0].centralized_elapsed_time;
     const maxX = entries[entries.length-1].centralized_elapsed_time;
     return (windows || [])
-      .map(w=>({ start: Math.max(minX, w.start), end: Math.min(maxX, w.end), distance: w.distance }))
+      .map(w=>({ start: Math.max(minX, w.start), end: Math.min(maxX, w.end), start_adj: Math.max(minX, w.start_adj), end_adj: Math.min(maxX, w.end_adj), distance: w.distance }))
       .filter(w=>w.start < w.end);
   }, [entries, windows]);
 
@@ -84,11 +84,11 @@ export default function PlayerDetailCard({
                 {normWindows.map((w, i)=> (
                   <>
                   <span key={i} className="inline-flex items-center rounded-md font-bold text-base bg-pink-900/50 px-1.5 py-0.5">
-                    Time: {formatSoccer(w.start)} – {formatSoccer(w.end)}
+                    Time: {formatSoccer(w.start_adj)} – {formatSoccer(w.end_adj)}
                     </span>
                   <span key={i} className="inline-flex items-center rounded-md font-bold text-base bg-green-900/50 px-1.5 py-0.5">                  
                   {typeof w.distance === 'number' ? (
-                    <> {" "}Distance: {w.distance.toFixed(2)} m</>
+                    <> Distance: {w.distance.toFixed(2)} m</>
                   ) : null}
                 </span></>
                 ))}
