@@ -6,9 +6,11 @@ type YouTubePlayer = any;
 export default function YouTubeVideo({
   videoId,
   onSecondChange,
+  seekTo,
 }: {
   videoId: string;
   onSecondChange?: (sec: number) => void;
+  seekTo?: number;
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const playerRef = React.useRef<YouTubePlayer | null>(null);
@@ -90,6 +92,12 @@ export default function YouTubeVideo({
             try {
               const d = player.getDuration();
               if (d && isFinite(d)) setDuration(d);
+              if (typeof seekTo === 'number') {
+                // Apply initial seek once ready
+                try { player.seekTo(seekTo, true); } catch {}
+                setCurrentTime(seekTo || 0);
+                const cb = onSecondChangeRef.current; if (cb) cb(seekTo || 0);
+              }
             } catch {}
           },
           onStateChange: (e: any) => {
@@ -123,7 +131,7 @@ export default function YouTubeVideo({
     };
   }, [ensureApi, videoId]);
 
-  const seekTo = (t: number) => {
+  const seekToFn = (t: number) => {
     const p = playerRef.current;
     if (!p) return;
     const clamped = Math.max(0, Math.min(t, duration || 0));
@@ -133,6 +141,12 @@ export default function YouTubeVideo({
     setCurrentTime(clamped);
     if (onSecondChange) onSecondChange(clamped);
   };
+
+  React.useEffect(() => {
+    if (seekTo === undefined) return;
+    seekToFn(seekTo || 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seekTo]);
 
   return (
     <>
@@ -146,14 +160,14 @@ export default function YouTubeVideo({
               min="0"
               max={duration}
               value={currentTime}
-              onChange={(e)=>seekTo(parseFloat(e.target.value))}
+              onChange={(e)=>seekToFn(parseFloat(e.target.value))}
             />
             {duration > 0 && (
               <div className="absolute inset-0 z-20 pointer-events-none">
                 <button
                   type="button"
                   aria-label="Jump to middle"
-                  onClick={() => seekTo(duration / 2)}
+                  onClick={() => seekToFn(duration / 2)}
                   className="absolute pointer-events-auto"
                   style={{ left: `50%`, transform: "translateX(-50%)", top: 0, width: 2, height: 20, background: "#10b981" }}
                 />
@@ -161,7 +175,7 @@ export default function YouTubeVideo({
                   <button
                     type="button"
                     aria-label="Jump to 45:00"
-                    onClick={() => seekTo(2700)}
+                    onClick={() => seekToFn(2700)}
                     className="absolute pointer-events-auto"
                     style={{ left: `${(2700 / duration) * 100}%`, transform: "translateX(-50%)", top: 0, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "8px solid #F0F" }}
                   />
@@ -170,7 +184,7 @@ export default function YouTubeVideo({
                   <button
                     type="button"
                     aria-label="Jump to 45:00 remaining"
-                    onClick={() => seekTo(duration - 2700)}
+                    onClick={() => seekToFn(duration - 2700)}
                     className="absolute pointer-events-auto"
                     style={{ left: `${((duration - 2700) / duration) * 100}%`, transform: "translateX(-50%)", bottom: 10, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "8px solid #ef4444" }}
                   />

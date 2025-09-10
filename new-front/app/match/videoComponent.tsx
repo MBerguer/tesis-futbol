@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 
-export default function VideoComponent({ onSecondChange }: { onSecondChange?: (sec: number) => void }) {
+export default function VideoComponent({ onSecondChange, seekTo }: { onSecondChange?: (sec: number) => void, seekTo?: number }) {
   const videoSource =
     "https://s3.amazonaws.com/azvideotagtesting/21012876/videos/139069/Nacional%205-1%20Juventud%20Clausura%202023.mp4";
 
@@ -19,12 +19,13 @@ export default function VideoComponent({ onSecondChange }: { onSecondChange?: (s
     return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
   };
 
-  const seekTo = (t: number) => {
+  const seekToFn = (t: number) => {
     const v = vidRef.current;
     if (!v) return;
     const clamped = Math.max(0, Math.min(t, duration || v.duration || 0));
     v.currentTime = clamped;
     setCurrentTime(clamped);
+    if (onSecondChange) onSecondChange(clamped);
   };
 
   const handleToggleVideo = () => {
@@ -87,6 +88,11 @@ export default function VideoComponent({ onSecondChange }: { onSecondChange?: (s
     };
   }, [videoSource]);
 
+  React.useEffect(() => {
+    if (seekTo === undefined) return;
+    seekToFn(seekTo || 0);
+  }, [seekTo]);
+
   return (
     <>
       <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
@@ -109,7 +115,7 @@ export default function VideoComponent({ onSecondChange }: { onSecondChange?: (s
                 <button
                   type="button"
                   aria-label="Jump to middle"
-                  onClick={() => seekTo(duration / 2)}
+                  onClick={() => seekToFn(duration / 2)}
                   className="absolute pointer-events-auto"
                   style={{
                     left: `50%`,
@@ -125,7 +131,7 @@ export default function VideoComponent({ onSecondChange }: { onSecondChange?: (s
                   <button
                     type="button"
                     aria-label="Jump to 45:00"
-                    onClick={() => seekTo(2700)}
+                    onClick={() => seekToFn(2700)}
                     className="absolute pointer-events-auto"
                     style={{
                       left: `${(2700 / duration) * 100}%`,
@@ -144,7 +150,7 @@ export default function VideoComponent({ onSecondChange }: { onSecondChange?: (s
                   <button
                     type="button"
                     aria-label="Jump to 45:00 remaining"
-                    onClick={() => seekTo(duration - 2700)}
+                    onClick={() => seekToFn(duration - 2700)}
                     className="absolute pointer-events-auto"
                     style={{
                       left: `${((duration - 2700) / duration) * 100}%`,

@@ -149,7 +149,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
     const halftimeEnd = (periods?.detected_second_half_start ?? periods?.detected_halftime_end) ?? null;
     const halftimeDuration = (halftimeStart !== null && halftimeEnd !== null) ? Math.max(0, halftimeEnd - halftimeStart) : 0;
 
-    const map: Record<string, Array<{start:number; end:number; distance?: number, start_adj: number, end_adj: number}>> = {};
+    const map: Record<string, Array<{start:number; end:number; distance?: number, start_adj: number, end_adj: number, start_abs: number, end_abs: number}>> = {};
     for (const wc of worstCases) {
       const key = norm(wc.player_display_name || '');
       const start = (wc.start_second || 0) - baseOffset;
@@ -159,10 +159,38 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
       const halftimeAdj = (halftimeEnd !== null && startAbs >= halftimeEnd) ? halftimeDuration : 0;
       const start_adj = (startAbs - baseOffset) - halftimeAdj;
       const end_adj = (endAbs - baseOffset) - halftimeAdj;
-      (map[key] ||= []).push({ start, end, distance: wc.distance_covered, start_adj, end_adj });
+      (map[key] ||= []).push({ start, end, distance: wc.distance_covered, start_adj, end_adj, start_abs: startAbs, end_abs: endAbs });
     }
     return map;
   }, [worstCases, baseTime, entries, periods]);
+
+  const openAnalysisAt = React.useCallback((centralSecond?: number | null) => {
+    setAnalysisModalOpen(true);
+    if (centralSecond == null || !periods) {
+      setAnalysisModalAt(null);
+      return;
+    }
+    setAnalysisModalAt(centralSecond);
+    const p = periods;
+    const kickoff = kickoffSpike ?? 0;
+    const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
+    const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+    const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
+
+    // Map centralized seconds back to video seconds (inverse of cursorSecond formula)
+    let targetVideoSec = 0;
+    if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+      // If centralized second is before second half start, it sits in first half
+      if (centralSecond < shStartPatched) {
+        targetVideoSec = Math.max(0, centralSecond - fhStartPatched);
+      } else {
+        targetVideoSec = Math.max(0, (centralSecond - shStartPatched) + fhDurPatched);
+      }
+    } else {
+      targetVideoSec = Math.max(0, centralSecond - fhStartPatched);
+    }
+    setVideoTimeSec(targetVideoSec);
+  }, [periods, kickoffSpike, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration]);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
@@ -278,7 +306,9 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const [mapBearing, setMapBearing] = useState<number>(0);
   const [showInfo, setShowInfo] = useState<boolean>(true);
   const [showAnalysis, setShowAnalysis] = useState<boolean>(true);
-
+  const [analysisModalOpen, setAnalysisModalOpen] = useState<boolean>(false);
+  const [analysisModalAt, setAnalysisModalAt] = useState<number | null>(null);
+  
   // Initialize patch values whenever detected periods load/update
   useEffect(() => {
     if (!periods) return;
@@ -664,6 +694,164 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
             </>
           )}
 
+          {analysisModalOpen && (
+            <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+              <div className="absolute inset-0 bg-black/60" onClick={()=>setAnalysisModalOpen(false)} />
+              <div className="absolute inset-0 flex items-start justify-center p-4 md:p-10">
+                <div className="w-full max-w-6xl rounded-md border border-zinc-800 bg-zinc-900/90 backdrop-blur shadow-xl">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+                    <div className="text-zinc-200 font-semibold">Analysis</div>
+                    <button className="text-zinc-400 hover:text-zinc-100" onClick={()=>setAnalysisModalOpen(false)}>Close</button>
+                  </div>
+                  <div className="p-4">
+                    {/* Inline Analysis accordion content */}
+                    <div className={`grid gap-4 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
+                      <Card className={`${showPatchPanel ? 'md:col-span-5' : ''} bg-zinc-900/50 border-zinc-800`}>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            Average Speed Over Time
+                            {loadingEntries&&(
+                              <Spinner />
+                            )}
+                          </CardTitle>
+                          <div className="ml-auto">
+                            <div className="relative" style={{ height: 0 }}>
+                              <div className="absolute right-3 -top-4">
+                                <ThresholdLegend thresholds={thresholds} inChart vertical className="min-w-[300px]" />
+                              </div>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          {loadingEntries ? (                      
+                            <Skeleton className="h-[360px]" />
+                          ) : entries.length === 0 || !periods ? (
+                            <div className="text-sm text-gray-600">No data to display.</div>
+                          ) : (
+                            <>
+                              <AvgSpeedChart
+                                entries={entries}
+                                baseTime={baseTime || derivedBaseTime}
+                                thresholds={thresholds}
+                                periods={periods}
+                                kickoffSpike={kickoffSpike}
+                                cursorSecond={(function(){
+                                  const p = periods;
+                                  const kickoff = kickoffSpike ?? 0;
+                                  const t = videoTimeSec;
+                                  const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
+                                  const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+                                  const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
+                                  if (!p) return kickoff + t;
+                                  if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+                                    const firstHalfDuration = Math.max(0, fhDurPatched);
+                                    if (t <= firstHalfDuration) return fhStartPatched + t;
+                                    return shStartPatched + (t - firstHalfDuration);
+                                  }
+                                  return fhStartPatched + t;
+                                })()}
+                                patchedFirstHalfStart={patchedFirstHalfStart}
+                                patchedSecondHalfStart={patchedSecondHalfStart}
+                              />
+
+                              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-2">
+                                  <UnifiedVideo
+                                    youtubeId={searchParams.get('yt')}
+                                    videoUrl={searchParams.get('video')}
+                                    onSecondChange={handleVideoSecondChange}
+                                    seekTo={videoTimeSec}
+                                  />
+                                </div>
+                                <div className="p-2">
+                                  <div className="h-[660px] md:h-[760px]">
+                                    <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
+                                      <div className="flex items-center gap-2 py-2">
+                                        <label className="text-xs text-zinc-400">Orientation</label>
+                                        <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-44" />
+                                        <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
+                                      </div>
+                                      <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
+                                    </div>
+                                    {(!selectedTable || !periods) ? (
+                                      <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
+                                    ) : (
+                                      <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
+                                        <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
+                                          <PitchMap
+                                            points={livePositions}
+                                            styleObj={{
+                                              version: 8,
+                                              sources: {
+                                                google: {
+                                                  type: 'raster',
+                                                  tiles: [
+                                                    `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
+                                                  ],
+                                                  tileSize: 256,
+                                                  attribution: '© Google'
+                                                }
+                                              },
+                                              layers: [
+                                                { id: 'google', type: 'raster', source: 'google' }
+                                              ]
+                                            }}
+                                            pinned={pinnedPlayers}
+                                            onToggle={togglePinned}
+                                            heightClass={'h-full'}
+                                            heightStyle={mapStacked ? undefined : undefined}
+                                            bearing={mapBearing}
+                                          />
+                                        </div>
+                                        <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
+                                          {loadingPlayers ? (
+                                            <Spinner />
+                                          ) : players.length === 0 ? (
+                                            <div className="text-sm text-gray-600">No players found.</div>
+                                          ) : (
+                                            <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
+                                              {players.map((player, index) => {
+                                                const { base, border } = stringToColorPair(player || "");
+                                                const active = !!pinnedPlayers[player];
+                                                return (
+                                                  <button
+                                                    key={index}
+                                                    onClick={() => togglePinned(player)}
+                                                    className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
+                                                    style={{
+                                                      background: active ? base : '#27272a',
+                                                      color: active ? '#fff' : '#d4d4d8',
+                                                      padding: '3px 8px',
+                                                    }}
+                                                    title={player}
+                                                  >
+                                                    <span
+                                                      className="inline-block rounded-full"
+                                                      style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
+                                                    />
+                                                    <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {selectedTable && activeTab === 'players' && (
             <div className="grid gap-4 items-start">
               <div className="md:col-span-3 space-y-3">
@@ -682,6 +870,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                       entries={byPlayer[p]}
                       windows={playerHighlights[norm(p)]}
                       sprints={sprintByPlayer[p]}
+                      onOpenAnalysisAt={openAnalysisAt}
                     />
                   ));
                 })()}

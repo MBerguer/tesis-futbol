@@ -21,19 +21,25 @@ export default function PlayerDetailCard({
   entries,
   windows,
   sprints,
+  onOpenAnalysisAt,
 }: {
   name: string;
   entries: MiniEntry[];
-  windows?: Array<{ start: number; end: number; distance?: number, start_adj: number, end_adj: number }>;
+  windows?: Array<{ start: number; end: number; distance?: number; start_abs?: number; end_abs?: number; start_adj?: number; end_adj?: number }>;
   sprints?: SprintItem[];
+  onOpenAnalysisAt?: (absoluteSecond?: number | null) => void;
 }) {
   const initials = React.useMemo(() => name.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase(), [name]);
   const normWindows = React.useMemo(() => {
-    if (!entries || entries.length === 0) return [] as Array<{start:number; end:number; distance?: number, start_adj: number, end_adj: number}>;
+    if (!entries || entries.length === 0) return [] as Array<{start:number; end:number; distance?: number}>;
     const minX = entries[0].centralized_elapsed_time;
     const maxX = entries[entries.length-1].centralized_elapsed_time;
     return (windows || [])
-      .map(w=>({ start: Math.max(minX, w.start), end: Math.min(maxX, w.end), start_adj: Math.max(minX, w.start_adj), end_adj: Math.min(maxX, w.end_adj), distance: w.distance }))
+      .map(w=>{
+        const startRaw = (typeof w.start_adj === 'number') ? w.start_adj : w.start;
+        const endRaw = (typeof w.end_adj === 'number') ? w.end_adj : w.end;
+        return ({ start: Math.max(minX, startRaw), end: Math.min(maxX, endRaw), distance: w.distance });
+      })
       .filter(w=>w.start < w.end);
   }, [entries, windows]);
 
@@ -82,15 +88,15 @@ export default function PlayerDetailCard({
               <div className="text-zinc-200 text-base mb-1">Worst Cases (≥19.8)</div>
               <div className="flex flex-wrap gap-1.5">
                 {normWindows.map((w, i)=> (
-                  <>
-                  <span key={i} className="inline-flex items-center rounded-md font-bold text-base bg-pink-900/50 px-1.5 py-0.5">
-                    Time: {formatSoccer(w.start_adj)} – {formatSoccer(w.end_adj)}
+                  <React.Fragment key={i}>
+                  <span className="inline-flex items-center rounded-md font-bold text-base bg-pink-900/50 px-1.5 py-0.5">
+                    Time: {formatSoccer(w.start)} – {formatSoccer(w.end)}
                     </span>
-                  <span key={i} className="inline-flex items-center rounded-md font-bold text-base bg-green-900/50 px-1.5 py-0.5">                  
+                  <span className="inline-flex items-center rounded-md font-bold text-base bg-green-900/50 px-1.5 py-0.5">                  
                   {typeof w.distance === 'number' ? (
                     <> Distance: {w.distance.toFixed(2)} m</>
                   ) : null}
-                </span></>
+                </span></React.Fragment>
                 ))}
               </div>
             </div>
@@ -104,8 +110,16 @@ export default function PlayerDetailCard({
                   return (
                     <div key={sp.sprint_id} className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/50 px-2 py-1">
                       <div className="text-zinc-300">
-                        Sprint #
-                        {sp.sprint_id}
+                        <button className="underline decoration-dotted hover:text-zinc-100" onClick={()=>{
+                          if (!onOpenAnalysisAt) return;
+                          // Prefer centralized time at WCS start if available
+                          const sprintStartAbs = parseHmsToSec(sp.sprint_start_time);
+                          const w = (windows||[]).find(wc => typeof wc.start_abs === 'number' && typeof wc.end_abs === 'number' && sprintStartAbs >= (wc.start_abs as number) && sprintStartAbs <= (wc.end_abs as number));
+                          const centralStart = (w && typeof w.start_adj === 'number') ? (w.start_adj as number) : undefined;
+                          onOpenAnalysisAt(centralStart ?? 0);
+                        }}>
+                          Sprint #{sp.sprint_id}
+                        </button>
                         </div>
                       <div className="text-zinc-400">Duration: {parseHmsToSec(sp.sprint_end_time) - parseHmsToSec(sp.sprint_start_time)} s</div>
                       <div className="text-zinc-400">Max: {sp.max_speed_reached_within_sprint.toFixed(2)} km/h</div>

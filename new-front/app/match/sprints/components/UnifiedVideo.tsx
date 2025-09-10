@@ -7,10 +7,12 @@ export default function UnifiedVideo({
   videoUrl,
   youtubeId,
   onSecondChange,
+  seekTo,
 }: {
   videoUrl?: string | null;
   youtubeId?: string | null;
   onSecondChange?: (sec: number) => void;
+  seekTo?: number | null;
 }) {
   const resolved = React.useMemo(() => {
     if (youtubeId && youtubeId.trim().length > 0) {
@@ -36,9 +38,9 @@ export default function UnifiedVideo({
 
   if (resolved.kind === "yt") {
     if (!resolved.id) return <div className="text-sm text-gray-600">Invalid YouTube URL/ID.</div>;
-    return <YouTubeVideo videoId={resolved.id} onSecondChange={onSecondChange} />;
+    return <YouTubeVideo videoId={resolved.id} onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} />;
   }
-  return <VideoComponent onSecondChange={onSecondChange} />;
+  return <VideoComponent onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} />;
 }
 
 
