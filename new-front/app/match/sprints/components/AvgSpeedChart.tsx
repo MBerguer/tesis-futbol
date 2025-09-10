@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line, ReferenceArea, ReferenceLine } from "recharts";
+import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line, ReferenceArea, ReferenceLine, Area, AreaChart } from "recharts";
 import { toAbsoluteTime as toAbsFromUtils } from "../utils/time";
 
-export interface AvgPoint { second: number; speed: number }
+export interface AvgPoint { second: number; speed: number | null }
 
 interface AvgSpeedChartProps {
   entries: { player_display_name: string; speed: number; centralized_elapsed_time: number }[];
@@ -49,7 +49,8 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
         const sum = speeds.reduce((a, b) => a + b, 0);
         out.push({ second: s, speed: sum / speeds.length });
       } else {
-        out.push({ second: s, speed: 0 });
+        // Use null instead of 0 so the line does not drop to the x-axis creating bar-like spikes
+        out.push({ second: s, speed: null });
       }
     }
     return out;
@@ -78,30 +79,41 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
   return (
     <div className="h-[320px]">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={series} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="second" ticks={ticks} tickFormatter={(s) => toAbsoluteTime(s)} />
-          <YAxis label={{ value: 'Speed (km/h)', angle: -90, position: 'insideLeft' }} />
-          <Tooltip labelFormatter={(l:any)=> toAbsoluteTime(l)} />
-          <Legend />
+        <AreaChart data={series} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+          <defs>
+            <linearGradient id="avgFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#6366f1" stopOpacity={0.5} />
+              <stop offset="100%" stopColor="#a5b4fc" stopOpacity={0.4} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke="#27272a" />
+          <XAxis dataKey="second" ticks={ticks} tickFormatter={(s) => toAbsoluteTime(s)} tick={{ fontSize: 12, fill: '#a1a1aa' }} stroke="#3f3f46" />
+          <YAxis domain={[0, 'auto']} label={{ value: 'Speed (km/h)', angle: -90, position: 'insideLeft', fill: '#a1a1aa' }} tick={{ fontSize: 12, fill: '#a1a1aa' }} stroke="#3f3f46" />
+          <Tooltip labelFormatter={(l:any)=> toAbsoluteTime(l)} contentStyle={{ background: '#0a0a0a', border: '1px solid #27272a', borderRadius: 8 }} labelStyle={{ color: '#e4e4e7' }} itemStyle={{ color: '#e4e4e7' }} />
+          <Legend wrapperStyle={{ color: '#a1a1aa' }} iconType="line" />
+          <Area type="monotone" dataKey="speed" stroke="#a5b4fc" strokeWidth={1.5} fill="url(#avgFill)" connectNulls isAnimationActive={false} />
+
           {thresholdsKmh && (
             <>
-              <ReferenceLine y={thresholdsKmh.match} stroke="#38ff48" strokeDasharray="4 4" ifOverflow="extendDomain" />
-              <ReferenceLine y={thresholdsKmh.halftime} stroke="#bb00b4" strokeDasharray="4 4" ifOverflow="extendDomain" />
-              <ReferenceLine y={thresholdsKmh.kickoff} stroke="#E53E3E" strokeDasharray="4 4" ifOverflow="extendDomain" />
+              <ReferenceLine y={thresholdsKmh.match} stroke="#22c55e" strokeOpacity={0.45} ifOverflow="extendDomain" />
+              <ReferenceLine y={thresholdsKmh.halftime} stroke="#a855f7" strokeOpacity={0.45} ifOverflow="extendDomain" />
+              {/* Adjusted from 20 to 19.8 km/h */}
+              <ReferenceLine y={19.8} stroke="#ef4444" strokeOpacity={0.55} ifOverflow="extendDomain" />
+              {/* Added sprint threshold at 25.2 km/h */}
+              <ReferenceLine y={25.2} stroke="#38bdf8" strokeOpacity={0.55} ifOverflow="extendDomain" />
             </>
           )}
           {typeof cursorSecond === 'number' && (
-            <ReferenceLine x={Math.floor(cursorSecond)} stroke="#111827" strokeWidth={2} ifOverflow="extendDomain" />
+            <ReferenceLine x={Math.floor(cursorSecond)} stroke="#F0F" strokeWidth={2} ifOverflow="extendDomain" />
           )}
           {typeof patchedFirstHalfStart === 'number' && (
-            <ReferenceLine x={patchedFirstHalfStart} stroke="#7c3aed" strokeDasharray="2 2" strokeWidth={2} />
+            <ReferenceLine x={patchedFirstHalfStart} stroke="#52525b" strokeWidth={2} />
           )}
           {typeof patchedSecondHalfStart === 'number' && (
-            <ReferenceLine x={patchedSecondHalfStart} stroke="#7c3aed" strokeDasharray="2 2" strokeWidth={2} />
+            <ReferenceLine x={patchedSecondHalfStart} stroke="#52525b" strokeWidth={2} />
           )}
           {periods && periods.detected_halftime_start !== undefined && periods.detected_halftime_end !== undefined && (
-            <ReferenceArea x1={periods.detected_halftime_start} x2={periods.detected_halftime_end} fill="#E53E3E" fillOpacity={0.28} ifOverflow="extendDomain" />
+            <ReferenceArea x1={periods.detected_halftime_start} x2={periods.detected_halftime_end} fill="#71717a" fillOpacity={0.14} ifOverflow="extendDomain" />
           )}
           {periods && (
             <>
@@ -114,11 +126,12 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
             </>
           )}
           {typeof kickoffSpike === 'number' && (
-            <ReferenceLine x={kickoffSpike} stroke="#DD6B20" strokeDasharray="3 3" strokeWidth={2} label={{ value: 'Kickoff spike', position: 'top' }} />
-          )}
-          <Line type="monotone" dataKey="speed" name="Avg speed" stroke="#2C5282" dot={false} isAnimationActive={false} />
-        </LineChart>
+            <ReferenceLine x={kickoffSpike} stroke="#a1a1aa" strokeWidth={2} label={{ value: 'Kickoff spike', position: 'top' }} />
+          )}          
+        </AreaChart>
       </ResponsiveContainer>
+
+
     </div>
   );
 }
