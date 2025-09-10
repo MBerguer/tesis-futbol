@@ -22,33 +22,33 @@ interface SprintsTableProps {
 export default function SprintsTable({ data }: SprintsTableProps) {
   if (!data || data.length === 0) return <div>No sprints</div>;
   return (
-    <div className="overflow-x-auto max-h-[400px]">
-      <table className="min-w-full">
-        <thead className="sticky top-0 bg-white">
-          <tr>
-            <th className="px-4 py-2">Player</th>
-            <th className="px-4 py-2">Sprint ID</th>
-            <th className="px-4 py-2">Start Time</th>
-            <th className="px-4 py-2">End Time</th>
-            <th className="px-4 py-2">Min Speed</th>
-            <th className="px-4 py-2">Max Speed</th>
-            <th className="px-4 py-2">Distance (m)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((s, i) => (
-            <tr key={i} className="border-t">
-              <td className="px-4 py-2">{s.player_display_name}</td>
-              <td className="px-4 py-2">{s.sprint_id}</td>
-              <td className="px-4 py-2">{s.sprint_start_time}</td>
-              <td className="px-4 py-2">{s.sprint_end_time}</td>
-              <td className="px-4 py-2">{s.min_speed_reached_within_sprint.toFixed(2)}</td>
-              <td className="px-4 py-2">{s.max_speed_reached_within_sprint.toFixed(2)}</td>
-              <td className="px-4 py-2">{s.total_sprint_distance.toFixed(2)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-2">
+      {data.map((s, i) => {
+        const initials = s.player_display_name
+          .split(' ')
+          .map(p => p[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase();
+        return (
+          <div key={i} className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 hover:border-zinc-700">
+            <div className="flex items-center gap-3">
+              <div className="h-7 w-7 rounded-full bg-zinc-800 text-zinc-300 grid place-items-center text-xs font-medium">
+                {initials}
+              </div>
+              <div className="text-sm text-zinc-200">{s.player_display_name}</div>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-zinc-300">
+              <div><span className="text-zinc-500">Sprint:</span> {s.sprint_id}</div>
+              <div><span className="text-zinc-500">Start:</span> {s.sprint_start_time}</div>
+              <div><span className="text-zinc-500">End:</span> {s.sprint_end_time}</div>
+              <div><span className="text-zinc-500">Min:</span> {s.min_speed_reached_within_sprint.toFixed(2)}</div>
+              <div><span className="text-zinc-500">Max:</span> {s.max_speed_reached_within_sprint.toFixed(2)}</div>
+              <div className="min-w-[120px] text-right"><span className="text-zinc-500">Dist:</span> {s.total_sprint_distance.toFixed(2)} m</div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

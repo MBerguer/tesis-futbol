@@ -260,32 +260,8 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
       <div className={`${fullWidth ? 'w-full' : 'max-w-7xl mx-auto'} p-4 md:p-6 space-y-4`}>
       <TopProgress active={loadingEntries || loadingPeriods || loadingWorstCases || loadingSprints} />
       <div className="mb-3" />
-      <div className="space-y-4">
-          {activeTab === 'players' && (
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <CardTitle>
-                  {selectedTable ? `Players in ${selectedTable}` : 'Select a match to view players'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingPlayers ? (
-                  <div>Loading players...</div>
-                ) : (
-                  <ul className="space-y-2">
-                    {players.map((player, index) => (
-                      <li key={index} className="p-2 border rounded">
-                        {player}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Player Speeds Over Time moved to Players tab */}
-
+      <div className="space-y-4">        
+          
           {activeTab === 'overview' && (
             <>
               <button
@@ -653,7 +629,7 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
           {selectedTable && activeTab === 'players' && (
             <Card className="bg-zinc-900/50 border-zinc-800">
               <CardHeader>
-                <CardTitle>Match Entries</CardTitle>
+                <CardTitle>Individual Player's Speeds</CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingEntries ? (
@@ -663,30 +639,6 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
                     <div className="mb-4">
                       <PlayerMiniList entries={entries} />
                     </div>
-                    
-                      <div className="overflow-x-auto max-h-[400px]">
-                        <table className="min-w-full">
-                          <thead className="sticky top-0 bg-zinc-950">
-                            <tr>
-                              <th className="px-4 py-2">Player</th>
-                              <th className="px-4 py-2">Time</th>
-                              <th className="px-4 py-2">Speed</th>
-                              <th className="px-4 py-2">Centralized Time</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {entries.map((entry, index) => (
-                              <tr key={index} className="border-t">
-                                <td className="px-4 py-2">{entry.player_display_name}</td>
-                                <td className="px-4 py-2">{entry.time}</td>
-                                <td className="px-4 py-2">{entry.speed.toFixed(2)}</td>
-                                <td className="px-4 py-2">{entry.centralized_elapsed_time.toFixed(2)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    
                   </div>
                 ) : (
                   <div>No entries to show</div>
@@ -694,8 +646,6 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
               </CardContent>
             </Card>
           )}
-
-          {/* Periods moved to Details page */}
 
           {selectedTable && activeTab === 'players' && (
             <Card className="bg-zinc-900/50 border-zinc-800">
