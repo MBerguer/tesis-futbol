@@ -25,6 +25,7 @@ async fn main() {
         .route("/", get(|| async { "Cantera inagotable API" }))
         .nest("/match", routes::matches_routes::matches_routes(pool))
         .nest("/player", routes::players_routes::players_routes())
+        .nest("/api", routes::admin_api::admin_api(pool))
         .layer(cors);
 
     // Allow overriding the port via environment variable API_PORT (defaults to 8000)

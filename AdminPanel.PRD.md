@@ -173,13 +173,16 @@ Indexes/constraints:
 
 12. API additions
 
-• GET /players?search=... → for autocomplete and fuzzy name lookup.
-• POST /players/import → upload CSV/Excel from the administrative spreadsheet (creates/updates by national_id).
-• PUT /matches/{id}/lineup → bulk upsert of `match_players` (starters/subs, optional jersey numbers).
-• PUT /matches/{id}/events → bulk upsert of events.
-• POST /matches/{id}/confirm → lock the match after admin review.
-• POST /upload_pdf → idempotent by `source_pdf_hash`; returns existing draft if already uploaded.
-• GET /uploads/{id}/status → poll background parse/OCR job status.
+• GET /api/players?search=... → for autocomplete and fuzzy name lookup.
+• POST /api/players/import → upload CSV/Excel from the administrative spreadsheet (creates/updates by national_id).
+• POST /api/teams; GET /api/teams
+• POST /api/players
+• POST /api/matches; GET /api/matches
+• PUT /api/matches/{id}/lineup → bulk upsert of `match_players` (starters/subs, optional jersey numbers).
+• PUT /api/matches/{id}/events → bulk upsert of events.
+• POST /api/matches/{id}/confirm → lock the match after admin review.
+• POST /api/upload_pdf → idempotent by `source_pdf_hash`; returns existing draft if already uploaded.
+• GET /api/uploads/{id}/status → poll background parse/OCR job status.
 
 ⸻
 
