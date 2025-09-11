@@ -1,4 +1,5 @@
 use axum::{extract::{Path, State}, Json};
+use axum_extra::extract::Multipart;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
@@ -74,8 +75,41 @@ pub async fn search_players(State(pool): State<Db>, axum::extract::Query(q): axu
 }
 
 // CSV/Excel import stub (to be implemented later)
-pub async fn import_players() -> Json<serde_json::Value> {
-    Json(json!({"status": "not_implemented"}))
+pub async fn import_players(State(pool): State<Db>, mut multipart: Multipart) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    // Expect a single CSV file part named "file". Columns: full_name,national_id,birthdate(YYYY-MM-DD),current_team_id,position
+    let mut imported: i64 = 0;
+    while let Some(field) = multipart.next_field().await.map_err(internal_err)? {
+        let name = field.name().map(|s| s.to_string()).unwrap_or_default();
+        if name != "file" { continue; }
+        let bytes = field.bytes().await.map_err(internal_err)?;
+        let mut rdr = csv::ReaderBuilder::new().flexible(true).from_reader(bytes.as_ref());
+        let mut tx = pool.begin().await.map_err(internal_err)?;
+        for rec in rdr.records() {
+            let rec = rec.map_err(internal_err)?;
+            let full_name = rec.get(0).unwrap_or("").trim().to_string();
+            let national_id = rec.get(1).unwrap_or("").trim().to_string();
+            if full_name.is_empty() || national_id.is_empty() { continue; }
+            let birthdate = rec.get(2).and_then(|s| if s.trim().is_empty() { None } else { chrono::NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok() });
+            let current_team_id = rec.get(3).and_then(|s| uuid::Uuid::parse_str(s.trim()).ok());
+            let position = rec.get(4).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+            // Upsert by national_id
+            sqlx::query!(
+                r#"INSERT INTO players (player_id, full_name, national_id, birthdate, current_team_id, position, active)
+                   VALUES ($1,$2,$3,$4,$5,$6, TRUE)
+                   ON CONFLICT (national_id) DO UPDATE SET
+                     full_name = EXCLUDED.full_name,
+                     birthdate = EXCLUDED.birthdate,
+                     current_team_id = EXCLUDED.current_team_id,
+                     position = EXCLUDED.position
+                "#,
+                Uuid::new_v4(), full_name, national_id, birthdate, current_team_id, position
+            ).execute(&mut *tx).await.map_err(internal_err)?;
+            imported += 1;
+        }
+        tx.commit().await.map_err(internal_err)?;
+        break;
+    }
+    Ok(Json(json!({"status": "ok", "imported": imported})))
 }
 
 // Matches
@@ -209,8 +243,174 @@ pub async fn confirm_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Resu
 }
 
 // Upload/OCR stubs
-pub async fn upload_pdf() -> Json<serde_json::Value> { Json(json!({"status": "not_implemented"})) }
-pub async fn upload_status(Path(_id): Path<Uuid>) -> Json<serde_json::Value> { Json(json!({"status": "not_implemented"})) }
+pub async fn upload_pdf(State(pool): State<Db>, mut multipart: Multipart) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    // Accept PDF and optional source_pdf_hash
+    use sha2::{Digest, Sha256};
+    let mut provided_hash: Option<String> = None;
+    let mut computed_hash: Option<String> = None;
+    let mut pdf_bytes: Option<bytes::Bytes> = None;
+    while let Some(field) = multipart.next_field().await.map_err(internal_err)? {
+        let name = field.name().unwrap_or("");
+        if name == "source_pdf_hash" {
+            let s = field.text().await.map_err(internal_err)?;
+            if !s.trim().is_empty() { provided_hash = Some(s.trim().to_string()); }
+        } else if name == "file" {
+            let bytes = field.bytes().await.map_err(internal_err)?;
+            let mut hasher = Sha256::new();
+            hasher.update(&bytes);
+            computed_hash = Some(format!("sha256:{}", hex::encode(hasher.finalize())));
+            pdf_bytes = Some(bytes);
+        }
+    }
+    let hash = provided_hash.or(computed_hash).unwrap_or_else(|| "sha256:empty".to_string());
+
+    // Idempotency: if upload already exists, return its info (and a minimal draft payload)
+    if let Some(existing) = sqlx::query!(
+        r#"SELECT upload_id, status, match_id FROM uploads WHERE source_pdf_hash = $1"#,
+        hash
+    ).fetch_optional(&pool).await.map_err(internal_err)? {
+        // Fetch current draft match details
+        let draft = sqlx::query!(
+            r#"SELECT match_id, match_date, home_team_id, away_team_id, result_home, result_away
+               FROM matches WHERE match_id = $1"#,
+            existing.match_id
+        ).fetch_one(&pool).await.map_err(internal_err)?;
+        return Ok(Json(json!({
+            "upload_id": existing.upload_id,
+            "status": existing.status,
+            "match_id": existing.match_id,
+            "source_pdf_hash": hash,
+            "draft": {
+                "match": {
+                    "match_id": draft.match_id,
+                    "match_date": draft.match_date,
+                    "home_team_id": draft.home_team_id,
+                    "away_team_id": draft.away_team_id,
+                    "result_home": draft.result_home,
+                    "result_away": draft.result_away
+                },
+                "teams": [],
+                "players": [],
+                "events": []
+            }
+        })));
+    }
+
+    // Ensure placeholder team exists to satisfy FKs (until parsing fills real teams)
+    let placeholder_team = sqlx::query!(
+        r#"SELECT team_id FROM teams WHERE name = 'Unknown Team'"#
+    ).fetch_optional(&pool).await.map_err(internal_err)?
+        .map(|r| r.team_id)
+        .unwrap_or({
+            let rec = sqlx::query!(
+                r#"INSERT INTO teams (team_id, name, category) VALUES ($1,'Unknown Team','Unknown') RETURNING team_id"#,
+                Uuid::new_v4()
+            ).fetch_one(&pool).await.map_err(internal_err)?;
+            rec.team_id
+        });
+
+    // Create a draft match (minimal) and uploads row
+    let draft_match = sqlx::query!(
+        r#"INSERT INTO matches (match_id, match_date, home_team_id, away_team_id, notes, source_pdf_hash)
+           VALUES ($1, NOW(), $2, $3, $4, $5)
+           RETURNING match_id"#,
+        Uuid::new_v4(),
+        placeholder_team,
+        placeholder_team,
+        Some("draft created from upload".to_string()),
+        Some(hash.clone())
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+
+    let mut upload = sqlx::query!(
+        r#"INSERT INTO uploads (upload_id, source_pdf_hash, status, match_id)
+           VALUES ($1, $2, 'received', $3)
+           RETURNING upload_id, status"#,
+        Uuid::new_v4(), hash, draft_match.match_id
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+
+    // Synchronous parsing (phase 1): mark processing, do lightweight text extraction heuristics
+    let _ = sqlx::query!(
+        r#"UPDATE uploads SET status = 'processing', updated_at = NOW() WHERE upload_id = $1"#,
+        upload.upload_id
+    ).execute(&pool).await.map_err(internal_err)?;
+
+    // Heuristic: try to extract plain text from the PDF bytes (works only if text layer exists)
+    let mut detected_home: Option<String> = None;
+    let mut detected_away: Option<String> = None;
+    let mut detected_date: Option<String> = None;
+    if let Some(bytes) = &pdf_bytes {
+        // Very naive: search for known tokens; fallback remains empty which the UI will allow to edit
+        // Look for patterns like "Nacional", "Juventud", and a date like DD/MM/YYYY or DD-MM-YYYY
+        let text = String::from_utf8_lossy(bytes);
+        let re_date = regex::Regex::new(r"(?P<d>\b\d{1,2})[\/-](?P<m>\d{1,2})[\/-](?P<y>\d{2,4})").ok();
+        if let Some(caps) = re_date.as_ref().and_then(|r| r.captures(&text)) {
+            let d = caps.name("d").map(|m| m.as_str()).unwrap_or("");
+            let m = caps.name("m").map(|m| m.as_str()).unwrap_or("");
+            let y = caps.name("y").map(|m| m.as_str()).unwrap_or("");
+            detected_date = Some(format!("{}-{:0>2}-{:0>2}", y, m, d));
+        }
+        // Team name hints
+        if text.contains("Nacional") { detected_home = Some("Nacional".to_string()); }
+        if text.contains("Juventud") { detected_away = Some("Juventud".to_string()); }
+    }
+
+    // TODO: In a future step, if no text layer, render + OCR and parse structured tables
+
+    let draft = sqlx::query!(
+        r#"SELECT match_id, match_date, home_team_id, away_team_id, result_home, result_away
+           FROM matches WHERE match_id = $1"#,
+        draft_match.match_id
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+
+    let _ = sqlx::query!(
+        r#"UPDATE uploads SET status = 'done', updated_at = NOW() WHERE upload_id = $1"#,
+        upload.upload_id
+    ).execute(&pool).await.map_err(internal_err)?;
+    upload.status = "done".to_string();
+
+    Ok(Json(json!({
+        "upload_id": upload.upload_id,
+        "status": upload.status,
+        "match_id": draft_match.match_id,
+        "source_pdf_hash": hash,
+        "draft": {
+            "match": {
+                "match_id": draft.match_id,
+                "match_date": draft.match_date,
+                "home_team_id": draft.home_team_id,
+                "away_team_id": draft.away_team_id,
+                "result_home": draft.result_home,
+                "result_away": draft.result_away,
+                "detected_date": detected_date
+            },
+            "teams": [
+                { "hint": detected_home },
+                { "hint": detected_away }
+            ],
+            "players": [],
+            "events": []
+        }
+    })))
+}
+pub async fn upload_status(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let row = sqlx::query!(
+        r#"SELECT upload_id, status, match_id, source_pdf_hash, error, created_at, updated_at FROM uploads WHERE upload_id = $1"#,
+        id
+    ).fetch_optional(&pool).await.map_err(internal_err)?;
+    if let Some(r) = row {
+        Ok(Json(json!({
+            "upload_id": r.upload_id,
+            "status": r.status,
+            "match_id": r.match_id,
+            "source_pdf_hash": r.source_pdf_hash,
+            "error": r.error,
+            "created_at": r.created_at,
+            "updated_at": r.updated_at
+        })))
+    } else {
+        Err((axum::http::StatusCode::NOT_FOUND, "upload not found".to_string()))
+    }
+}
 
 fn internal_err<E: std::fmt::Display>(e: E) -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
