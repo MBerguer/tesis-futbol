@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::models::{Competition, Event, EventType, Match, MatchPlayer, Player, Team};
+use crate::models::{Competition, EventType, Match, MatchPlayer, Player, Team};
 
 // Wrap pool in State
 type Db = PgPool;
@@ -180,14 +180,32 @@ pub async fn upsert_events(State(pool): State<Db>, Path(id): Path<Uuid>, Json(it
 }
 
 pub async fn confirm_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
-    // no explicit confirmed flag yet; could add later. For now, return match.
-    let rec = sqlx::query_as!(
-        Match,
+    // simple update to set parse_confidence to 1.0 as a placeholder for "confirmed"
+    let _ = sqlx::query!("UPDATE matches SET parse_confidence = 1.0 WHERE match_id = $1", id)
+        .execute(&pool).await.map_err(internal_err)?;
+    let row = sqlx::query!(
         r#"SELECT match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence
            FROM matches WHERE match_id = $1"#,
         id
     ).fetch_one(&pool).await.map_err(internal_err)?;
-    Ok(Json(json!({"status": "ok", "match": rec})))
+    Ok(Json(json!({
+        "status": "ok",
+        "match": {
+            "match_id": row.match_id,
+            "competition_id": row.competition_id,
+            "match_date": row.match_date,
+            "venue_id": row.venue_id,
+            "category": row.category,
+            "home_team_id": row.home_team_id,
+            "away_team_id": row.away_team_id,
+            "result_home": row.result_home,
+            "result_away": row.result_away,
+            "youtube_link": row.youtube_link,
+            "notes": row.notes,
+            "source_pdf_hash": row.source_pdf_hash,
+            "parse_confidence": row.parse_confidence
+        }
+    })))
 }
 
 // Upload/OCR stubs
@@ -197,5 +215,6 @@ pub async fn upload_status(Path(_id): Path<Uuid>) -> Json<serde_json::Value> { J
 fn internal_err<E: std::fmt::Display>(e: E) -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
 }
+
 
 

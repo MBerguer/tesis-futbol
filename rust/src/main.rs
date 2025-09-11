@@ -4,6 +4,7 @@ use std::env;
 use tower_http::cors::{Any, CorsLayer};
 
 mod config;
+mod models;
 mod modules;
 mod routes;
 
@@ -16,6 +17,16 @@ async fn main() {
         .await
         .expect("Failed to connect to database");
 
+    println!("Connected to database");
+
+    // Run SQLx migrations on startup (applies files under ./migrations)
+    if let Err(e) = sqlx::migrate!("./migrations").run(&pool).await {
+        eprintln!("Failed to run migrations: {}", e);
+        panic!("migrations failed");
+    }
+
+    println!("Migrations applied");
+
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -23,7 +34,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(|| async { "Cantera inagotable API" }))
-        .nest("/match", routes::matches_routes::matches_routes(pool))
+        .nest("/match", routes::matches_routes::matches_routes(pool.clone()))
         .nest("/player", routes::players_routes::players_routes())
         .nest("/api", routes::admin_api::admin_api(pool))
         .layer(cors);

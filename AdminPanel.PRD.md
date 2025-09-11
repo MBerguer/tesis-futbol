@@ -184,6 +184,140 @@ Indexes/constraints:
 • POST /api/upload_pdf → idempotent by `source_pdf_hash`; returns existing draft if already uploaded.
 • GET /api/uploads/{id}/status → poll background parse/OCR job status.
 
+12.1 Endpoint contracts (examples)
+
+• POST /api/teams
+Request:
+```json
+{ "name": "Nacional U19", "category": "Sub 19" }
+```
+Response 200:
+```json
+{ "team_id": "uuid", "name": "Nacional U19", "category": "Sub 19" }
+```
+
+• GET /api/teams
+Response 200:
+```json
+[
+  { "team_id": "uuid", "name": "Juventud U19", "category": "Sub 19" },
+  { "team_id": "uuid", "name": "Nacional U19", "category": "Sub 19" }
+]
+```
+
+• POST /api/players
+Request:
+```json
+{
+  "full_name": "Juan Pérez",
+  "national_id": "12345678",
+  "birthdate": "2006-03-01",
+  "current_team_id": "uuid",
+  "position": "MF"
+}
+```
+Response 200:
+```json
+{
+  "player_id": "uuid",
+  "full_name": "Juan Pérez",
+  "national_id": "12345678",
+  "birthdate": "2006-03-01",
+  "current_team_id": "uuid",
+  "position": "MF",
+  "active": true
+}
+```
+
+• GET /api/players?search=Juan
+Response 200:
+```json
+[
+  { "player_id": "uuid", "full_name": "Juan Pérez", "national_id": "12345678", "current_team_id": "uuid", "position": "MF", "active": true }
+]
+```
+
+• POST /api/matches
+Request:
+```json
+{
+  "competition_id": "uuid",
+  "match_date": "2025-09-11T20:00:00Z",
+  "venue_id": "uuid",
+  "category": "Sub 19",
+  "home_team_id": "uuid",
+  "away_team_id": "uuid",
+  "youtube_link": null,
+  "notes": "parsed from PDF",
+  "source_pdf_hash": "sha256:..."
+}
+```
+Response 200:
+```json
+{
+  "match_id": "uuid",
+  "competition_id": "uuid",
+  "match_date": "2025-09-11T20:00:00Z",
+  "venue_id": "uuid",
+  "category": "Sub 19",
+  "home_team_id": "uuid",
+  "away_team_id": "uuid",
+  "result_home": 0,
+  "result_away": 0,
+  "youtube_link": null,
+  "notes": "parsed from PDF",
+  "source_pdf_hash": "sha256:...",
+  "parse_confidence": null
+}
+```
+
+• PUT /api/matches/{id}/lineup
+Request:
+```json
+[
+  { "player_id": "uuid", "team_id": "uuid", "role": "starter", "position": "MF", "jersey_number": null },
+  { "player_id": "uuid", "team_id": "uuid", "role": "sub", "position": "FW", "jersey_number": null }
+]
+```
+Response 200:
+```json
+{ "status": "ok" }
+```
+
+• PUT /api/matches/{id}/events
+Request (event_type enum values: goal|pen_goal|own_goal|yellow|second_yellow|red|sub_on|sub_off):
+```json
+[
+  { "team_id": "uuid", "player_id": "uuid", "minute": 12, "added_time": null, "type": "goal", "assist_player_id": null },
+  { "team_id": "uuid", "player_id": "uuid", "related_player_id": "uuid", "minute": 60, "type": "sub_off" },
+  { "team_id": "uuid", "player_id": "uuid", "minute": 60, "type": "sub_on" }
+]
+```
+Response 200:
+```json
+{ "status": "ok" }
+```
+
+• POST /api/matches/{id}/confirm
+Response 200:
+```json
+{ "status": "ok", "match": { "match_id": "uuid", "parse_confidence": 1.0, "result_home": 0, "result_away": 0, "home_team_id": "uuid", "away_team_id": "uuid" } }
+```
+
+• POST /api/upload_pdf (planned)
+Request: multipart/form-data with fields `file` (PDF) and optional `source_pdf_hash`.
+Response 200:
+```json
+{ "match_id": "uuid", "status": "draft_created", "parse_confidence": 0.42 }
+```
+Idempotency: same `source_pdf_hash` returns existing draft.
+
+• GET /api/uploads/{id}/status (planned)
+Response 200:
+```json
+{ "upload_id": "uuid", "state": "processing", "progress": 65 }
+```
+
 ⸻
 
 13. PDF ingestion details

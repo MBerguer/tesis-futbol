@@ -41,7 +41,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   libglib2.0-0 libgtk-3-0 libnspr4 libpango-1.0-0 libpangocairo-1.0-0 \
   libstdc++6 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 \
   libxdamage1 libxss1 libxtst6 libnss3 libasound2 \
-  libatk1.0-0 libc6 libdrm-dev libgbm-dev ca-certificates fonts-liberation lsb-release xdg-utils wget \
+  libatk1.0-0 libc6 libdrm-dev libgbm-dev ca-certificates fonts-liberation lsb-release xdg-utils wget postgresql-client \
   # Chromium for running Turbopack benchmarks
   chromium \
   # Used for plotters graph visualizations in turbopack benchmarks
@@ -63,3 +63,4 @@ RUN corepack enable pnpm
 
 RUN npx create-next-app@latest
 
+RUN sqlx migrate run
