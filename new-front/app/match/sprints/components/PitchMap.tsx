@@ -20,6 +20,12 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
 
+  const buildPopupHTML = (name: string, speed?: number) => (
+    `<div style="background:rgba(24,24,27,0.96);color:#e4e4e7;border:1px solid #27272a;padding:4px 8px;border-radius:8px;white-space:nowrap;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.35)">`
+    + `${name}${typeof speed === 'number' && isFinite(speed) ? ` — ${speed.toFixed(1)} km/h` : ''}`
+    + `</div>`
+  );
+
   useEffect(() => {
     if (!containerRef.current) return;
     if (!mapRef.current) {
@@ -90,7 +96,7 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
 
         const marker = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map);
         const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: [0, 14], anchor: 'top', className: 'no-chrome' })
-          .setHTML(`<div style="background:rgba(24,24,27,0.96);color:#e4e4e7;border:1px solid #27272a;padding:4px 8px;border-radius:8px;white-space:nowrap;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.35)">${name}${typeof (p as any).speed === 'number' ? ` — ${(p as any).speed.toFixed(1)} km/h` : ''}</div>`);
+          .setHTML(buildPopupHTML(name, (p as any).speed as number | undefined));
 
         rec = { marker, popup };
         markersRef.current.set(name, rec);
@@ -112,6 +118,8 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
 
       // update position for current snapshot
       rec.marker.setLngLat([p.lon, p.lat]);
+      // update popup content with latest speed
+      try { rec.popup.setHTML(buildPopupHTML(name, (p as any).speed as number | undefined)); } catch {}
       if (pinned && pinned[name]) rec.popup.setLngLat([p.lon, p.lat]);
     }
 

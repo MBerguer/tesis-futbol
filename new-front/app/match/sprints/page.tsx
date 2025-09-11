@@ -17,7 +17,7 @@ import ThresholdLegend from "./components/ThresholdLegend";
 import PlayerMiniList from "./components/PlayerMiniList";
 import PlayerDetailCard from "./components/PlayerDetailCard";
 import VideoComponent from "../videoComponent";
-import YouTubeVideo from "./components/YouTubeVideo";
+// import YouTubeVideo from "./components/YouTubeVideo";
 import UnifiedVideo from "./components/UnifiedVideo";
 import StadiumMap from "./components/StadiumMap";
 import PitchMap from "./components/PitchMap";
@@ -164,38 +164,11 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
     return map;
   }, [worstCases, baseTime, entries, periods]);
 
-  const openAnalysisAt = React.useCallback((centralSecond?: number | null) => {
-    setAnalysisModalOpen(true);
-    if (centralSecond == null || !periods) {
-      setAnalysisModalAt(null);
-      return;
-    }
-    setAnalysisModalAt(centralSecond);
-    const p = periods;
-    const kickoff = kickoffSpike ?? 0;
-    const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
-    const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-    const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
-
-    // Map centralized seconds back to video seconds (inverse of cursorSecond formula)
-    let targetVideoSec = 0;
-    if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
-      // If centralized second is before second half start, it sits in first half
-      if (centralSecond < shStartPatched) {
-        targetVideoSec = Math.max(0, centralSecond - fhStartPatched);
-      } else {
-        targetVideoSec = Math.max(0, (centralSecond - shStartPatched) + fhDurPatched);
-      }
-    } else {
-      targetVideoSec = Math.max(0, centralSecond - fhStartPatched);
-    }
-    setVideoTimeSec(targetVideoSec);
-  }, [periods, kickoffSpike, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration]);
+  
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
-  const sectionParam = (searchParams.get('section') as 'overview'|'players'|'details'|null);
-  const activeTab: 'overview' | 'players' = sectionParam === 'players' ? 'players' : 'overview';
+  
 
   // Auto-loading data hook (must be called directly, not inside useMemo)
   const autoData = useMatchData(API_BASE, selectedTable, reloadToken + globalReloadToken);
@@ -297,6 +270,39 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
     15,
   );
 
+  const googleRasterStyle = React.useMemo(() => ({
+    version: 8,
+    sources: {
+      google: {
+        type: 'raster',
+        tiles: [
+          `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
+        ],
+        tileSize: 256,
+        attribution: '© Google'
+      }
+    },
+    layers: [
+      { id: 'google', type: 'raster', source: 'google' }
+    ]
+  }), []);
+
+  const playersGrouped = React.useMemo(() => {
+    const byPlayer: Record<string, typeof entries> = {} as any;
+    entries.forEach(e => { (byPlayer[e.player_display_name] ||= []).push(e); });
+    Object.keys(byPlayer).forEach(k => byPlayer[k].sort((a,b)=>a.centralized_elapsed_time-b.centralized_elapsed_time));
+    return byPlayer;
+  }, [entries]);
+
+  const sprintsGrouped = React.useMemo(() => {
+    const sprintByPlayer: Record<string, typeof sprintsInWorstCases> = {} as any;
+    sprintsInWorstCases.forEach(s => { (sprintByPlayer[s.player_display_name] ||= []).push(s); });
+    return sprintByPlayer;
+  }, [sprintsInWorstCases]);
+
+  const orderedPlayers = React.useMemo(() => Object.keys(playersGrouped), [playersGrouped]);
+  const [playersRenderLimit, setPlayersRenderLimit] = React.useState<number>(10);
+
   // Pinned popups shared between list and map
   const [pinnedPlayers, setPinnedPlayers] = useState<Record<string, boolean>>({});
   const togglePinned = React.useCallback((name: string) => {
@@ -306,8 +312,8 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
   const [mapBearing, setMapBearing] = useState<number>(0);
   const [showInfo, setShowInfo] = useState<boolean>(true);
   const [showAnalysis, setShowAnalysis] = useState<boolean>(true);
-  const [analysisModalOpen, setAnalysisModalOpen] = useState<boolean>(false);
-  const [analysisModalAt, setAnalysisModalAt] = useState<number | null>(null);
+  const [showPlayersSection, setShowPlayersSection] = useState<boolean>(false);
+  
   
   // Initialize patch values whenever detected periods load/update
   useEffect(() => {
@@ -330,555 +336,391 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
       <div className="mb-3" />
       <div className="space-y-4">        
           
-          {activeTab === 'overview' && (
-            <>
-              <button
-                onClick={()=>setShowInfo(v=>!v)}
-                className="w-full mt-2 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
-                aria-expanded={showInfo}
-              >
-                <span className="text-base font-semibold">Match info</span>
-                <svg className={`w-4 h-4 ml-3 transition-transform ${showInfo ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
-              </button>
-              <div style={{maxHeight: showInfo ? '2000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-3">
-                <div className="md:col-span-3 h-full">
-                  <Card className="h-full bg-zinc-900/50 border-zinc-800">
-                  <CardHeader>
-                    <CardTitle>Details</CardTitle>
-                  </CardHeader>
-                  <CardContent className="h-[660px] md:h-[760px]">
-                    {!selectedTable ? (
-                      <div className="text-sm text-gray-600">Select a match to view details.</div>
-                    ) : (
-                      <div className="space-y-2">
-                        <p className="text-lg font-semibold">{matchMetadata.teamA} vs {matchMetadata.teamB}</p>
-                        <p>Date: {matchMetadata.date}</p>
-                        <p>Location: {matchMetadata.location}</p>
-                        <p>Referee: {matchMetadata.referee}</p>
-                        <p>Attendance: {matchMetadata.attendance}</p>
-                        <div className="mt-2">
-                          <p className="font-medium">Result:</p>
-                          <p>{matchMetadata.teamA} {matchMetadata.result.teamAScore} - {matchMetadata.teamB} {matchMetadata.result.teamBScore}</p>
-                          <p className="mt-1 font-medium">Goals:</p>
-                          <ul className="list-disc pl-5">
-                            {matchMetadata.goals.map((g, i)=> (
-                              <li key={i}>{g.player} ({g.team}) - {g.minute}'</li>
-                            ))}
-                          </ul>
-                        </div>
+            <button
+              onClick={()=>setShowInfo(v=>!v)}
+              className="w-full mt-2 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
+              aria-expanded={showInfo}
+            >
+              <span className="text-base font-semibold">Match info</span>
+              <svg className={`w-4 h-4 ml-3 transition-transform ${showInfo ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+            </button>
+            <div style={{maxHeight: showInfo ? '2000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
+            {showInfo && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-3">
+              <div className="md:col-span-3 h-full">
+                <Card className="h-full bg-zinc-900/50 border-zinc-800">
+                <CardHeader>
+                  <CardTitle>Details</CardTitle>
+                </CardHeader>
+                <CardContent className="h-[660px] md:h-[760px]">
+                  {!selectedTable ? (
+                    <div className="text-sm text-gray-600">Select a match to view details.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-lg font-semibold">{matchMetadata.teamA} vs {matchMetadata.teamB}</p>
+                      <p>Date: {matchMetadata.date}</p>
+                      <p>Location: {matchMetadata.location}</p>
+                      <p>Referee: {matchMetadata.referee}</p>
+                      <p>Attendance: {matchMetadata.attendance}</p>
+                      <div className="mt-2">
+                        <p className="font-medium">Result:</p>
+                        <p>{matchMetadata.teamA} {matchMetadata.result.teamAScore} - {matchMetadata.teamB} {matchMetadata.result.teamBScore}</p>
+                        <p className="mt-1 font-medium">Goals:</p>
+                        <ul className="list-disc pl-5">
+                          {matchMetadata.goals.map((g, i)=> (
+                            <li key={i}>{g.player} ({g.team}) - {g.minute}'</li>
+                          ))}
+                        </ul>
                       </div>
-                    )}
-                  </CardContent>
-                  </Card>
-                </div>
+                    </div>
+                  )}
+                </CardContent>
+                </Card>
+              </div>
 
-                <div className="md:col-span-4 h-full">
-                  <Card className="h-full bg-zinc-900/50 border-zinc-800">
-                  <CardHeader>
-                    <CardTitle>Periods
-                    {loadingPeriods && (
+              <div className="md:col-span-4 h-full">
+                <Card className="h-full bg-zinc-900/50 border-zinc-800">
+                <CardHeader>
+                  <CardTitle>Periods
+                  {loadingPeriods && (
+                    <Spinner />
+                  )}
+                  </CardTitle>
+                  {!loadingPeriods && periods && (
+                    <div className="text-xs text-gray-500">{autoData.periods?.using_manual ? 'Using patched periods' : 'Using detected periods'}</div>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {!selectedTable ? (
+                    <div className="text-sm text-gray-600">Select a match to view periods.</div>
+                  ) : !periods ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-6" />
+                      <Skeleton className="h-6" />
+                      <Skeleton className="h-6" />
+                    </div>
+                  ) : (
+                    <PeriodsSummary
+                      baseTime={baseTime}
+                      detected_first_half_start={periods.detected_first_half_start}
+                      detected_first_half_end={periods.detected_first_half_end}
+                      detected_second_half_start={periods.detected_second_half_start}
+                      detected_second_half_end={periods.detected_second_half_end}
+                      detected_halftime_start={periods.detected_halftime_start}
+                      detected_halftime_end={periods.detected_halftime_end}
+                    />
+                  )}
+                </CardContent>
+                </Card>
+              </div>
+
+              <div className="md:col-span-5 h-full">
+                <Card className="h-full bg-zinc-900/50 border-zinc-800">
+                <CardHeader>
+                  <CardTitle>Stadium</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <StadiumMap
+                      latitude={-34.795334}
+                      longitude={-56.147974}
+                      zoom={15}
+                      styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
+                    />
+                </CardContent>
+                </Card>
+              </div>
+            </div>
+            )}
+            </div>
+
+            <button
+              onClick={()=>setShowAnalysis(v=>!v)}
+              className="w-full mt-6 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
+              aria-expanded={showAnalysis}
+            >
+              <span className="text-base font-semibold">Analysis</span>
+              <svg className={`w-4 h-4 ml-3 transition-transform ${showAnalysis ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+            </button>
+            <div style={{maxHeight: showAnalysis ? '4000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
+            {showAnalysis && (
+            <div className={`grid gap-4 mt-3 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
+              <Card className={`${showPatchPanel ? 'md:col-span-5' : ''} bg-zinc-900/50 border-zinc-800`}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    Average Speed Over Time
+                    {loadingEntries&&(
                       <Spinner />
                     )}
-                    </CardTitle>
-                    {!loadingPeriods && periods && (
-                      <div className="text-xs text-gray-500">{autoData.periods?.using_manual ? 'Using patched periods' : 'Using detected periods'}</div>
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    {!selectedTable ? (
-                      <div className="text-sm text-gray-600">Select a match to view periods.</div>
-                    ) : !periods ? (
-                      <div className="space-y-2">
-                        <Skeleton className="h-6" />
-                        <Skeleton className="h-6" />
-                        <Skeleton className="h-6" />
-                      </div>
-                    ) : (
-                      <PeriodsSummary
-                        baseTime={baseTime}
-                        detected_first_half_start={periods.detected_first_half_start}
-                        detected_first_half_end={periods.detected_first_half_end}
-                        detected_second_half_start={periods.detected_second_half_start}
-                        detected_second_half_end={periods.detected_second_half_end}
-                        detected_halftime_start={periods.detected_halftime_start}
-                        detected_halftime_end={periods.detected_halftime_end}
-                      />
-                    )}
-                  </CardContent>
-                  </Card>
-                </div>
 
-                <div className="md:col-span-5 h-full">
-                  <Card className="h-full bg-zinc-900/50 border-zinc-800">
-                  <CardHeader>
-                    <CardTitle>Stadium</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                      <StadiumMap
-                        latitude={-34.795334}
-                        longitude={-56.147974}
-                        zoom={15}
-                        styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
-                      />
-                  </CardContent>
-                  </Card>
-                </div>
-              </div>
-              </div>
-              <button
-                onClick={()=>setShowAnalysis(v=>!v)}
-                className="w-full mt-6 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
-                aria-expanded={showAnalysis}
-              >
-                <span className="text-base font-semibold">Analysis</span>
-                <svg className={`w-4 h-4 ml-3 transition-transform ${showAnalysis ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
-              </button>
-              <div style={{maxHeight: showAnalysis ? '4000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
-              <div className={`grid gap-4 mt-3 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
-                <Card className={`${showPatchPanel ? 'md:col-span-5' : ''} bg-zinc-900/50 border-zinc-800`}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      Average Speed Over Time
-                      {loadingEntries&&(
-                        <Spinner />
-                      )}
-
-                    {!showPatchPanel && (
-                      <div className="ml-auto justify-end">
-                        <Button variant={'outline'} onClick={()=>setShowPatchPanel(true)}>
-                          Edit Periods
-                        </Button>
+                  {!showPatchPanel && (
+                    <div className="ml-auto justify-end">
+                      <Button variant={'outline'} onClick={()=>setShowPatchPanel(true)}>
+                        Edit Periods
+                      </Button>
+                    </div>
+                  )}
+                  </CardTitle>
+                  
+                  <div className="ml-auto">
+                    <div className="relative" style={{ height: 0 }}>
+                      <div className="absolute right-3 -top-4">
+                        <ThresholdLegend thresholds={thresholds} inChart vertical className="min-w-[300px]" />
                       </div>
-                    )}
-                    </CardTitle>
-                    
-                    <div className="ml-auto">
-                      <div className="relative" style={{ height: 0 }}>
-                        <div className="absolute right-3 -top-4">
-                          <ThresholdLegend thresholds={thresholds} inChart vertical className="min-w-[300px]" />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingEntries ? (                      
+                    <Skeleton className="h-[360px]" />
+                  ) : entries.length === 0 || !periods ? (
+                    <div className="text-sm text-gray-600">No data to display.</div>
+                  ) : (
+                    <>
+                      <AvgSpeedChart
+                        entries={entries}
+                        baseTime={baseTime || derivedBaseTime}
+                        thresholds={thresholds}
+                        periods={periods}
+                        kickoffSpike={kickoffSpike}
+                        cursorSecond={(function(){
+                          const p = periods;
+                          const kickoff = kickoffSpike ?? 0;
+                          const t = videoTimeSec;
+                          const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
+                          const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+                          const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
+                          if (!p) return kickoff + t;
+                          if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+                            const firstHalfDuration = Math.max(0, fhDurPatched);
+                            if (t <= firstHalfDuration) return fhStartPatched + t;
+                            return shStartPatched + (t - firstHalfDuration);
+                          }
+                          return fhStartPatched + t;
+                        })()}
+                        patchedFirstHalfStart={patchedFirstHalfStart}
+                        patchedSecondHalfStart={patchedSecondHalfStart}
+                      />
+
+                      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-2">
+                          {/* Automatically choose player via query params: ?yt=<id> or ?video=<url> */}
+                          <UnifiedVideo
+                            youtubeId={searchParams.get('yt')}
+                            videoUrl={searchParams.get('video')}
+                            onSecondChange={handleVideoSecondChange}
+                          />
+                        </div>
+                        <div className="p-2">
+                          <div className="h-[660px] md:h-[760px]">
+                            <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
+                              <div className="flex items-center gap-2 py-2">
+                                <label className="text-xs text-zinc-400">Orientation</label>
+                                <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-44" />
+                                <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
+                              </div>
+                              <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
+                            </div>
+                            {(!selectedTable || !periods) ? (
+                              <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
+                            ) : (
+                              <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
+                                <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
+                                  <PitchMap
+                                    points={livePositions}
+                                    styleObj={googleRasterStyle}
+                                    pinned={pinnedPlayers}
+                                    onToggle={togglePinned}
+                                    heightClass={'h-full'}
+                                    heightStyle={mapStacked ? undefined : undefined}
+                                    bearing={mapBearing}
+                                  />
+                                </div>
+                                <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
+                                  {loadingPlayers ? (
+                                    <Spinner />
+                                  ) : players.length === 0 ? (
+                                    <div className="text-sm text-gray-600">No players found.</div>
+                                  ) : (
+                                    <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
+                                      {players.map((player, index) => {
+                                        const { base, border } = stringToColorPair(player || "");
+                                        const active = !!pinnedPlayers[player];
+                                        return (
+                                          <button
+                                            key={index}
+                                            onClick={() => togglePinned(player)}
+                                            className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
+                                            style={{
+                                              background: active ? base : '#27272a',
+                                              color: active ? '#fff' : '#d4d4d8',
+                                              padding: '3px 8px',
+                                            }}
+                                            title={player}
+                                          >
+                                            <span
+                                              className="inline-block rounded-full"
+                                              style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
+                                            />
+                                            <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+              {showPatchPanel && (
+                <Card className="md:col-span-1 bg-zinc-900/50 border-zinc-800">
+                  <CardHeader>
+                    <CardTitle>Periods Editor</CardTitle>
+                    <div className="ml-auto">
+                      <Button variant={'secondary'} onClick={()=>setShowPatchPanel(false)}>Close Editor</Button>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {loadingEntries ? (                      
-                      <Skeleton className="h-[360px]" />
-                    ) : entries.length === 0 || !periods ? (
-                      <div className="text-sm text-gray-600">No data to display.</div>
+                    {!periods ? (
+                      <div className="text-sm text-gray-600">No detected periods yet.</div>
                     ) : (
-                      <>
-                        <AvgSpeedChart
-                          entries={entries}
-                          baseTime={baseTime || derivedBaseTime}
-                          thresholds={thresholds}
-                          periods={periods}
-                          kickoffSpike={kickoffSpike}
-                          cursorSecond={(function(){
-                            const p = periods;
-                            const kickoff = kickoffSpike ?? 0;
-                            const t = videoTimeSec;
-                            const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
-                            const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-                            const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
-                            if (!p) return kickoff + t;
-                            if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
-                              const firstHalfDuration = Math.max(0, fhDurPatched);
-                              if (t <= firstHalfDuration) return fhStartPatched + t;
-                              return shStartPatched + (t - firstHalfDuration);
-                            }
-                            return fhStartPatched + t;
-                          })()}
-                          patchedFirstHalfStart={patchedFirstHalfStart}
-                          patchedSecondHalfStart={patchedSecondHalfStart}
-                        />
-
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="p-2">
-                            {/* Automatically choose player via query params: ?yt=<id> or ?video=<url> */}
-                            <UnifiedVideo
-                              youtubeId={searchParams.get('yt')}
-                              videoUrl={searchParams.get('video')}
-                              onSecondChange={handleVideoSecondChange}
-                            />
-                          </div>
-                          <div className="p-2">
-                            <div className="h-[660px] md:h-[760px]">
-                              <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
-                                <div className="flex items-center gap-2 py-2">
-                                  <label className="text-xs text-zinc-400">Orientation</label>
-                                  <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-44" />
-                                  <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
-                                </div>
-                                <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
-                              </div>
-                              {(!selectedTable || !periods) ? (
-                                <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
-                              ) : (
-                                <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
-                                  <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
-                                    <PitchMap
-                                      points={livePositions}
-                                      styleObj={{
-                                        version: 8,
-                                        sources: {
-                                          google: {
-                                            type: 'raster',
-                                            tiles: [
-                                              `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
-                                            ],
-                                            tileSize: 256,
-                                            attribution: '© Google'
-                                          }
-                                        },
-                                        layers: [
-                                          { id: 'google', type: 'raster', source: 'google' }
-                                        ]
-                                      }}
-                                      pinned={pinnedPlayers}
-                                      onToggle={togglePinned}
-                                      heightClass={'h-full'}
-                                      heightStyle={mapStacked ? undefined : undefined}
-                                      bearing={mapBearing}
-                                    />
-                                  </div>
-                                  <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
-                                    {loadingPlayers ? (
-                                      <Spinner />
-                                    ) : players.length === 0 ? (
-                                      <div className="text-sm text-gray-600">No players found.</div>
-                                    ) : (
-                                      <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
-                                        {players.map((player, index) => {
-                                          const { base, border } = stringToColorPair(player || "");
-                                          const active = !!pinnedPlayers[player];
-                                          return (
-                                            <button
-                                              key={index}
-                                              onClick={() => togglePinned(player)}
-                                              className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
-                                              style={{
-                                                background: active ? base : '#27272a',
-                                                color: active ? '#fff' : '#d4d4d8',
-                                                padding: '3px 8px',
-                                              }}
-                                              title={player}
-                                            >
-                                              <span
-                                                className="inline-block rounded-full"
-                                                style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
-                                              />
-                                              <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+                      <div className="space-y-4 text-sm">
+                        <div>
+                          <div className="font-medium mb-1">Detected first half start</div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 rounded bg-zinc-100">sec: {periods.detected_first_half_start ?? '—'}</span>
+                            <span className="px-2 py-1 rounded bg-zinc-100">time: {toAbsFromUtils(baseTime || null, periods.detected_first_half_start)}</span>
                           </div>
                         </div>
-                      </>
+                        <div>
+                          <div className="font-medium mb-1">Detected second half start</div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 rounded bg-zinc-100">sec: {periods.detected_second_half_start ?? '—'}</span>
+                            <span className="px-2 py-1 rounded bg-zinc-100">time: {toAbsFromUtils(baseTime || null, periods.detected_second_half_start)}</span>
+                          </div>
+                        </div>
+                        <hr />
+                        <div>
+                          <div className="font-medium mb-1">Patched first half start (sec)</div>
+                          <input
+                            type="number"
+                            className="w-full border rounded px-2 py-1"
+                            value={patchedFirstHalfStart ?? ''}
+                            onChange={(e)=>setPatchedFirstHalfStart(e.target.value === '' ? null : Number(e.target.value))}
+                          />
+                        </div>
+                        <div>
+                          <div className="font-medium mb-1">Patched second half start (sec)</div>
+                          <input
+                            type="number"
+                            className="w-full border rounded px-2 py-1"
+                            value={patchedSecondHalfStart ?? ''}
+                            onChange={(e)=>setPatchedSecondHalfStart(e.target.value === '' ? null : Number(e.target.value))}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant={'outline'} onClick={()=>{
+                            setPatchedFirstHalfStart(periods.detected_first_half_start ?? null);
+                            setPatchedSecondHalfStart(periods.detected_second_half_start ?? null);
+                            const fh = periods.detected_first_half_start ?? null;
+                            const fe = periods.detected_first_half_end ?? null;
+                            setPatchedFirstHalfDuration(fh !== null && fe !== null ? Math.max(0, Math.floor(fe - fh)) : null);
+                            const sh = periods.detected_second_half_start ?? null;
+                            const se = periods.detected_second_half_end ?? null;
+                            setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
+                          }}>Reset to detected</Button>
+                          <Button
+                            onClick={async()=>{
+                              if (!selectedTable) return;
+                              const body = {
+                                match_name: selectedTable,
+                                manual_first_half_start: patchedFirstHalfStart,
+                                manual_second_half_start: patchedSecondHalfStart,
+                                first_half_duration_sec: patchedFirstHalfDuration,
+                                second_half_duration_sec: patchedSecondHalfDuration,
+                              };
+                              try {
+                                await fetch(`${API_BASE}/match/table/${selectedTable}/periods/patch`,{
+                                  method:'POST',
+                                  headers:{'Content-Type':'application/json'},
+                                  body: JSON.stringify(body)
+                                });
+                              } catch (e) { /* ignore */ }
+                            }}
+                          >Save patched</Button>
+                        </div>
+                        <hr />
+                        <div>
+                          <div className="font-medium mb-1">First half duration (mm:ss)</div>
+                          <input
+                            type="text"
+                            placeholder="45:00"
+                            className="w-full border rounded px-2 py-1"
+                            value={formatMmSsFromSeconds(patchedFirstHalfDuration)}
+                            onChange={(e)=> setPatchedFirstHalfDuration(parseMmSsToSeconds(e.target.value))}
+                          />
+                        </div>
+                        <div>
+                          <div className="font-medium mb-1">Second half duration (mm:ss)</div>
+                          <input
+                            type="text"
+                            placeholder="45:00"
+                            className="w-full border rounded px-2 py-1"
+                            value={formatMmSsFromSeconds(patchedSecondHalfDuration)}
+                            onChange={(e)=> setPatchedSecondHalfDuration(parseMmSsToSeconds(e.target.value))}
+                          />
+                        </div>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
-                {showPatchPanel && (
-                  <Card className="md:col-span-1 bg-zinc-900/50 border-zinc-800">
-                    <CardHeader>
-                      <CardTitle>Periods Editor</CardTitle>
-                      <div className="ml-auto">
-                        <Button variant={'secondary'} onClick={()=>setShowPatchPanel(false)}>Close Editor</Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {!periods ? (
-                        <div className="text-sm text-gray-600">No detected periods yet.</div>
-                      ) : (
-                        <div className="space-y-4 text-sm">
-                          <div>
-                            <div className="font-medium mb-1">Detected first half start</div>
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-1 rounded bg-zinc-100">sec: {periods.detected_first_half_start ?? '—'}</span>
-                              <span className="px-2 py-1 rounded bg-zinc-100">time: {toAbsFromUtils(baseTime || null, periods.detected_first_half_start)}</span>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="font-medium mb-1">Detected second half start</div>
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-1 rounded bg-zinc-100">sec: {periods.detected_second_half_start ?? '—'}</span>
-                              <span className="px-2 py-1 rounded bg-zinc-100">time: {toAbsFromUtils(baseTime || null, periods.detected_second_half_start)}</span>
-                            </div>
-                          </div>
-                          <hr />
-                          <div>
-                            <div className="font-medium mb-1">Patched first half start (sec)</div>
-                            <input
-                              type="number"
-                              className="w-full border rounded px-2 py-1"
-                              value={patchedFirstHalfStart ?? ''}
-                              onChange={(e)=>setPatchedFirstHalfStart(e.target.value === '' ? null : Number(e.target.value))}
-                            />
-                          </div>
-                          <div>
-                            <div className="font-medium mb-1">Patched second half start (sec)</div>
-                            <input
-                              type="number"
-                              className="w-full border rounded px-2 py-1"
-                              value={patchedSecondHalfStart ?? ''}
-                              onChange={(e)=>setPatchedSecondHalfStart(e.target.value === '' ? null : Number(e.target.value))}
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button variant={'outline'} onClick={()=>{
-                              setPatchedFirstHalfStart(periods.detected_first_half_start ?? null);
-                              setPatchedSecondHalfStart(periods.detected_second_half_start ?? null);
-                              const fh = periods.detected_first_half_start ?? null;
-                              const fe = periods.detected_first_half_end ?? null;
-                              setPatchedFirstHalfDuration(fh !== null && fe !== null ? Math.max(0, Math.floor(fe - fh)) : null);
-                              const sh = periods.detected_second_half_start ?? null;
-                              const se = periods.detected_second_half_end ?? null;
-                              setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
-                            }}>Reset to detected</Button>
-                            <Button
-                              onClick={async()=>{
-                                if (!selectedTable) return;
-                                const body = {
-                                  match_name: selectedTable,
-                                  manual_first_half_start: patchedFirstHalfStart,
-                                  manual_second_half_start: patchedSecondHalfStart,
-                                  first_half_duration_sec: patchedFirstHalfDuration,
-                                  second_half_duration_sec: patchedSecondHalfDuration,
-                                };
-                                try {
-                                  await fetch(`${API_BASE}/match/table/${selectedTable}/periods/patch`,{
-                                    method:'POST',
-                                    headers:{'Content-Type':'application/json'},
-                                    body: JSON.stringify(body)
-                                  });
-                                } catch (e) { /* ignore */ }
-                              }}
-                            >Save patched</Button>
-                          </div>
-                          <hr />
-                          <div>
-                            <div className="font-medium mb-1">First half duration (mm:ss)</div>
-                            <input
-                              type="text"
-                              placeholder="45:00"
-                              className="w-full border rounded px-2 py-1"
-                              value={formatMmSsFromSeconds(patchedFirstHalfDuration)}
-                              onChange={(e)=> setPatchedFirstHalfDuration(parseMmSsToSeconds(e.target.value))}
-                            />
-                          </div>
-                          <div>
-                            <div className="font-medium mb-1">Second half duration (mm:ss)</div>
-                            <input
-                              type="text"
-                              placeholder="45:00"
-                              className="w-full border rounded px-2 py-1"
-                              value={formatMmSsFromSeconds(patchedSecondHalfDuration)}
-                              onChange={(e)=> setPatchedSecondHalfDuration(parseMmSsToSeconds(e.target.value))}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-
-              
-              </div>
-            </>
-          )}
-
-          {analysisModalOpen && (
-            <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
-              <div className="absolute inset-0 bg-black/60" onClick={()=>setAnalysisModalOpen(false)} />
-              <div className="absolute inset-0 flex items-start justify-center p-4 md:p-10">
-                <div className="w-full max-w-6xl rounded-md border border-zinc-800 bg-zinc-900/90 backdrop-blur shadow-xl">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-                    <div className="text-zinc-200 font-semibold">Analysis</div>
-                    <button className="text-zinc-400 hover:text-zinc-100" onClick={()=>setAnalysisModalOpen(false)}>Close</button>
-                  </div>
-                  <div className="p-4">
-                    {/* Inline Analysis accordion content */}
-                    <div className={`grid gap-4 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
-                      <Card className={`${showPatchPanel ? 'md:col-span-5' : ''} bg-zinc-900/50 border-zinc-800`}>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2">
-                            Average Speed Over Time
-                            {loadingEntries&&(
-                              <Spinner />
-                            )}
-                          </CardTitle>
-                          <div className="ml-auto">
-                            <div className="relative" style={{ height: 0 }}>
-                              <div className="absolute right-3 -top-4">
-                                <ThresholdLegend thresholds={thresholds} inChart vertical className="min-w-[300px]" />
-                              </div>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          {loadingEntries ? (                      
-                            <Skeleton className="h-[360px]" />
-                          ) : entries.length === 0 || !periods ? (
-                            <div className="text-sm text-gray-600">No data to display.</div>
-                          ) : (
-                            <>
-                              <AvgSpeedChart
-                                entries={entries}
-                                baseTime={baseTime || derivedBaseTime}
-                                thresholds={thresholds}
-                                periods={periods}
-                                kickoffSpike={kickoffSpike}
-                                cursorSecond={(function(){
-                                  const p = periods;
-                                  const kickoff = kickoffSpike ?? 0;
-                                  const t = videoTimeSec;
-                                  const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
-                                  const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-                                  const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
-                                  if (!p) return kickoff + t;
-                                  if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
-                                    const firstHalfDuration = Math.max(0, fhDurPatched);
-                                    if (t <= firstHalfDuration) return fhStartPatched + t;
-                                    return shStartPatched + (t - firstHalfDuration);
-                                  }
-                                  return fhStartPatched + t;
-                                })()}
-                                patchedFirstHalfStart={patchedFirstHalfStart}
-                                patchedSecondHalfStart={patchedSecondHalfStart}
-                              />
-
-                              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="p-2">
-                                  <UnifiedVideo
-                                    youtubeId={searchParams.get('yt')}
-                                    videoUrl={searchParams.get('video')}
-                                    onSecondChange={handleVideoSecondChange}
-                                    seekTo={videoTimeSec}
-                                  />
-                                </div>
-                                <div className="p-2">
-                                  <div className="h-[660px] md:h-[760px]">
-                                    <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
-                                      <div className="flex items-center gap-2 py-2">
-                                        <label className="text-xs text-zinc-400">Orientation</label>
-                                        <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-44" />
-                                        <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
-                                      </div>
-                                      <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
-                                    </div>
-                                    {(!selectedTable || !periods) ? (
-                                      <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
-                                    ) : (
-                                      <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
-                                        <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
-                                          <PitchMap
-                                            points={livePositions}
-                                            styleObj={{
-                                              version: 8,
-                                              sources: {
-                                                google: {
-                                                  type: 'raster',
-                                                  tiles: [
-                                                    `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
-                                                  ],
-                                                  tileSize: 256,
-                                                  attribution: '© Google'
-                                                }
-                                              },
-                                              layers: [
-                                                { id: 'google', type: 'raster', source: 'google' }
-                                              ]
-                                            }}
-                                            pinned={pinnedPlayers}
-                                            onToggle={togglePinned}
-                                            heightClass={'h-full'}
-                                            heightStyle={mapStacked ? undefined : undefined}
-                                            bearing={mapBearing}
-                                          />
-                                        </div>
-                                        <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
-                                          {loadingPlayers ? (
-                                            <Spinner />
-                                          ) : players.length === 0 ? (
-                                            <div className="text-sm text-gray-600">No players found.</div>
-                                          ) : (
-                                            <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
-                                              {players.map((player, index) => {
-                                                const { base, border } = stringToColorPair(player || "");
-                                                const active = !!pinnedPlayers[player];
-                                                return (
-                                                  <button
-                                                    key={index}
-                                                    onClick={() => togglePinned(player)}
-                                                    className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
-                                                    style={{
-                                                      background: active ? base : '#27272a',
-                                                      color: active ? '#fff' : '#d4d4d8',
-                                                      padding: '3px 8px',
-                                                    }}
-                                                    title={player}
-                                                  >
-                                                    <span
-                                                      className="inline-block rounded-full"
-                                                      style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
-                                                    />
-                                                    <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
-                                                  </button>
-                                                );
-                                              })}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
-          )}
+            )}
+            </div>
 
-          {selectedTable && activeTab === 'players' && (
+            
+            </div>
+          
+
+          <button
+            onClick={()=>setShowPlayersSection(v=>!v)}
+            className="w-full mt-6 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
+            aria-expanded={showPlayersSection}
+          >
+            <span className="text-base font-semibold">Players</span>
+            <svg className={`w-4 h-4 ml-3 transition-transform ${showPlayersSection ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+          </button>
+          {selectedTable && showPlayersSection && (
             <div className="grid gap-4 items-start">
               <div className="md:col-span-3 space-y-3">
-                {(() => {
+                {orderedPlayers.slice(0, playersRenderLimit).map(p => {
                   const norm = (s: string) => (s||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').toLowerCase();
-                  const byPlayer: Record<string, typeof entries> = {} as any;
-                  entries.forEach(e => { (byPlayer[e.player_display_name] ||= []).push(e); });
-                  Object.keys(byPlayer).forEach(k => byPlayer[k].sort((a,b)=>a.centralized_elapsed_time-b.centralized_elapsed_time));
-                  const sprintByPlayer: Record<string, typeof sprintsInWorstCases> = {} as any;
-                  sprintsInWorstCases.forEach(s => { (sprintByPlayer[s.player_display_name] ||= []).push(s); });
-                  const order = Object.keys(byPlayer);
-                  return order.map(p => (
+                  return (
                     <PlayerDetailCard
                       key={p}
                       name={p}
-                      entries={byPlayer[p]}
+                      entries={playersGrouped[p]}
                       windows={playerHighlights[norm(p)]}
-                      sprints={sprintByPlayer[p]}
-                      onOpenAnalysisAt={openAnalysisAt}
+                      sprints={sprintsGrouped[p]}
                     />
-                  ));
-                })()}
+                  );
+                })}
+                {orderedPlayers.length > playersRenderLimit && (
+                  <div className="flex justify-center mt-2">
+                    <Button variant={'outline'} onClick={()=>setPlayersRenderLimit(l=>l+10)}>Load more</Button>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {selectedTable && activeTab === 'players' && (
+          {selectedTable && showPlayersSection && (
             <Card className="col-span-2 bg-zinc-900/50 border-zinc-800">
               <CardHeader><CardTitle>Player Speeds Over Time</CardTitle></CardHeader>
               <CardContent>
@@ -890,7 +732,6 @@ export default function SprintsPage({ selectedTable: selectedTableProp }: { sele
               </CardContent>
             </Card>
           )}
-      </div>
       </div>
     </main>
   );
