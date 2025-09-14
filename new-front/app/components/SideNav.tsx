@@ -39,12 +39,13 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
 
       {!collapsed && (
         <div className="px-3 py-3 border-b border-zinc-800 flex flex-col gap-2">
-          <div className="text-xs uppercase text-zinc-500">General</div>
+          <div className="text-xs uppercase text-zinc-500">Sections</div>
           <nav className="flex flex-col gap-1">
-            <Link href="#" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Dashboard</Link>
-            <Link href="#" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Admin</Link>
-            <Link href="#" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Users</Link>
-            <Link href="#" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Settings</Link>
+            <Link href="/" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Home</Link>
+            <Link href="/mockup" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Mockup</Link>
+            <Link href="/players" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Players</Link>
+            <Link href="/week-preparation" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Week preparation</Link>
+            <Link href="/match" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Match</Link>
           </nav>
         </div>
       )}

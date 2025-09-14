@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import SideNav from "./SideNav";
+import { MatchProvider } from "../match/context";
 
 export default function SiteShell({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
@@ -12,6 +13,8 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
   const [matchTables, setMatchTables] = useState<string[]>([]);
   const [loadingTables, setLoadingTables] = useState(true);
   const [collapsed, setCollapsed] = useState<boolean>(false);
+  const [reloadToken, setReloadToken] = useState<number>(0);
+  const [fullWidth, setFullWidth] = useState<boolean>(false);
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const selectedTable = useMemo(() => searchParams.get('table'), [searchParams]);
@@ -20,6 +23,10 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
     try {
       const v = localStorage.getItem('sidenav_collapsed');
       if (v === '1') setCollapsed(true);
+    } catch {}
+    try {
+      const fw = localStorage.getItem('content_fullwidth');
+      if (fw === '1') setFullWidth(true);
     } catch {}
     const fetchMatchTables = async () => {
       try {
@@ -41,6 +48,7 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
     url.searchParams.set('table', tableName);
     router.replace(`${pathname}?${url.searchParams.toString()}`);
     try { localStorage.setItem('lastTable', tableName); } catch {}
+    setReloadToken(x => x + 1);
   };
 
   return (
@@ -54,7 +62,36 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
         onSelect={handleTableSelect}
       />
       <div className="flex-1 min-w-0">
-        {children}
+        <MatchProvider value={{
+          selectedTable,
+          setSelectedTable: (t: string | null) => {
+            const url = new URL(window.location.href);
+            if (t) url.searchParams.set('table', t); else url.searchParams.delete('table');
+            router.replace(`${pathname}?${url.searchParams.toString()}`);
+            try { if (t) localStorage.setItem('lastTable', t); } catch {}
+            setReloadToken((x)=>x+1);
+          },
+          reloadToken,
+          reload: () => setReloadToken((x)=>x+1),
+          fullWidth
+        }}>
+          <div className={`${fullWidth ? 'w-full' : 'max-w-7xl mx-auto'} p-4 md:p-6`}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="text-xl font-semibold">Partido</div>
+              <div className="flex-1" />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setFullWidth(v => { const nv = !v; try { localStorage.setItem('content_fullwidth', nv ? '1' : '0'); } catch {} return nv; })}
+                  className={`${fullWidth ? 'bg-zinc-800 text-zinc-100 border-zinc-700' : 'bg-zinc-900/50 text-zinc-300 border-zinc-800 hover:border-zinc-700'} border px-3 py-1.5 rounded-md text-sm`}
+                  title={fullWidth ? 'Switch to centered width' : 'Expand to full width'}
+                >
+                  {fullWidth ? 'Centered' : 'Full width'}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className={`${fullWidth ? 'w-full' : 'max-w-7xl mx-auto'} px-4 md:px-6`}>{children}</div>
+        </MatchProvider>
       </div>
     </div>
   );
