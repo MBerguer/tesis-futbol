@@ -225,7 +225,7 @@ pub async fn detect_match_periods_notebook(
     .ok()
     .flatten();
 
-    if let Some(row) = &cached {
+    if let Some(_row) = &cached {
         println!("Found cached periods for match {}", table_name);
     } else {
         println!("No cached periods found for match {}", table_name); 
@@ -976,7 +976,7 @@ pub async fn detect_and_store_match_periods(
     }
 
     // Detectar bloques de entretiempo (velocidad <= 11 durante al menos 15 minutos, reduciendo hasta encontrar)
-    let mut halftime_blocks: Vec<Vec<i64>> = Vec::new();
+    let mut halftime_blocks: Vec<Vec<i64>>;
     let mut current_window = 900; // 15 minutos = 900 segundos (como en el notebook)
 
     // Precalcular runs de "velocidad baja" (<= 11 km/h)
@@ -999,15 +999,16 @@ pub async fn detect_and_store_match_periods(
     // Buscar bloques válidos, reduciendo ventana si es necesario
     let maximum_halftime_end = max_second - duracion_segundo_tiempo; // dejar espacio mínimo para ST
     loop {
-        halftime_blocks = runs
+        let candidate: Vec<Vec<i64>> = runs
             .iter()
             .filter(|block| block.len() as i64 >= current_window)
             .filter(|block| !block.is_empty() && block[0] > 60) // evitar el bloque inicial
             .filter(|block| *block.last().unwrap_or(&0) <= maximum_halftime_end)
-            .map(|b| b.clone())
+            .cloned()
             .collect();
 
-        if !halftime_blocks.is_empty() || current_window <= 0 {
+        if !candidate.is_empty() || current_window <= 0 {
+            halftime_blocks = candidate;
             break;
         }
         current_window -= 10;
@@ -1549,6 +1550,7 @@ pub async fn patch_match_periods(
     Path(table_name): Path<String>,
     Json(payload): Json<PatchPeriodsPayload>,
 ) -> Json<Value> {
+    let match_name = payload.match_name.clone().unwrap_or(table_name.clone());
     let manual_first_start = payload.manual_first_half_start;
     let manual_second_start = payload.manual_second_half_start;
     let fh_dur = payload.first_half_duration_sec;
@@ -1570,7 +1572,7 @@ pub async fn patch_match_periods(
         ON CONFLICT (match_name) DO NOTHING
     "#;
     let _ = sqlx::query(query)
-        .bind(&table_name)
+        .bind(&match_name)
         .execute(&pool)
         .await;
 
@@ -1586,7 +1588,7 @@ pub async fn patch_match_periods(
     "#;
 
     let row = sqlx::query(update)
-        .bind(&table_name)
+        .bind(&match_name)
         .bind(manual_first_start)
         .bind(manual_first_end)
         .bind(manual_second_start)
@@ -1601,7 +1603,7 @@ pub async fn patch_match_periods(
             let mss: Option<i32> = r.try_get("manual_second_half_start").ok();
             let mse: Option<i32> = r.try_get("manual_second_half_end").ok();
             Json(json!({
-                "match_name": table_name,
+                "match_name": match_name,
                 "manual_first_half_start": mfs,
                 "manual_first_half_end": mfe,
                 "manual_second_half_start": mss,

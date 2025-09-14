@@ -63,4 +63,3 @@ RUN corepack enable pnpm
 
 RUN npx create-next-app@latest
 
-RUN sqlx migrate run

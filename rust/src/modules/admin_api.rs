@@ -1,12 +1,11 @@
 use axum::{extract::{Path, State}, Json};
 use axum_extra::extract::Multipart;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use serde_json::json;
 use sqlx::PgPool;
-use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::models::{Competition, EventType, Match, MatchPlayer, Player, Team};
+use crate::models::{EventType, Match, Player, Team};
 
 // Wrap pool in State
 type Db = PgPool;
@@ -264,37 +263,11 @@ pub async fn upload_pdf(State(pool): State<Db>, mut multipart: Multipart) -> Res
     }
     let hash = provided_hash.or(computed_hash).unwrap_or_else(|| "sha256:empty".to_string());
 
-    // Idempotency: if upload already exists, return its info (and a minimal draft payload)
-    if let Some(existing) = sqlx::query!(
+    // Idempotency: if upload already exists, reuse it and its draft match; otherwise, create them
+    let existing = sqlx::query!(
         r#"SELECT upload_id, status, match_id FROM uploads WHERE source_pdf_hash = $1"#,
         hash
-    ).fetch_optional(&pool).await.map_err(internal_err)? {
-        // Fetch current draft match details
-        let draft = sqlx::query!(
-            r#"SELECT match_id, match_date, home_team_id, away_team_id, result_home, result_away
-               FROM matches WHERE match_id = $1"#,
-            existing.match_id
-        ).fetch_one(&pool).await.map_err(internal_err)?;
-        return Ok(Json(json!({
-            "upload_id": existing.upload_id,
-            "status": existing.status,
-            "match_id": existing.match_id,
-            "source_pdf_hash": hash,
-            "draft": {
-                "match": {
-                    "match_id": draft.match_id,
-                    "match_date": draft.match_date,
-                    "home_team_id": draft.home_team_id,
-                    "away_team_id": draft.away_team_id,
-                    "result_home": draft.result_home,
-                    "result_away": draft.result_away
-                },
-                "teams": [],
-                "players": [],
-                "events": []
-            }
-        })));
-    }
+    ).fetch_optional(&pool).await.map_err(internal_err)?;
 
     // Ensure placeholder team exists to satisfy FKs (until parsing fills real teams)
     let placeholder_team = sqlx::query!(
@@ -308,30 +281,35 @@ pub async fn upload_pdf(State(pool): State<Db>, mut multipart: Multipart) -> Res
             ).fetch_one(&pool).await.map_err(internal_err)?;
             rec.team_id
         });
+    
+    // Derive upload/match ids
+    let (upload_id, match_id) = if let Some(existing) = existing {
+        (existing.upload_id, existing.match_id)
+    } else {
+        let draft_match = sqlx::query!(
+            r#"INSERT INTO matches (match_id, match_date, home_team_id, away_team_id, notes, source_pdf_hash)
+               VALUES ($1, NOW(), $2, $3, $4, $5)
+               RETURNING match_id"#,
+            Uuid::new_v4(),
+            placeholder_team,
+            placeholder_team,
+            Some("draft created from upload".to_string()),
+            Some(hash.clone())
+        ).fetch_one(&pool).await.map_err(internal_err)?;
 
-    // Create a draft match (minimal) and uploads row
-    let draft_match = sqlx::query!(
-        r#"INSERT INTO matches (match_id, match_date, home_team_id, away_team_id, notes, source_pdf_hash)
-           VALUES ($1, NOW(), $2, $3, $4, $5)
-           RETURNING match_id"#,
-        Uuid::new_v4(),
-        placeholder_team,
-        placeholder_team,
-        Some("draft created from upload".to_string()),
-        Some(hash.clone())
-    ).fetch_one(&pool).await.map_err(internal_err)?;
-
-    let mut upload = sqlx::query!(
-        r#"INSERT INTO uploads (upload_id, source_pdf_hash, status, match_id)
-           VALUES ($1, $2, 'received', $3)
-           RETURNING upload_id, status"#,
-        Uuid::new_v4(), hash, draft_match.match_id
-    ).fetch_one(&pool).await.map_err(internal_err)?;
-
+        let up = sqlx::query!(
+            r#"INSERT INTO uploads (upload_id, source_pdf_hash, status, match_id)
+               VALUES ($1, $2, 'received', $3)
+               RETURNING upload_id"#,
+            Uuid::new_v4(), hash, draft_match.match_id
+        ).fetch_one(&pool).await.map_err(internal_err)?;
+        (up.upload_id, draft_match.match_id)
+    };
+ 
     // Synchronous parsing (phase 1): mark processing, do lightweight text extraction heuristics
     let _ = sqlx::query!(
         r#"UPDATE uploads SET status = 'processing', updated_at = NOW() WHERE upload_id = $1"#,
-        upload.upload_id
+        upload_id
     ).execute(&pool).await.map_err(internal_err)?;
 
     // Heuristic: try to extract plain text from the PDF bytes (works only if text layer exists)
@@ -359,19 +337,18 @@ pub async fn upload_pdf(State(pool): State<Db>, mut multipart: Multipart) -> Res
     let draft = sqlx::query!(
         r#"SELECT match_id, match_date, home_team_id, away_team_id, result_home, result_away
            FROM matches WHERE match_id = $1"#,
-        draft_match.match_id
+        match_id
     ).fetch_one(&pool).await.map_err(internal_err)?;
 
     let _ = sqlx::query!(
         r#"UPDATE uploads SET status = 'done', updated_at = NOW() WHERE upload_id = $1"#,
-        upload.upload_id
+        upload_id
     ).execute(&pool).await.map_err(internal_err)?;
-    upload.status = "done".to_string();
 
     Ok(Json(json!({
-        "upload_id": upload.upload_id,
-        "status": upload.status,
-        "match_id": draft_match.match_id,
+        "upload_id": upload_id,
+        "status": "done",
+        "match_id": match_id,
         "source_pdf_hash": hash,
         "draft": {
             "match": {
