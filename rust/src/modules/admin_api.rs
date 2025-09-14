@@ -228,7 +228,19 @@ pub async fn get_lineup(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<
               a."Jugador" as jugador,
               mp.role,
               mp.position,
-              mp.jersey_number
+              mp.jersey_number,
+              -- minutes estimate: from 0 or sub_on minute to sub_off minute or 90
+              COALESCE(
+                (SELECT MIN(eo.minute) FROM events eo 
+                   WHERE eo.match_id = mp.match_id AND eo.team_id = mp.team_id 
+                     AND eo.type = 'sub_off' AND eo.player_id = mp.player_id),
+                90
+              ) - COALESCE(
+                (SELECT MIN(ei.minute) FROM events ei 
+                   WHERE ei.match_id = mp.match_id AND ei.team_id = mp.team_id 
+                     AND ei.type = 'sub_on' AND ei.player_id = mp.player_id),
+                0
+              ) AS minutes_played
            FROM match_players mp
            JOIN teams t ON t.team_id = mp.team_id
            LEFT JOIN administrativo a ON a."Documento_de_Identidad" = mp.player_id
@@ -251,7 +263,8 @@ pub async fn get_lineup(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<
             "jugador": r.jugador,
             "role": r.role,
             "position": r.position,
-            "jersey_number": r.jersey_number
+            "jersey_number": r.jersey_number,
+            "minutes_played": r.minutes_played
         }))
         .collect();
     Ok(Json(json!({"lineup": data})))
@@ -330,6 +343,59 @@ pub async fn get_events(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<
         }))
         .collect();
     Ok(Json(json!({"events": data})))
+}
+
+// Read-only: normalized substitutions per match (paired)
+pub async fn get_subs(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    #[derive(Debug)]
+    struct SubRow {
+        minute: i32,
+        team_id: Uuid,
+        team_name: String,
+        player_out_id: Option<i32>,
+        player_out_name: Option<String>,
+        player_in_id: Option<i32>,
+        player_in_name: Option<String>,
+    }
+
+    let rows = sqlx::query_as!(
+        SubRow,
+        r#"SELECT 
+              so.minute,
+              so.team_id,
+              t.name as team_name,
+              so.player_id as player_out_id,
+              aout."Jugador" as player_out_name,
+              si.player_id as player_in_id,
+              ain."Jugador" as player_in_name
+           FROM events so
+           JOIN events si ON si.match_id = so.match_id AND si.team_id = so.team_id AND si.minute = so.minute
+                         AND so.type = 'sub_off' AND si.type = 'sub_on'
+                         AND si.related_player_id = so.player_id AND so.related_player_id = si.player_id
+           JOIN teams t ON t.team_id = so.team_id
+           LEFT JOIN administrativo aout ON aout."Documento_de_Identidad" = so.player_id
+           LEFT JOIN administrativo ain  ON ain."Documento_de_Identidad" = si.player_id
+          WHERE so.match_id = $1
+          ORDER BY so.minute, so.team_id"#,
+        id
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(internal_err)?;
+
+    let data: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|r| json!({
+            "minute": r.minute,
+            "team_id": r.team_id,
+            "team_name": r.team_name,
+            "player_out_id": r.player_out_id,
+            "player_out_name": r.player_out_name,
+            "player_in_id": r.player_in_id,
+            "player_in_name": r.player_in_name
+        }))
+        .collect();
+    Ok(Json(json!({"subs": data})))
 }
 
 

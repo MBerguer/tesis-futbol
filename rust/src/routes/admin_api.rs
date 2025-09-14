@@ -16,6 +16,7 @@ pub fn admin_api(pool: PgPool) -> Router {
         .route("/matches/:id/lineup", put(handlers::upsert_lineup))
         .route("/matches/:id/events", get(handlers::get_events))
         .route("/matches/:id/events", put(handlers::upsert_events))
+        .route("/matches/:id/subs", get(handlers::get_subs))
         .route("/matches/:id/confirm", post(handlers::confirm_match))
         // Upload/OCR pipeline
         .route("/upload_pdf", post(handlers::upload_pdf))

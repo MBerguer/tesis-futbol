@@ -58,3 +58,9 @@ PLAYERS=$(curl -sS "$API/api/players?search=Juan")
 printf "%s\n" "$PLAYERS" | $JQ '.[0:10]'
 PLAYER_COUNT=$(printf "%s\n" "$PLAYERS" | $JQ 'length')
 say "Players matched: $PLAYER_COUNT (showing up to 10)"
+
+
+API=http://localhost:8000
+MID=$(curl -s $API/api/matches | jq -r '.[0].match_id')
+curl -s "$API/api/matches/$MID/lineup" | jq .
+curl -s "$API/api/matches/$MID/subs" | jq .
