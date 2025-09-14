@@ -159,6 +159,7 @@ Update match (includes YouTube link, notes).
 
 • teams: id, name, short_name
 • players: id, full_name, national_id (unique), dob?, current_team_id?, active
+• administrativo (source of truth): "Documento_de_Identidad" (PK, int), "Jugador", ... other administrative fields
 • competitions: id, name, season
 • venues: id, name, city
 • matches: id, date_time, competition_id, venue_id, category, home_team_id, away_team_id, home_score, away_score, youtube_url, notes, source_pdf_hash, parse_confidence
@@ -178,8 +179,8 @@ Indexes/constraints:
 • POST /api/teams; GET /api/teams
 • POST /api/players
 • POST /api/matches; GET /api/matches
-• PUT /api/matches/{id}/lineup → bulk upsert of `match_players` (starters/subs, optional jersey numbers).
-• PUT /api/matches/{id}/events → bulk upsert of events.
+• PUT /api/matches/{id}/lineup → bulk upsert of `match_players` (starters/subs, optional jersey numbers). Player key: Documento_de_Identidad (int)
+• PUT /api/matches/{id}/events → bulk upsert of events. Player fields use Documento_de_Identidad (int)
 • POST /api/matches/{id}/confirm → lock the match after admin review.
 • POST /api/upload_pdf → idempotent by `source_pdf_hash`; returns existing draft if already uploaded.
 • GET /api/uploads/{id}/status → poll background parse/OCR job status.
@@ -229,7 +230,7 @@ Response 200:
 }
 ```
 
-• GET /api/players?search=Juan
+• GET /api/players?search=Juan (reads from administrativo)
 Response 200:
 ```json
 [
@@ -271,12 +272,12 @@ Response 200:
 }
 ```
 
-• PUT /api/matches/{id}/lineup
+• PUT /api/matches/{id}/lineup (Documento_de_Identidad)
 Request:
 ```json
 [
-  { "player_id": "uuid", "team_id": "uuid", "role": "starter", "position": "MF", "jersey_number": null },
-  { "player_id": "uuid", "team_id": "uuid", "role": "sub", "position": "FW", "jersey_number": null }
+  { "player_id": 12345678, "team_id": "uuid", "role": "starter", "position": "MF", "jersey_number": null },
+  { "player_id": 87654321, "team_id": "uuid", "role": "sub", "position": "FW", "jersey_number": null }
 ]
 ```
 Response 200:
@@ -284,13 +285,13 @@ Response 200:
 { "status": "ok" }
 ```
 
-• PUT /api/matches/{id}/events
+• PUT /api/matches/{id}/events (Documento_de_Identidad)
 Request (event_type enum values: goal|pen_goal|own_goal|yellow|second_yellow|red|sub_on|sub_off):
 ```json
 [
-  { "team_id": "uuid", "player_id": "uuid", "minute": 12, "added_time": null, "type": "goal", "assist_player_id": null },
-  { "team_id": "uuid", "player_id": "uuid", "related_player_id": "uuid", "minute": 60, "type": "sub_off" },
-  { "team_id": "uuid", "player_id": "uuid", "minute": 60, "type": "sub_on" }
+  { "team_id": "uuid", "player_id": 12345678, "minute": 12, "added_time": null, "type": "goal", "assist_player_id": null },
+  { "team_id": "uuid", "player_id": 12345678, "related_player_id": 87654321, "minute": 60, "type": "sub_off" },
+  { "team_id": "uuid", "player_id": 87654321, "minute": 60, "type": "sub_on" }
 ]
 ```
 Response 200:

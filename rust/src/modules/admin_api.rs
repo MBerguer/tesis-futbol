@@ -33,40 +33,27 @@ pub async fn list_teams(State(pool): State<Db>) -> Result<Json<Vec<Team>>, (axum
 }
 
 // Players
-#[derive(Deserialize)]
-pub struct PlayerPayload {
-    pub full_name: String,
-    pub national_id: String,
-    pub birthdate: Option<chrono::NaiveDate>,
-    pub current_team_id: Option<Uuid>,
-    pub position: Option<String>,
-}
-
-pub async fn create_player(State(pool): State<Db>, Json(p): Json<PlayerPayload>) -> Result<Json<Player>, (axum::http::StatusCode, String)> {
-    let rec = sqlx::query_as!(
-        Player,
-        r#"INSERT INTO players (player_id, full_name, national_id, birthdate, current_team_id, position, active)
-           VALUES ($1,$2,$3,$4,$5,$6, TRUE)
-           RETURNING player_id, full_name, national_id, birthdate, current_team_id, position, active"#,
-        Uuid::new_v4(), p.full_name, p.national_id, p.birthdate, p.current_team_id, p.position
-    )
-    .fetch_one(&pool)
-    .await
-    .map_err(internal_err)?;
-    Ok(Json(rec))
+// With Administrativo as source of truth, we expose read-only search here.
+pub async fn create_player() -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    Err((axum::http::StatusCode::METHOD_NOT_ALLOWED, "Create via administrativo import".into()))
 }
 
 pub async fn search_players(State(pool): State<Db>, axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>) -> Result<Json<Vec<Player>>, (axum::http::StatusCode, String)> {
     let search = q.get("search").map(|s| format!("%{}%", s)).unwrap_or("%%".to_string());
-    let recs = sqlx::query_as!(
-        Player,
-        r#"SELECT player_id, full_name, national_id, birthdate, current_team_id, position, active
-            FROM players
-            WHERE full_name ILIKE $1 OR national_id ILIKE $1
-            ORDER BY full_name
-        "#,
-        search
+    let recs = sqlx::query_as::<_, Player>(
+        r#"SELECT 
+                "Documento_de_Identidad"      as documento_de_identidad,
+                "Jugador"                      as jugador,
+                NULL::date                      as birthdate,
+                NULL::uuid                      as current_team_id,
+                NULL::text                      as position,
+                NULL::bool                      as active
+           FROM administrativo
+          WHERE "Jugador" ILIKE $1 OR CAST("Documento_de_Identidad" AS TEXT) ILIKE $1
+          ORDER BY "Jugador"
+        "#
     )
+    .bind(search)
     .fetch_all(&pool)
     .await
     .map_err(internal_err)?;
@@ -135,7 +122,7 @@ pub async fn list_matches(State(pool): State<Db>) -> Result<Json<Vec<Match>>, (a
 
 // Lineup bulk upsert
 #[derive(Deserialize)]
-pub struct LineupItem { pub player_id: Uuid, pub team_id: Uuid, pub role: String, pub position: Option<String>, pub jersey_number: Option<i32> }
+pub struct LineupItem { pub player_id: i32, pub team_id: Uuid, pub role: String, pub position: Option<String>, pub jersey_number: Option<i32> }
 pub async fn upsert_lineup(State(pool): State<Db>, Path(id): Path<Uuid>, Json(items): Json<Vec<LineupItem>>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     let mut tx = pool.begin().await.map_err(internal_err)?;
     // simplify: delete and insert
@@ -156,12 +143,12 @@ pub async fn upsert_lineup(State(pool): State<Db>, Path(id): Path<Uuid>, Json(it
 #[derive(Deserialize)]
 pub struct EventItem {
     pub team_id: Uuid,
-    pub player_id: Option<Uuid>,
-    pub related_player_id: Option<Uuid>,
+    pub player_id: Option<i32>,
+    pub related_player_id: Option<i32>,
     pub minute: i32,
     pub added_time: Option<i32>,
     pub r#type: EventType,
-    pub assist_player_id: Option<Uuid>,
+    pub assist_player_id: Option<i32>,
     pub reason: Option<String>,
 }
 pub async fn upsert_events(State(pool): State<Db>, Path(id): Path<Uuid>, Json(items): Json<Vec<EventItem>>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {

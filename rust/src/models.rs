@@ -41,13 +41,13 @@ pub struct Venue {
 
 #[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
 pub struct Player {
-    pub player_id: Uuid,
-    pub full_name: String,
-    pub national_id: String,
+    // Adapted to administrativo table (Documento_de_Identidad as int)
+    pub documento_de_identidad: i32,
+    pub jugador: Option<String>,
     pub birthdate: Option<NaiveDate>,
     pub current_team_id: Option<Uuid>,
     pub position: Option<String>,
-    pub active: bool,
+    pub active: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
@@ -72,7 +72,7 @@ pub struct MatchPlayer {
     pub match_player_id: Uuid,
     pub match_id: Uuid,
     pub team_id: Uuid,
-    pub player_id: Uuid,
+    pub player_id: i32, // references administrativo.Documento_de_Identidad
     pub role: String,                 // 'starter' | 'sub'
     pub position: Option<String>,
     pub jersey_number: Option<i32>,   // youth jerseys rotate; optional
@@ -83,12 +83,12 @@ pub struct Event {
     pub event_id: Uuid,
     pub match_id: Uuid,
     pub team_id: Uuid,
-    pub player_id: Option<Uuid>,
-    pub related_player_id: Option<Uuid>,
+    pub player_id: Option<i32>,
+    pub related_player_id: Option<i32>,
     pub minute: i32,
     pub added_time: Option<i32>,
     pub r#type: EventType,
-    pub assist_player_id: Option<Uuid>,
+    pub assist_player_id: Option<i32>,
     pub reason: Option<String>,
     pub data_json: Option<JsonValue>,
 }
