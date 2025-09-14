@@ -40,10 +40,23 @@ pub async fn create_player() -> Result<Json<serde_json::Value>, (axum::http::Sta
 
 pub async fn search_players(State(pool): State<Db>, axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>) -> Result<Json<Vec<Player>>, (axum::http::StatusCode, String)> {
     let search = q.get("search").map(|s| format!("%{}%", s)).unwrap_or("%%".to_string());
-    let recs = sqlx::query_as::<_, Player>(
+    let recs = sqlx::query_as!(
+        Player,
         r#"SELECT 
                 "Documento_de_Identidad"      as documento_de_identidad,
-                "Jugador"                      as jugador,
+                "Jugador"                      as "jugador?",
+                "Fecha_Nacimiento"            as "fecha_nacimiento?",
+                "Pasaporte"                    as "pasaporte?",
+                "Telefono"                     as "telefono?",
+                "Celular"                      as "celular?",
+                "Email"                        as "email?",
+                "Cobertura_Medica"            as "cobertura_medica?",
+                "Estudios"                     as "estudios?",
+                "Oriundo"                      as "oriundo?",
+                "Club_de_Origen"              as "club_de_origen?",
+                "Club_de_Origen_Porcentaje"   as "club_de_origen_porcentaje?",
+                "Posicion"                     as "posicion?",
+                nombre                          as "nombre?",
                 NULL::date                      as birthdate,
                 NULL::uuid                      as current_team_id,
                 NULL::text                      as position,
@@ -51,9 +64,9 @@ pub async fn search_players(State(pool): State<Db>, axum::extract::Query(q): axu
            FROM administrativo
           WHERE "Jugador" ILIKE $1 OR CAST("Documento_de_Identidad" AS TEXT) ILIKE $1
           ORDER BY "Jugador"
-        "#
+        "#,
+        search
     )
-    .bind(search)
     .fetch_all(&pool)
     .await
     .map_err(internal_err)?;

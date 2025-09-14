@@ -44,6 +44,20 @@ pub struct Player {
     // Adapted to administrativo table (Documento_de_Identidad as int)
     pub documento_de_identidad: i32,
     pub jugador: Option<String>,
+    // administrative raw fields (stored as text in DB)
+    pub fecha_nacimiento: Option<String>,
+    pub pasaporte: Option<String>,
+    pub telefono: Option<String>,
+    pub celular: Option<String>,
+    pub email: Option<String>,
+    pub cobertura_medica: Option<String>,
+    pub estudios: Option<String>,
+    pub oriundo: Option<String>,
+    pub club_de_origen: Option<String>,
+    pub club_de_origen_porcentaje: Option<String>,
+    pub posicion: Option<String>,
+    pub nombre: Option<String>,
+    // legacy optional fields for compatibility
     pub birthdate: Option<NaiveDate>,
     pub current_team_id: Option<Uuid>,
     pub position: Option<String>,
