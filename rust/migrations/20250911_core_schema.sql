@@ -101,9 +101,3 @@ CREATE INDEX IF NOT EXISTS idx_events_match ON events(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_players_match ON match_players(match_id);
 
 
-
-
-
-
-
-
