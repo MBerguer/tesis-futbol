@@ -47,3 +47,4 @@ export default function WorstCasesTable({ data, highlightedPlayer }: WorstCasesT
 }
 
 
+

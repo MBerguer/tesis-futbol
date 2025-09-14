@@ -42,3 +42,4 @@ export default function StadiumMap({ latitude, longitude, zoom = 15, styleUrl }:
 }
 
 
+

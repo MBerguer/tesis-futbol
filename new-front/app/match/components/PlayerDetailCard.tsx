@@ -168,3 +168,4 @@ function PlayerDetailCardBase({
 export default React.memo(PlayerDetailCardBase);
 
 
+

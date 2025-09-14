@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import YouTubeVideo from "./YouTubeVideo";
-import VideoComponent from "../../videoComponent";
+import VideoComponent from "./videoComponent";
 
 export default function UnifiedVideo({
   videoUrl,
@@ -42,5 +42,6 @@ export default function UnifiedVideo({
   }
   return <VideoComponent onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} />;
 }
+
 
 

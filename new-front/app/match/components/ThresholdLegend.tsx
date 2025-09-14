@@ -30,3 +30,4 @@ export default function ThresholdLegend({ thresholds, vertical, inChart, classNa
 }
 
 
+
