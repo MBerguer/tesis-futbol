@@ -1,5 +1,5 @@
 use axum::{extract::{Path, State}, Json};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -201,6 +201,122 @@ pub async fn upload_status(Path(_id): Path<Uuid>) -> Json<serde_json::Value> { J
 
 fn internal_err<E: std::fmt::Display>(e: E) -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+}
+
+// Read-only: get lineup for a match
+pub async fn get_lineup(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let rows = sqlx::query!(
+        r#"SELECT 
+              mp.match_player_id,
+              mp.match_id,
+              mp.team_id,
+              t.name AS team_name,
+              mp.player_id,
+              a."Jugador" as jugador,
+              mp.role,
+              mp.position,
+              mp.jersey_number
+           FROM match_players mp
+           JOIN teams t ON t.team_id = mp.team_id
+           LEFT JOIN administrativo a ON a."Documento_de_Identidad" = mp.player_id
+          WHERE mp.match_id = $1
+          ORDER BY (CASE WHEN mp.role = 'starter' THEN 0 ELSE 1 END), a."Jugador" NULLS LAST, mp.match_player_id"#,
+        id
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(internal_err)?;
+
+    let data: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|r| json!({
+            "match_player_id": r.match_player_id,
+            "match_id": r.match_id,
+            "team_id": r.team_id,
+            "team_name": r.team_name,
+            "player_id": r.player_id,
+            "jugador": r.jugador,
+            "role": r.role,
+            "position": r.position,
+            "jersey_number": r.jersey_number
+        }))
+        .collect();
+    Ok(Json(json!({"lineup": data})))
+}
+
+// Read-only: get events for a match
+pub async fn get_events(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    #[derive(Debug)]
+    struct EventRow {
+        event_id: Uuid,
+        match_id: Uuid,
+        team_id: Uuid,
+        team_name: String,
+        player_id: Option<i32>,
+        jugador: Option<String>,
+        related_player_id: Option<i32>,
+        related_jugador: Option<String>,
+        minute: i32,
+        added_time: Option<i32>,
+        etype: EventType,
+        assist_player_id: Option<i32>,
+        assist_jugador: Option<String>,
+        reason: Option<String>,
+        data_json: Option<serde_json::Value>,
+    }
+
+    let rows = sqlx::query_as!(
+        EventRow,
+        r#"SELECT 
+              e.event_id,
+              e.match_id,
+              e.team_id,
+              t.name as team_name,
+              e.player_id,
+              ap."Jugador" as jugador,
+              e.related_player_id,
+              ar."Jugador" as related_jugador,
+              e.minute,
+              e.added_time,
+              e.type as "etype: EventType",
+              e.assist_player_id,
+              aa."Jugador" as assist_jugador,
+              e.reason,
+              e.data_json
+           FROM events e
+           JOIN teams t ON t.team_id = e.team_id
+           LEFT JOIN administrativo ap ON ap."Documento_de_Identidad" = e.player_id
+           LEFT JOIN administrativo ar ON ar."Documento_de_Identidad" = e.related_player_id
+           LEFT JOIN administrativo aa ON aa."Documento_de_Identidad" = e.assist_player_id
+          WHERE e.match_id = $1
+          ORDER BY e.minute, e.added_time NULLS LAST, e.event_id"#,
+        id
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(internal_err)?;
+
+    let data: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|r| json!({
+            "event_id": r.event_id,
+            "match_id": r.match_id,
+            "team_id": r.team_id,
+            "team_name": r.team_name,
+            "player_id": r.player_id,
+            "jugador": r.jugador,
+            "related_player_id": r.related_player_id,
+            "related_jugador": r.related_jugador,
+            "minute": r.minute,
+            "added_time": r.added_time,
+            "type": r.etype,
+            "assist_player_id": r.assist_player_id,
+            "assist_jugador": r.assist_jugador,
+            "reason": r.reason,
+            "data_json": r.data_json
+        }))
+        .collect();
+    Ok(Json(json!({"events": data})))
 }
 
 
