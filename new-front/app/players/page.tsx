@@ -1,415 +1,136 @@
 "use client";
 
-import React, { useState } from "react";
-import personsData from "./data/merged_data.json"; // Import local JSON file
+import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
+import { Badge } from "./components/ui/badge";
+import { Separator } from "./components/ui/separator";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
+import { Mail, Phone, User, Ruler, Activity } from "lucide-react";
 
-import { CardTitle, CardHeader, CardContent, Card } from "./components/ui/card";
-import { AvatarImage, AvatarFallback, Avatar } from "./components/ui/avatar";
-import { Button } from "./components/ui/button";
-import { Key } from "react";
-import {
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ComposedChart,
-} from "recharts";
-import { BarChart, Bar, Legend } from "recharts";
-
-interface Person {
-  id: Key;
-  nombre: string;
-  path_foto: string | undefined;
-  categoria: string | undefined;
-  alias: string | undefined;
-  edad: number | undefined;
-  personalMetrics: string | undefined;
-  masaF0: string | undefined;
-  sumatoriaPliegues: string | undefined;
-  relacionMusculoHueso: string | undefined;
-  Jugador: string | undefined;
-  Fecha_Nacimiento: string | undefined;
-  Documento_de_Identidad: number | undefined | null;
-  Pasaporte: string | undefined;
-  Telefono: string | undefined;
-  Celular: string | undefined;
-  Email: string | undefined;
-  Cobertura_Medica: string | undefined;
-  Estudios: string | undefined;
-  Oriundo: string | undefined;
-  Club_de_Origen: string | undefined;
-  Club_de_Origen_Porcentaje: string | undefined;
-  Posicion: string | undefined;
-}
-
-const data = [
-  { name: "Page A", uv: 400, pv: 2400, amt: 2400 },
-  { name: "Page B", uv: 300, pv: 1398, amt: 2210 },
-  // Agrega más datos aquí
-];
-
-const databloque = [
-  { day: "-5", distanciaTotal: 5709, distanciaHML: 801, promedioHSR: 213 },
-  { day: "-4", distanciaTotal: 5008, distanciaHML: 595, promedioHSR: 151 },
-  { day: "-3", distanciaTotal: 4981, distanciaHML: 686, promedioHSR: 159 },
-  { day: "-2", distanciaTotal: 5201, distanciaHML: 552, promedioHSR: 185 },
-  { day: "-1", distanciaTotal: 2751, distanciaHML: 250, promedioHSR: 36 },
-  // Agrega más datos aquí
-];
-
-// calc age
-function calcAge(birthDate: string) {
-  const today = new Date();
-  const birth = new Date(
-    birthDate.replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$2/$1/$3")
-  );
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  return age;
-}
-
-export default function Page() {
-  const [persons, setPersons] = useState<Person[]>(personsData);
-
-  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
-  const handlePersonClick = (person: Person) => {
-    setSelectedPerson(person);
+export default function PlayerProfile() {
+  // Ejemplo de datos (usar los que tienes en el PDF)
+  const player = {
+    name: "Acosta Facundo",
+    alias: "facundo acosta",
+    edad: 19,
+    fechaNacimiento: "15/04/2006",
+    documento: "55862728",
+    celular: "94677431",
+    email: "facundoacosta.conve10@gmail.com",
+    posicion: "Lateral Izquierdo",
+    masaPliegues: "F0 - Sumatoria 6 pliegues",
+    relacionMH: "Relación músculo-hueso",
+    salto: "Medición salto (curva y=x²)",
+    distanciaMax: "4013 m",
+    hsrMax: "1653 m",
+    velocidadMax: "27 km/h",
+    highMetabDist: "z6",
   };
+
+  const rendimiento = [
+    { name: "Page A", hsr: 100, distancia: 220 },
+    { name: "Page B", hsr: 200, distancia: 300 },
+  ];
+
+  const bloqueAdq = [
+    { factor: "Recuperación", valor: -5 },
+    { factor: "Tensión", valor: -4 },
+    { factor: "Duración", valor: -3 },
+    { factor: "Velocidad", valor: -2 },
+    { factor: "Bajo HSR", valor: -1 },
+  ];
+
   return (
-    <main className="flex flex-col lg:flex-row gap-6 p-4">
-      <aside className="w-full lg:w-1/4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Plantel</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-screen overflow-y-auto">
-              <ul className="space-y-4">
-                {persons.map((person: Person) => (
-                  <li key={person.id}>
-                    <Button
-                      className="flex items-center gap-2"
-                      onClick={() => handlePersonClick(person)}
-                    >
-                      <Avatar className="h-6 w-6">
-                        <AvatarImage
-                          alt={person.nombre}
-                          src={person.path_foto}
-                        />
-                        <AvatarFallback>{person.nombre[0]} </AvatarFallback>
-                      </Avatar>
-                      <span>
-                        {person.Jugador} ({person.categoria})
-                      </span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
-      </aside>
-      <section className="w-full lg:w-3/4">
-        {selectedPerson && (
+    <div className="p-6 space-y-6">
+      {/* Encabezado */}
+      <Card className="rounded-2xl shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold flex items-center gap-2">
+            <User className="w-6 h-6 text-blue-500" />
+            {player.name}{" "}
+            <Badge variant="secondary" className="ml-2">{player.posicion}</Badge>
+          </CardTitle>
+          <p className="text-muted-foreground">Alias: {player.alias}</p>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <p><strong>Edad:</strong> {player.edad}</p>
+            <p><strong>Fecha Nacimiento:</strong> {player.fechaNacimiento}</p>
+            <p><strong>Documento:</strong> {player.documento}</p>
+          </div>
+          <div>
+            <p className="flex items-center gap-2"><Phone size={16}/> {player.celular}</p>
+            <p className="flex items-center gap-2"><Mail size={16}/> {player.email}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tabs de información */}
+      <Tabs defaultValue="fisico" className="w-full">
+        <TabsList className="grid grid-cols-3 w-full">
+          <TabsTrigger value="fisico">Mediciones</TabsTrigger>
+          <TabsTrigger value="rendimiento">Rendimiento</TabsTrigger>
+          <TabsTrigger value="adq">Bloque Adquisición</TabsTrigger>
+        </TabsList>
+
+        {/* Mediciones físicas */}
+        <TabsContent value="fisico">
           <Card>
             <CardHeader>
-              <CardTitle>
-                {selectedPerson.nombre} /
-                <a href="/equipo">{selectedPerson.categoria}</a>
-              </CardTitle>
+              <CardTitle>Mediciones Físicas</CardTitle>
             </CardHeader>
-            <CardContent className="flex items-start">
-              <div className="w-1/4">
-                <Avatar className="h-96 w-full">
-                  <AvatarImage
-                    alt="Selected Person"
-                    src={selectedPerson.path_foto}
-                  />
-                  <AvatarFallback>{selectedPerson.nombre[0]}</AvatarFallback>
-                </Avatar>
-              </div>
-              <div className="ml-4">
-                <h2 className="mt-4 text-xl font-semibold">
-                  {selectedPerson.Jugador}
-                </h2>
-                <p>Alias: {selectedPerson.nombre}</p>
-                <p>
-                  Edad:{" "}
-                  {selectedPerson.Fecha_Nacimiento &&
-                    calcAge(selectedPerson.Fecha_Nacimiento)}
-                </p>
-                <p>Medidas personales: {selectedPerson.personalMetrics}</p>
-                <p>Fecha_Nacimiento: {selectedPerson.Fecha_Nacimiento}</p>
-                <p>
-                  Documento_de_Identidad:{" "}
-                  {selectedPerson.Documento_de_Identidad}
-                </p>
-                <p>Pasaporte: {selectedPerson.Pasaporte}</p>
-                <p>Telefono: {selectedPerson.Telefono}</p>
-                <p>Celular: {selectedPerson.Celular}</p>
-                <p>Email: {selectedPerson.Email}</p>
-                <p>Cobertura_Medica: {selectedPerson.Cobertura_Medica}</p>
-                <p>Estudios: {selectedPerson.Estudios}</p>
-                <p>Oriundo: {selectedPerson.Oriundo}</p>
-                <p>Club_de_Origen: {selectedPerson.Club_de_Origen}</p>
-                <p>
-                  Club_de_Origen_Porcentaje:{" "}
-                  {selectedPerson.Club_de_Origen_Porcentaje}
-                </p>
-                <p>Posicion: {selectedPerson.Posicion}</p>
-              </div>
-            </CardContent>
-            <CardContent className="w-full mt-6">
-              <div className="justify-between">
-                <div className="flex gap-4">
-                  <Card className="w-full lg:w-1/3 bg-blue-200">
-                    <CardContent>
-                      <h2 className="text-2xl font-bold">Masa F0</h2>
-                      <p className="text-4xl font-bold">
-                        {selectedPerson?.masaF0}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="w-full lg:w-1/3 bg-green-200">
-                    <CardContent>
-                      <h2 className="text-2xl font-bold">
-                        Sumatoria de 6 Pliegues
-                      </h2>
-                      <p className="text-4xl font-bold">
-                        {selectedPerson?.sumatoriaPliegues}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="w-full lg:w-1/3 bg-yellow-200">
-                    <CardContent>
-                      <h2 className="text-2xl font-bold">
-                        Relación Musculo-Hueso
-                      </h2>
-                      <p className="text-4xl font-bold">
-                        {selectedPerson?.relacionMusculoHueso}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </CardContent>
-            <CardContent className="w-full mt-6">
-              <h2 className="text-2xl font-bold">Medición del Salto</h2>
-              <div className="flex gap-4">
-                <Card className="w-full lg:w-1/2">
-                  <CardContent>
-                    <h3 className="text-lg font-semibold my-4">
-                      Curva: y = x^2
-                    </h3>
-                    <LineChart width={400} height={300} data={data}>
-                      <Line type="monotone" dataKey="uv" stroke="#8884d8" />
-                      <CartesianGrid stroke="#ccc" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                    </LineChart>
-                  </CardContent>
-                </Card>
-                <Card className="w-full lg:w-1/2">
-                  <CardContent>
-                    <h3 className="text-lg font-semibold my-4">
-                      Gráfica de Barras
-                    </h3>
-                    <BarChart
-                      width={400}
-                      height={300}
-                      data={data}
-                      layout="vertical"
-                      margin={{
-                        top: 5,
-                        right: 30,
-                        left: 20,
-                        bottom: 5,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="name" type="category" />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="pv" fill="#8884d8" />
-                    </BarChart>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-
-            <CardContent className="w-full mt-6">
-              <div className="justify-between">
-                <div className="flex gap-4">
-                  <Card className="w-full lg:w-1/5 bg-red-200">
-                    <CardContent
-                      className="py-[5px] flex h-full"
-                      style={{ flexFlow: "wrap row" }}
-                    >
-                      <div>
-                        <h2 className="text-xl font-bold">Max. Dist</h2>
-                        <p className="text-2xl font-bold">4013m</p>
-                      </div>
-                      <a
-                        href="/match"
-                        className="text-blue-600"
-                        style={{
-                          display: "inline-block",
-                          alignSelf: "flex-end",
-                        }}
-                      >
-                        2 Nac : Rac 3
-                      </a>
-                    </CardContent>
-                  </Card>
-                  <Card className="w-full lg:w-1/5 bg-blue-200">
-                    <CardContent
-                      className="py-[5px] flex h-full"
-                      style={{ flexFlow: "wrap row" }}
-                    >
-                      <div>
-                        <h2 className="text-xl font-bold">HSR Max</h2>
-                        <p className="text-2xl font-bold">1653m</p>
-                      </div>
-                      <a
-                        href="#"
-                        className="text-blue-600"
-                        style={{
-                          display: "inline-block",
-                          alignSelf: "flex-end",
-                        }}
-                      >
-                        2 Nac : Rac 3
-                      </a>
-                    </CardContent>
-                  </Card>
-                  <Card className="w-full lg:w-1/5 bg-green-200">
-                    <CardContent
-                      className="py-[5px] flex h-full"
-                      style={{ flexFlow: "wrap row" }}
-                    >
-                      <div>
-                        <h2 className="text-xl font-bold">Velocidad Max.</h2>
-                        <p className="text-2xl font-bold">27 km/h</p>
-                      </div>
-                      <a
-                        href="#"
-                        className="text-blue-600"
-                        style={{
-                          display: "inline-block",
-                          alignSelf: "flex-end",
-                        }}
-                      >
-                        2 Nac : Rac 3
-                      </a>
-                    </CardContent>
-                  </Card>
-                  <Card className="w-full lg:w-1/5 bg-yellow-200">
-                    <CardContent
-                      className="py-[5px] flex h-full"
-                      style={{ flexFlow: "wrap row" }}
-                    >
-                      <div>
-                        <h2 className="text-xl font-bold">High Metab. Dist.</h2>
-                        <p className="text-2xl font-bold">550 m</p>
-                      </div>
-                      <a
-                        href="#"
-                        className="text-blue-600"
-                        style={{
-                          display: "inline-block",
-                          alignSelf: "flex-end",
-                        }}
-                      >
-                        2 Nac : Rac 3
-                      </a>
-                    </CardContent>
-                  </Card>
-                  <Card className="w-full lg:w-1/5 bg-purple-200">
-                    <CardContent
-                      className="py-[5px] flex h-full"
-                      style={{ flexFlow: "wrap row" }}
-                    >
-                      <div>
-                        <h2 className="text-xl font-bold">z6</h2>
-                        <p className="text-2xl font-bold">15" (229m)</p>
-                      </div>
-                      <a
-                        href="#"
-                        className="text-blue-600"
-                        style={{
-                          display: "inline-block",
-                          alignSelf: "flex-end",
-                        }}
-                      >
-                        2 Nac : Rac 3
-                      </a>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </CardContent>
-
-            <CardContent className="w-full mt-6">
-              <h2 className="text-2xl font-bold">
-                Bloque de Adquisicion del jugador
-              </h2>
-              <div className="flex gap-4">
-                <Card className="w-full">
-                  <CardContent>
-                    <h3 className="text-lg font-semibold my-4">
-                      Recuperacion (-5), Tension (-4), Duracion (-3), Velocidad
-                      (-2), Bajo HSR (-1)
-                    </h3>
-                    <ComposedChart width={1000} height={500} data={databloque}>
-                      {/* { day: "-5", distanciaTotal: 5709, distanciaHML: 801 }, */}
-                      <XAxis dataKey="day" />
-                      <YAxis
-                        yAxisId={1}
-                        orientation="right"
-                        label={{ value: "Distancia Total", angle: -90 }}
-                      />
-                      <Tooltip />
-                      <Legend />
-                      <CartesianGrid stroke="#f5f5f5" />
-                      <Bar
-                        yAxisId={1}
-                        dataKey="distanciaTotal"
-                        barSize={40}
-                        fill="#413ea0"
-                      />
-                      <Bar
-                        yAxisId={1}
-                        dataKey="distanciaHML"
-                        barSize={40}
-                        fill="#049be5"
-                      />
-                      <YAxis
-                        yAxisId={2}
-                        label={{ value: "Promedio HSR", angle: -90 }}
-                        padding={{ top: 200, bottom: 20 }}
-                      />
-                      <Line
-                        yAxisId={2}
-                        type="monotone"
-                        dataKey="promedioHSR"
-                        stroke="#000"
-                        dot={true}
-                      />
-                    </ComposedChart>
-                  </CardContent>
-                </Card>
-              </div>
+            <CardContent className="space-y-2">
+              <p><Ruler className="inline-block w-4 h-4 mr-2 text-green-500"/>{player.masaPliegues}</p>
+              <p>{player.relacionMH}</p>
+              <p>{player.salto}</p>
             </CardContent>
           </Card>
-        )}
-      </section>
-    </main>
+        </TabsContent>
+
+        {/* Rendimiento */}
+        <TabsContent value="rendimiento">
+          <Card>
+            <CardHeader>
+              <CardTitle>Rendimiento en Campo</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p><Activity className="inline-block w-4 h-4 mr-2 text-red-500"/>Distancia Máx: {player.distanciaMax}</p>
+              <p>HSR Máx: {player.hsrMax}</p>
+              <p>Velocidad Máx: {player.velocidadMax}</p>
+              <p>High Metabolic Dist: {player.highMetabDist}</p>
+              <Separator className="my-2"/>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={rendimiento}>
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="hsr" fill="#2563eb" name="HSR" />
+                  <Bar dataKey="distancia" fill="#16a34a" name="Distancia" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Bloque adquisición */}
+        <TabsContent value="adq">
+          <Card>
+            <CardHeader>
+              <CardTitle>Bloque de Adquisición</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={bloqueAdq}>
+                  <XAxis dataKey="factor"/>
+                  <YAxis />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="valor" stroke="#f97316" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }

@@ -10,16 +10,18 @@
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.0.4",
-    "class-variance-authority": "^0.7.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "framer-motion": "^12.23.12",
-    "lucide-react": "^0.543.0",
+    "lucide-react": "^0.544.0",
     "maplibre-gl": "^3.6.2",
     "next": "^14.2.13",
     "radix-ui": "^1.0.1",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^2.15.3",
-    "tailwind-merge": "^2.2.1"
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@types/node": "^20",

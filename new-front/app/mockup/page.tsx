@@ -23,7 +23,7 @@ import {
   Users2,
 } from "lucide-react";
 
-// Minimal local UI stubs to avoid missing shadcn imports
+// Minimal local UI stubs to avoid missing npx shadcn@latest init imports
 function Badge({ className = "", children, variant }: any) {
   return <span className={`inline-flex items-center rounded-md border border-zinc-800 bg-zinc-900/40 px-2 py-0.5 text-xs ${className}`}>{children}</span>;
 }
