@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import personsData from "./data/merged_data.json";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -22,7 +21,30 @@ import {
   Legend,
 } from "recharts";
 
-type Person = (typeof personsData)[number];
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+type Person = {
+  id?: number;
+  Documento_de_Identidad?: number;
+  Jugador?: string | null;
+  nombre?: string | null;
+  Posicion?: string | null;
+  Fecha_Nacimiento?: string | null;
+  Pasaporte?: string | null;
+  Telefono?: string | null;
+  Celular?: string | null;
+  Email?: string | null;
+  Cobertura_Medica?: string | null;
+  Estudios?: string | null;
+  Oriundo?: string | null;
+  Club_de_Origen?: string | null;
+  Club_de_Origen_Porcentaje?: string | null;
+  path_foto?: string | null;
+  personalMetrics?: string | null;
+  masaF0?: string | number | null;
+  sumatoriaPliegues?: string | number | null;
+  relacionMusculoHueso?: string | number | null;
+};
 
 const rendimiento = [
   { name: "A", hsr: 100, distancia: 220 },
@@ -51,21 +73,33 @@ function calcAge(birthDate?: string | null) {
 export default function Page() {
   const [selectedPerson, setSelectedPerson] = React.useState<Person | null>(null);
   const [filter, setFilter] = React.useState<string>("");
-  const [selectedCategory, setSelectedCategory] = React.useState<string>("sub19");
-
-  const persons = React.useMemo(() => personsData as Person[], []);
-  const categories = React.useMemo(() => {
-    const set = new Set<string>();
-    (persons as Person[]).forEach(p => { if (p.categoria) set.add((p.categoria as string).toLowerCase()); });
-    return Array.from(set).sort((a,b)=>a.localeCompare(b));
-  }, [persons]);
+  const [persons, setPersons] = React.useState<Person[]>([]);
   const list = React.useMemo(() => {
     const f = filter.trim().toLowerCase();
-    let arr = persons as Person[];
-    if (selectedCategory) arr = arr.filter(p => (p.categoria || "").toLowerCase() === selectedCategory);
-    if (!f) return arr;
-    return arr.filter(p => `${p.Jugador} ${p.nombre} ${p.categoria} ${p.Posicion}`.toLowerCase().includes(f));
-  }, [persons, filter, selectedCategory]);
+    if (!f) return persons;
+    return persons.filter(p => `${p.Jugador ?? ""} ${p.nombre ?? ""} ${p.Posicion ?? ""}`.toLowerCase().includes(f));
+  }, [persons, filter]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/players/active?limit_matches=20`, { cache: "no-store" });
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) {
+          const normalized: Person[] = data.map((p: any) => ({
+            ...p,
+            id: p.id ?? p.Documento_de_Identidad ?? undefined,
+          }));
+          setPersons(normalized);
+          if (normalized.length > 0) setSelectedPerson(normalized[0]);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Select first player by default on initial load
   React.useEffect(() => {
@@ -86,34 +120,10 @@ export default function Page() {
       <aside className="w-full lg:w-1/4">
         <Card className="bg-zinc-900/50 border-zinc-800">
           <CardHeader>
-            <CardTitle>Plantel</CardTitle>
+            <CardTitle>Active Players (our study)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="sticky top-0 z-10 mb-3 space-y-2">
-              <div className="flex flex-wrap gap-2">
-                {categories.map((cat)=>{
-                  const active = selectedCategory === cat;
-                  const label = cat;
-                  return (
-                    <Button
-                      key={cat}
-                      size="sm"
-                      variant={active?"default":"ghost"}
-                      className={`capitalize ${active?"bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40":"border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60 text-zinc-200"}`}
-                      onClick={()=> setSelectedCategory(cat)}>
-                      {label}
-                    </Button>
-                  );
-                })}
-                <Button
-                  size="sm"
-                  variant={selectedCategory?"ghost":"default"}
-                  className={`${selectedCategory?"border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60 text-zinc-200":"bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40"}`}
-                  onClick={()=>setSelectedCategory("")}
-                >
-                  Todos
-                </Button>
-              </div>
               <input
                 type="text"
                 placeholder="Buscar jugador…"
@@ -125,7 +135,7 @@ export default function Page() {
             <div className="h-[70vh] overflow-y-auto pr-1">
               <ul className="space-y-2">
                 {list.map((person) => (
-                  <li key={person.id as any}>
+                  <li key={(person.Documento_de_Identidad ?? person.id ?? Math.random()).toString()}>
                     <Button
                       variant={selectedPerson?.id === person.id ? "secondary" : "ghost"}
                       size="sm"
@@ -133,14 +143,13 @@ export default function Page() {
                       onClick={() => setSelectedPerson(person)}
                     >
                       <Avatar className="h-7 w-7">
-                        <AvatarImage alt={person.Jugador} src={person.path_foto || undefined} />
+                        <AvatarImage alt={person.Jugador ?? undefined} src={person.path_foto || undefined} />
                         <AvatarFallback>{(person.Jugador || person.nombre || "?").slice(0,1)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 text-left">
                         <div className="text-sm truncate">{person.Jugador || person.nombre}</div>
                         <div className="text-[11px] text-zinc-400 truncate">{person.Posicion || "—"}</div>
                       </div>
-                      <Badge variant="outline" className="ml-auto capitalize border-zinc-700 bg-zinc-900/60 text-zinc-200">{person.categoria || ""}</Badge>
                     </Button>
                   </li>
                 ))}
@@ -159,13 +168,12 @@ export default function Page() {
               <CardTitle className="flex items-center gap-3">
                 <User className="w-5 h-5" />
                 <span className="truncate">{selectedPerson.Jugador || selectedPerson.nombre}</span>
-                <Badge variant="secondary" className="ml-2 capitalize">{selectedPerson.categoria || ""}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col md:flex-row gap-6">
               <div className="md:w-1/3">
                 <Avatar className="w-full h-auto rounded-md overflow-hidden">
-                  <AvatarImage alt={selectedPerson.Jugador} src={selectedPerson.path_foto || undefined} className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
+                  <AvatarImage alt={selectedPerson.Jugador ?? undefined} src={selectedPerson.path_foto || undefined} className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
                   <AvatarFallback className="h-72 text-3xl">{(selectedPerson.Jugador || selectedPerson.nombre || "?").slice(0,1)}</AvatarFallback>
                 </Avatar>
               </div>

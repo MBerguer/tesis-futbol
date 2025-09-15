@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import personsData from "./data/merged_data.json"; // Import local JSON file
+import React from "react";
+import personsData from "./data/merged_data.json"; // local JSON
 
-import { CardTitle, CardHeader, CardContent, Card } from "./components/ui/card";
-import { AvatarImage, AvatarFallback, Avatar } from "./components/ui/avatar";
-import { Button } from "./components/ui/button";
-import { Key } from "react";
+import { CardTitle, CardHeader, CardContent, Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   ComposedChart,
   Line,
@@ -14,33 +12,16 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  ResponsiveContainer,
 } from "recharts";
-import { BarChart, Bar, Legend } from "recharts";
 
 interface Person {
-  id: Key;
+  id: React.Key;
   nombre: string;
-  path_foto: string | undefined;
-  categoria: string | undefined;
-  alias: string | undefined;
-  edad: number | undefined;
-  personalMetrics: string | undefined;
-  masaF0: string | undefined;
-  sumatoriaPliegues: string | undefined;
-  relacionMusculoHueso: string | undefined;
-  Jugador: string | undefined;
-  Fecha_Nacimiento: string | undefined;
-  Documento_de_Identidad: number | undefined | null;
-  Pasaporte: string | undefined;
-  Telefono: string | undefined;
-  Celular: string | undefined;
-  Email: string | undefined;
-  Cobertura_Medica: string | undefined;
-  Estudios: string | undefined;
-  Oriundo: string | undefined;
-  Club_de_Origen: string | undefined;
-  Club_de_Origen_Porcentaje: string | undefined;
-  Posicion: string | undefined;
+  categoria?: string;
 }
 
 const databloque = [
@@ -49,7 +30,6 @@ const databloque = [
   { day: "-3", distanciaTotal: 4981, distanciaHML: 686, promedioHSR: 159 },
   { day: "-2", distanciaTotal: 5201, distanciaHML: 552, promedioHSR: 185 },
   { day: "-1", distanciaTotal: 2751, distanciaHML: 250, promedioHSR: 36 },
-  // Agrega más datos aquí
 ];
 
 const data = [
@@ -65,198 +45,126 @@ const data = [
 ];
 
 export default function Page() {
-  const [persons, setPersons] = useState<Person[]>(personsData);
+  const persons = React.useMemo(() => personsData as unknown as Person[], []);
+  const categories = React.useMemo(() => {
+    const set = new Set<string>();
+    persons.forEach(p => { if (p.categoria) set.add((p.categoria as string).toLowerCase()); });
+    return Array.from(set).sort((a,b)=>a.localeCompare(b));
+  }, [persons]);
 
-  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
-  const handlePersonClick = (person: Person) => {
-    setSelectedPerson(person);
-  };
-
-  const [domLoaded, setDomLoaded] = useState(false);
-
-  useEffect(() => {
-    setDomLoaded(true);
-  }, []);
+  const [selectedCategory, setSelectedCategory] = React.useState<string>("sub19");
 
   return (
-    <main className="flex flex-col lg:flex-row gap-6 p-4">
-      <aside className="w-full lg:w-1/4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Menu</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-screen overflow-y-auto">
-              <ul className="space-y-4">
-                <li>
-                  <a href="/dashboard" className="text-blue-600">
-                    {" "}
-                    Dashboard
-                  </a>
-                </li>
-                <li>
-                  <a href="/match" className="text-blue-600">
-                    {" "}
-                    Club Nacional de futbol
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
-      </aside>
-      <section className="w-full lg:w-3/4">
-        <Card>
-          {domLoaded && (
-            <CardContent className="w-full mt-6">
-              <h1 className="text-2xl font-bold mb-2">
-                Análisis por categoria
-              </h1>
+    <main className="p-4 space-y-6">
+      <Card className="bg-zinc-900/50 border-zinc-800">
+        <CardHeader>
+          <CardTitle>Preparación del fin de semana</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {categories.map((cat)=>{
+              const active = selectedCategory === cat;
+              return (
+                <Button
+                  key={cat}
+                  size="sm"
+                  variant={active?"default":"ghost"}
+                  className={`${active?"bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40":"border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60 text-zinc-200"} capitalize`}
+                  onClick={()=>setSelectedCategory(cat)}
+                >
+                  {cat}
+                </Button>
+              );
+            })}
+            <Button
+              size="sm"
+              variant={selectedCategory?"ghost":"default"}
+              className={`${selectedCategory?"border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60 text-zinc-200":"bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40"}`}
+              onClick={()=>setSelectedCategory("")}
+            >
+              Todos
+            </Button>
+          </div>
 
-              <div className="justify-between">
-                <div className="flex gap-4">
-                  <Card className="w-full lg:w-1/3 bg-blue-200">
-                    <CardContent>
-                      <h2 className="text-2xl font-bold">Sub 16</h2>
-                      <p className="text-4xl font-bold">
-                        {selectedPerson?.masaF0}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="w-full lg:w-1/3 bg-green-200">
-                    <CardContent>
-                      <h2 className="text-2xl font-bold">Sub 17</h2>
-                      <p className="text-4xl font-bold">
-                        {selectedPerson?.sumatoriaPliegues}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="w-full lg:w-1/3 bg-yellow-200">
-                    <CardContent>
-                      <h2 className="text-2xl font-bold">Sub19</h2>
-                      <p className="text-4xl font-bold">
-                        {selectedPerson?.relacionMusculoHueso}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </CardContent>
-          )}
-          {domLoaded && (
-            <CardContent className="w-full mt-6">
-              <h3 className="text-lg font-bold">
-                Promedio de distancia total, promedio de distancia HML y
-                promedio de high speed running absoluto por mes y dia
-              </h3>
-              <div className="flex gap-4">
-                <Card className="w-full">
-                  <CardContent>
-                    <h5 className="text-sm font-semibold my-4">
-                      Recuperacion (-5), Tension (-4), Duracion (-3), Velocidad
-                      (-2), Bajo HSR (-1)
-                    </h5>
-                    <ComposedChart width={1000} height={500} data={databloque}>
-                      {/* { day: "-5", distanciaTotal: 5709, distanciaHML: 801 }, */}
+          {/* KPI cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Card className="bg-zinc-900/60 border-zinc-800"><CardContent className="pt-4"><div className="text-xs text-zinc-400">Sub 16</div><div className="text-2xl font-semibold">—</div></CardContent></Card>
+            <Card className="bg-zinc-900/60 border-zinc-800"><CardContent className="pt-4"><div className="text-xs text-zinc-400">Sub 17</div><div className="text-2xl font-semibold">—</div></CardContent></Card>
+            <Card className="bg-zinc-900/60 border-zinc-800"><CardContent className="pt-4"><div className="text-xs text-zinc-400">Sub 19</div><div className="text-2xl font-semibold">—</div></CardContent></Card>
+          </div>
+
+          {/* Charts */}
+          <div className="grid grid-cols-1 gap-4">
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader><CardTitle className="text-base">Promedio de distancia total, HML y HSR (bloque)</CardTitle></CardHeader>
+              <CardContent>
+                <div className="h-[360px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={databloque}>
                       <XAxis dataKey="day" />
-                      <YAxis
-                        yAxisId={1}
-                        orientation="right"
-                        label={{ value: "Distancia Total", angle: -90 }}
-                      />
+                      <YAxis yAxisId={1} orientation="right" label={{ value: "Distancia Total", angle: -90 }} />
                       <Tooltip />
                       <Legend />
-                      <CartesianGrid stroke="#f5f5f5" />
-                      <Bar
-                        yAxisId={1}
-                        dataKey="distanciaTotal"
-                        barSize={40}
-                        fill="#413ea0"
-                      />
-                      <Bar
-                        yAxisId={1}
-                        dataKey="distanciaHML"
-                        barSize={40}
-                        fill="#049be5"
-                      />
-                      <YAxis
-                        yAxisId={2}
-                        label={{ value: "Promedio HSR", angle: -90 }}
-                        padding={{ top: 200, bottom: 20 }}
-                      />
-                      <Line
-                        yAxisId={2}
-                        type="monotone"
-                        dataKey="promedioHSR"
-                        stroke="#000"
-                        dot={true}
-                      />
+                      <CartesianGrid stroke="#27272a" />
+                      <Bar yAxisId={1} dataKey="distanciaTotal" barSize={28} fill="#4f46e5" />
+                      <Bar yAxisId={1} dataKey="distanciaHML" barSize={28} fill="#06b6d4" />
+                      <YAxis yAxisId={2} label={{ value: "Promedio HSR", angle: -90 }} />
+                      <Line yAxisId={2} type="monotone" dataKey="promedioHSR" stroke="#fff" dot />
                     </ComposedChart>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          )}
-          {domLoaded && (
-            <CardContent className="w-full mt-6">
-              <h3 className="text-lg font-bold">
-                Promedio de desaceleracion z4 y z6 y promedio de aceleraciones
-                z4 a z6 por año mes y dia
-              </h3>
-              <div className="flex gap-4">
-                <Card className="w-full">
-                  <CardContent>
-                    <BarChart width={1000} height={500} data={data}>
-                      <CartesianGrid />
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader><CardTitle className="text-base">Promedio de desaceleraciones z4-z6 y aceleraciones z4-z6</CardTitle></CardHeader>
+              <CardContent>
+                <div className="h-[360px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data}>
+                      <CartesianGrid stroke="#27272a" />
                       <XAxis dataKey="name" />
                       <YAxis />
+                      <Tooltip />
+                      <Legend />
                       <Bar dataKey="x" stackId="a" fill="#8884d8" />
                       <Bar dataKey="y" stackId="a" fill="#82ca9d" />
                     </BarChart>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          )}
-          {domLoaded && (
-            <CardContent className="w-full mt-6">
-              <h3 className="text-lg font-bold">Tabla de jugadores</h3>
-              <div className="flex gap-4">
-                <table className="table-auto">
-                  <thead>
-                    <th className="px-4 py-2">Nombre</th>
-                    <th className="px-4 py-2">Categoria</th>
-                    <th className="px-4 py-2">Suma de Distancia Total</th>
-                    <th className="px-4 py-2">Suma de HML</th>
-                    <th className="px-4 py-2">Suma de acc z4 a z6</th>
-                    <th className="px-4 py-2">Suma de decc z6 a z4</th>
-                    <th className="px-4 py-2">Promedio de Max Acc.</th>
-                    <th className="px-4 py-2">Suma de HSR</th>
-                  </thead>
-                  <tbody>
-                    {persons
-                      .filter((person) => person.categoria === "sub16")
-                      .map((person) => (
-                        <tr>
-                          <td className="border px-4 py-2">{person.nombre}</td>
-                          <td className="border px-4 py-2">
-                            {person.categoria}
-                          </td>
-                          <td className="border px-4 py-2">{person.edad}</td>
-                          <td className="border px-4 py-2">{person.alias}</td>
-                          <td className="border px-4 py-2">{person.alias}</td>
-                          <td className="border px-4 py-2">{person.alias}</td>
-                          <td className="border px-4 py-2">{person.alias}</td>
-                          <td className="border px-4 py-2">{person.alias}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          )}
-        </Card>
-      </section>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Players table for selected category (placeholder) */}
+      <Card className="bg-zinc-900/50 border-zinc-800">
+        <CardHeader><CardTitle className="text-base">Tabla de jugadores {selectedCategory?`· ${selectedCategory}`:""}</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-zinc-400">
+                  <th className="px-3 py-2">Nombre</th>
+                  <th className="px-3 py-2">Categoría</th>
+                </tr>
+              </thead>
+              <tbody>
+                {persons
+                  .filter(p => !selectedCategory || (p.categoria || "").toLowerCase() === selectedCategory)
+                  .slice(0, 20)
+                  .map((p) => (
+                    <tr key={p.id as any} className="border-t border-zinc-800">
+                      <td className="px-3 py-2">{p.nombre}</td>
+                      <td className="px-3 py-2 capitalize">{p.categoria}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </main>
   );
 }

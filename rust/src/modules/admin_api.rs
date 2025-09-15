@@ -1,8 +1,10 @@
 use axum::{extract::{Path, State}, Json};
+use axum::extract::Query;
 use axum::routing::delete;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
+use sqlx::Row;
 use uuid::Uuid;
 
 use crate::models::{Competition, EventType, Match, Player, Team, Venue};
@@ -85,6 +87,105 @@ pub async fn search_players(State(pool): State<Db>, axum::extract::Query(q): axu
     .await
     .map_err(internal_err)?;
     Ok(Json(recs))
+}
+
+// Active players across the last N matches (default 10), joined with administrativo
+// GET /api/players/active?limit_matches=10
+pub async fn get_active_players(
+    State(pool): State<Db>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<Vec<serde_json::Value>>, (axum::http::StatusCode, String)> {
+    let limit_matches: i64 = q
+        .get("limit_matches")
+        .and_then(|s| s.parse::<i64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(10);
+
+    let rows = sqlx::query(
+        r#"
+        WITH recent_matches AS (
+            SELECT match_id, match_date
+            FROM matches
+            ORDER BY match_date DESC
+            LIMIT $1
+        ),
+        mp AS (
+            SELECT mp.player_id, rm.match_date, mp.position
+            FROM match_players mp
+            JOIN recent_matches rm ON rm.match_id = mp.match_id
+        )
+        SELECT 
+            a."Documento_de_Identidad"        AS documento_de_identidad,
+            a."Jugador"                        AS jugador,
+            a."Fecha_Nacimiento"              AS fecha_nacimiento,
+            a."Pasaporte"                      AS pasaporte,
+            a."Telefono"                       AS telefono,
+            a."Celular"                        AS celular,
+            a."Email"                          AS email,
+            a."Cobertura_Medica"              AS cobertura_medica,
+            a."Estudios"                       AS estudios,
+            a."Oriundo"                        AS oriundo,
+            a."Club_de_Origen"                AS club_de_origen,
+            a."Club_de_Origen_Porcentaje"     AS club_de_origen_porcentaje,
+            a."Posicion"                       AS posicion_adm,
+            a.nombre                            AS nombre,
+            COUNT(DISTINCT mp.match_date)       AS appearances,
+            MAX(mp.match_date)                  AS last_match_date,
+            MAX(mp.position) FILTER (WHERE mp.match_date = (SELECT MAX(match_date) FROM mp WHERE mp.player_id = a."Documento_de_Identidad")) AS last_position
+        FROM mp
+        LEFT JOIN administrativo a ON a."Documento_de_Identidad" = mp.player_id
+        GROUP BY 
+            a."Documento_de_Identidad",
+            a."Jugador",
+            a."Fecha_Nacimiento",
+            a."Pasaporte",
+            a."Telefono",
+            a."Celular",
+            a."Email",
+            a."Cobertura_Medica",
+            a."Estudios",
+            a."Oriundo",
+            a."Club_de_Origen",
+            a."Club_de_Origen_Porcentaje",
+            a."Posicion",
+            a.nombre
+        ORDER BY last_match_date DESC NULLS LAST, jugador NULLS LAST
+        "#,
+    )
+    .bind(limit_matches)
+    .fetch_all(&pool)
+    .await
+    .map_err(internal_err)?;
+
+    let data: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|r| {
+            // Map to JSON, using documento_de_identidad as id
+            let id: i32 = r.try_get("documento_de_identidad").unwrap_or(0);
+            json!({
+                "id": id,
+                "Documento_de_Identidad": id,
+                "Jugador": r.try_get::<String, _>("jugador").ok(),
+                "nombre": r.try_get::<String, _>("nombre").ok(),
+                "Fecha_Nacimiento": r.try_get::<String, _>("fecha_nacimiento").ok(),
+                "Pasaporte": r.try_get::<String, _>("pasaporte").ok(),
+                "Telefono": r.try_get::<String, _>("telefono").ok(),
+                "Celular": r.try_get::<String, _>("celular").ok(),
+                "Email": r.try_get::<String, _>("email").ok(),
+                "Cobertura_Medica": r.try_get::<String, _>("cobertura_medica").ok(),
+                "Estudios": r.try_get::<String, _>("estudios").ok(),
+                "Oriundo": r.try_get::<String, _>("oriundo").ok(),
+                "Club_de_Origen": r.try_get::<String, _>("club_de_origen").ok(),
+                "Club_de_Origen_Porcentaje": r.try_get::<String, _>("club_de_origen_porcentaje").ok(),
+                // Prefer last_position when available, otherwise administrativo.Posicion
+                "Posicion": r.try_get::<String, _>("last_position").ok().or_else(|| r.try_get::<String, _>("posicion_adm").ok()),
+                "appearances": r.try_get::<i64, _>("appearances").unwrap_or(0),
+                "last_match_date": r.try_get::<chrono::DateTime<chrono::Utc>, _>("last_match_date").ok()
+            })
+        })
+        .collect();
+
+    Ok(Json(data))
 }
 
 // CSV/Excel import stub (to be implemented later)

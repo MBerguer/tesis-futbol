@@ -11,6 +11,7 @@ pub fn admin_api(pool: PgPool) -> Router {
         .route("/teams/:id", delete(handlers::delete_team))
         // Players
         .route("/players", post(handlers::create_player).get(handlers::search_players))
+        .route("/players/active", get(handlers::get_active_players))
         .route("/players/import", post(handlers::import_players))
         // Competitions
         .route("/competitions", post(handlers::create_competition).get(handlers::list_competitions))

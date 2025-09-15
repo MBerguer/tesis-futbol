@@ -38,16 +38,17 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
             <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 010 1.06L9.085 10l3.704 3.71a.75.75 0 11-1.06 1.06l-4.24-4.24a.75.75 0 010-1.06l4.24-4.24a.75.75 0 011.06 0z" clipRule="evenodd" />
           </svg>
         </button>
-        {!collapsed && <div className="text-sm font-semibold">Navigation</div>}
+        {!collapsed && <div className="text-sm font-semibold">Dashboard</div>}
       </div>
 
       {!collapsed && (
         <div className="px-3 py-3 border-b border-zinc-800 flex flex-col gap-2">
           <div className="text-xs uppercase text-zinc-500">Sections</div>
           <nav className="flex flex-col gap-1">
-            <Link href="/players" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Players</Link>
-            <Link href="/week-preparation" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Week preparation</Link>
-            <Link href="/admin" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Admin</Link>
+            <Link href="/players" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Players</Link>
+            <Link href="/plantel" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Plantel</Link>
+            <Link href="/week-preparation" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Week preparation</Link>
+            <Link href="/admin" className="rounded-md px-2 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Admin</Link>
           </nav>
         </div>
       )}
