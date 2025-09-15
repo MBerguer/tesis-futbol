@@ -79,6 +79,8 @@ interface SprintInWorstCase {
   venue_id: string | null;
   venue_name?: string | null;
   venue_city?: string | null;
+  venue_latitude?: number | null;
+  venue_longitude?: number | null;
   category: string | null;
   home_team_id: string;
   away_team_id: string;
@@ -126,6 +128,11 @@ export default function Page() {
   const [showWorstCases, setShowWorstCases] = useState(false);
   const [showSprints, setShowSprints] = useState(false);
   const [hoverPlayer, setHoverPlayer] = useState<string | null>(null);
+  const [matchEvents, setMatchEvents] = useState<any[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState<boolean>(false);
+  const [lineupMinutes, setLineupMinutes] = useState<any[]>([]);
+  const [loadingLineup, setLoadingLineup] = useState<boolean>(false);
+  const [eventsTab, setEventsTab] = useState<'events'|'lineup'>('events');
   let playerHighlights = React.useMemo(()=>{
     const norm = (s: string) => (s||'').trim()
       .normalize('NFD')
@@ -227,6 +234,33 @@ export default function Page() {
       } finally {
         if (!cancelled) setMatchDetailsLoading(false);
       }
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, selectedMatchId]);
+
+  useEffect(() => {
+    const id = selectedMatchId;
+    if (!id) { setMatchEvents([]); setLineupMinutes([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingEvents(true);
+        const res = await fetch(`${API_BASE}/api/matches/${id}/events`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setMatchEvents(Array.isArray(data?.events) ? data.events : []);
+        } else { if (!cancelled) setMatchEvents([]); }
+      } finally { if (!cancelled) setLoadingEvents(false); }
+    })();
+    (async () => {
+      try {
+        setLoadingLineup(true);
+        const res = await fetch(`${API_BASE}/api/matches/${id}/lineup`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setLineupMinutes(Array.isArray(data?.lineup) ? data.lineup : []);
+        } else { if (!cancelled) setLineupMinutes([]); }
+      } finally { if (!cancelled) setLoadingLineup(false); }
     })();
     return () => { cancelled = true; };
   }, [API_BASE, selectedMatchId]);
@@ -396,7 +430,7 @@ export default function Page() {
             <div style={{maxHeight: showInfo ? '2000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
             {showInfo && (
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-3">
-              <div className="md:col-span-3 h-full">
+              <div className="md:col-span-4 h-full">
                 <Card className="h-full bg-zinc-900/50 border-zinc-800">
                 <CardHeader>
                   <CardTitle>Details</CardTitle>
@@ -451,6 +485,18 @@ export default function Page() {
                         <p>
                           <span className="text-zinc-400">Notes:</span> {md.notes || 'No info'}
                         </p>
+                        <div className="mt-3" />
+                        <div>
+                          <div className="text-sm font-semibold mb-2">Stadium</div>
+                          <div className="rounded-md overflow-hidden border border-zinc-800">
+                            <StadiumMap
+                              latitude={(md.venue_latitude ?? -34.795334) as number}
+                              longitude={(md.venue_longitude ?? -56.147974) as number}
+                              zoom={15}
+                              styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
+                            />
+                          </div>
+                        </div>
                       </div>
                     ); })()
                   )}
@@ -494,19 +540,65 @@ export default function Page() {
                 </Card>
               </div>
 
-              <div className="md:col-span-5 h-full">
+              <div className="md:col-span-4 h-full">
                 <Card className="h-full bg-zinc-900/50 border-zinc-800">
-                <CardHeader>
-                  <CardTitle>Stadium</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <StadiumMap
-                      latitude={-34.795334}
-                      longitude={-56.147974}
-                      zoom={15}
-                      styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
-                    />
-                </CardContent>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-3">
+                      <button onClick={()=>setEventsTab('events')} className={`px-3 py-1.5 rounded border ${eventsTab==='events'?'border-zinc-600 bg-zinc-800 text-zinc-100':'border-zinc-800 text-zinc-300 hover:border-zinc-700'}`}>Events</button>
+                      <button onClick={()=>setEventsTab('lineup')} className={`px-3 py-1.5 rounded border ${eventsTab==='lineup'?'border-zinc-600 bg-zinc-800 text-zinc-100':'border-zinc-800 text-zinc-300 hover:border-zinc-700'}`}>Lineup minutes</button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {eventsTab === 'events' ? (
+                      (!selectedMatchId || loadingEvents) ? (
+                        <div className="space-y-2">
+                          <Skeleton className="h-5" />
+                          <Skeleton className="h-5" />
+                          <Skeleton className="h-5" />
+                        </div>
+                      ) : matchEvents.length === 0 ? (
+                        <div className="text-sm text-gray-600">No events.</div>
+                      ) : (
+                        <div className="space-y-1 text-sm">
+                          {matchEvents.map((ev: any) => (
+                            <div key={ev.event_id} className="flex items-start gap-2 py-1 px-2 rounded border border-zinc-800">
+                              <div className="w-16 text-zinc-400">{ev.minute}{typeof ev.added_time === 'number' ? `+${ev.added_time}` : ''}'</div>
+                              <div className="flex-1">
+                                <div><span className="text-zinc-300">{ev.team_name}</span> · <span className="uppercase text-xs px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700">{ev.type}</span></div>
+                                <div className="text-zinc-400">
+                                  {ev.jugador || ''}
+                                  {ev.related_jugador ? ` ↔ ${ev.related_jugador}` : ''}
+                                  {ev.assist_jugador ? ` (assist: ${ev.assist_jugador})` : ''}
+                                  {ev.reason ? ` – ${ev.reason}` : ''}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    ) : (
+                      (!selectedMatchId || loadingLineup) ? (
+                        <div className="space-y-2">
+                          <Skeleton className="h-5" />
+                          <Skeleton className="h-5" />
+                          <Skeleton className="h-5" />
+                        </div>
+                      ) : lineupMinutes.length === 0 ? (
+                        <div className="text-sm text-gray-600">No lineup data.</div>
+                      ) : (
+                        <div className="text-sm space-y-1">
+                          {lineupMinutes.map((row: any) => (
+                            <div key={row.match_player_id} className="flex items-center justify-between border border-zinc-800 rounded px-2 py-1">
+                              <div className="truncate mr-2">
+                                <span className="text-zinc-300">{row.team_name}</span> · {row.jugador || '—'} {row.role === 'starter' ? '' : '(sub)'}
+                              </div>
+                              <div className="text-zinc-400">{row.minutes_played ?? 0} min</div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    )}
+                  </CardContent>
                 </Card>
               </div>
             </div>
