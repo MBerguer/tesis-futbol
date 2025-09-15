@@ -5,6 +5,8 @@ import React, { createContext, useContext } from "react";
 export interface MatchContextValue {
   selectedTable: string | null;
   setSelectedTable: (table: string | null) => void;
+  selectedMatchId?: string | null;
+  setSelectedMatchId?: (id: string | null) => void;
   reloadToken: number;
   reload: () => void;
   fullWidth?: boolean;

@@ -12,12 +12,15 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
 
   const [matchTables, setMatchTables] = useState<string[]>([]);
   const [loadingTables, setLoadingTables] = useState(true);
+  const [matches, setMatches] = useState<Array<{ match_id: string; match_date: string; category?: string | null; home_team_id: string; away_team_id: string; result_home: number; result_away: number }>>([]);
+  const [loadingMatches, setLoadingMatches] = useState<boolean>(true);
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [reloadToken, setReloadToken] = useState<number>(0);
   const [fullWidth, setFullWidth] = useState<boolean>(false);
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const selectedTable = useMemo(() => searchParams.get('table'), [searchParams]);
+  const selectedMatchId = useMemo(() => searchParams.get('match'), [searchParams]);
 
   useEffect(() => {
     try {
@@ -40,7 +43,20 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
         setLoadingTables(false);
       }
     };
+    const fetchMatches = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/matches`);
+        if (!res.ok) throw new Error("Failed to fetch matches");
+        const data = await res.json();
+        setMatches(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingMatches(false);
+      }
+    };
     fetchMatchTables();
+    fetchMatches();
   }, [API_BASE]);
 
   const handleTableSelect = (tableName: string) => {
@@ -48,6 +64,14 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
     url.searchParams.set('table', tableName);
     router.replace(`${pathname}?${url.searchParams.toString()}`);
     try { localStorage.setItem('lastTable', tableName); } catch {}
+    setReloadToken(x => x + 1);
+  };
+
+  const handleMatchSelect = (matchId: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('match', matchId);
+    router.replace(`${pathname}?${url.searchParams.toString()}`);
+    try { localStorage.setItem('lastMatchId', matchId); } catch {}
     setReloadToken(x => x + 1);
   };
 
@@ -60,6 +84,10 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
         tables={matchTables}
         selectedTable={selectedTable}
         onSelect={handleTableSelect}
+        loadingMatches={loadingMatches}
+        matches={matches}
+        selectedMatchId={selectedMatchId}
+        onSelectMatch={handleMatchSelect}
       />
       <div className="flex-1 min-w-0">
         <MatchProvider value={{
@@ -69,6 +97,14 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
             if (t) url.searchParams.set('table', t); else url.searchParams.delete('table');
             router.replace(`${pathname}?${url.searchParams.toString()}`);
             try { if (t) localStorage.setItem('lastTable', t); } catch {}
+            setReloadToken((x)=>x+1);
+          },
+          selectedMatchId,
+          setSelectedMatchId: (id: string | null) => {
+            const url = new URL(window.location.href);
+            if (id) url.searchParams.set('match', id); else url.searchParams.delete('match');
+            router.replace(`${pathname}?${url.searchParams.toString()}`);
+            try { if (id) localStorage.setItem('lastMatchId', id); } catch {}
             setReloadToken((x)=>x+1);
           },
           reloadToken,
