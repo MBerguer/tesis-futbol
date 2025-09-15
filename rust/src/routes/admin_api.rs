@@ -12,6 +12,7 @@ pub fn admin_api(pool: PgPool) -> Router {
         .route("/players/import", post(handlers::import_players))
         // Matches
         .route("/matches", post(handlers::create_match).get(handlers::list_matches))
+        .route("/matches/:id", get(handlers::get_match))
         .route("/matches/:id/lineup", get(handlers::get_lineup))
         .route("/matches/:id/lineup", put(handlers::upsert_lineup))
         .route("/matches/:id/events", get(handlers::get_events))

@@ -109,6 +109,7 @@ export default function Page() {
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [baseTime, setBaseTime] = useState<string | null>(null);
   const [videoTimeSec, setVideoTimeSec] = useState<number>(0);
+  const [youtubeLink, setYoutubeLink] = useState<string | null>(null);
   const handleVideoSecondChange = React.useCallback((s: number)=> setVideoTimeSec(s), []);
   const [showPatchPanel, setShowPatchPanel] = useState<boolean>(false);
   const [patchedFirstHalfStart, setPatchedFirstHalfStart] = useState<number | null>(null);
@@ -180,6 +181,22 @@ export default function Page() {
     })();
     return () => { cancelled = true; };
   }, [API_BASE, selectedMatchId, selectedTable, setSelectedTable]);
+
+  // Fetch youtube link from match details when match id is present
+  useEffect(() => {
+    const matchId = selectedMatchId;
+    if (!matchId) { setYoutubeLink(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/matches/${matchId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setYoutubeLink(data?.youtube_link || null);
+      } catch { if (!cancelled) setYoutubeLink(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, selectedMatchId]);
   
   const autoData = useMatchData(API_BASE, (selectedTable || null), reloadToken + globalReloadToken);
   const entriesAuto = autoData.entries;
@@ -504,7 +521,7 @@ export default function Page() {
                         <div className="p-2">
                           <UnifiedVideo
                             youtubeId={searchParams.get('yt')}
-                            videoUrl={searchParams.get('video')}
+                            videoUrl={youtubeLink || searchParams.get('video') || undefined}
                             onSecondChange={handleVideoSecondChange}
                           />
                         </div>

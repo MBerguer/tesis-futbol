@@ -173,6 +173,53 @@ pub async fn list_matches(State(pool): State<Db>) -> Result<Json<Vec<serde_json:
     Ok(Json(data))
 }
 
+// Get single match with team names
+pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let r = sqlx::query!(
+        r#"
+        SELECT 
+          m.match_id,
+          m.competition_id,
+          m.match_date,
+          m.venue_id,
+          m.category,
+          m.home_team_id,
+          m.away_team_id,
+          m.result_home,
+          m.result_away,
+          m.youtube_link,
+          m.notes,
+          m.source_pdf_hash,
+          m.parse_confidence,
+          th.name AS home_team_name,
+          ta.name AS away_team_name
+        FROM matches m
+        JOIN teams th ON th.team_id = m.home_team_id
+        JOIN teams ta ON ta.team_id = m.away_team_id
+        WHERE m.match_id = $1
+        "#,
+        id
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+
+    Ok(Json(json!({
+        "match_id": r.match_id,
+        "competition_id": r.competition_id,
+        "match_date": r.match_date,
+        "venue_id": r.venue_id,
+        "category": r.category,
+        "home_team_id": r.home_team_id,
+        "away_team_id": r.away_team_id,
+        "result_home": r.result_home,
+        "result_away": r.result_away,
+        "youtube_link": r.youtube_link,
+        "notes": r.notes,
+        "source_pdf_hash": r.source_pdf_hash,
+        "parse_confidence": r.parse_confidence,
+        "home_team_name": r.home_team_name,
+        "away_team_name": r.away_team_name,
+    })))
+}
+
 // Lineup bulk upsert
 #[derive(Deserialize)]
 pub struct LineupItem { pub player_id: i32, pub team_id: Uuid, pub role: String, pub position: Option<String>, pub jersey_number: Option<i32> }
