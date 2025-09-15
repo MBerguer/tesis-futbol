@@ -45,11 +45,8 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
         <div className="px-3 py-3 border-b border-zinc-800 flex flex-col gap-2">
           <div className="text-xs uppercase text-zinc-500">Sections</div>
           <nav className="flex flex-col gap-1">
-            <Link href="/" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Home</Link>
-            <Link href="/mockup" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Mockup</Link>
             <Link href="/players" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Players</Link>
             <Link href="/week-preparation" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Week preparation</Link>
-            <Link href="/match" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Match</Link>
             <Link href="/admin" className="rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Admin</Link>
           </nav>
         </div>
@@ -86,15 +83,21 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
             }).map((m) => {
               const dateStr = new Date(m.match_date).toLocaleDateString();
               const teams = (m.home_team_name && m.away_team_name) ? `${m.home_team_name} vs ${m.away_team_name}` : `${m.home_team_id.slice(0,4)}… vs ${m.away_team_id.slice(0,4)}…`;
-              const label = collapsed ? dateStr : `${teams} · ${dateStr}${m.category ? ' · ' + m.category : ''}`;
               return (
                 <button
                   key={m.match_id}
-                  title={label}
+                  title={`${teams} · ${dateStr}${m.category ? ' · ' + m.category : ''}`}
                   onClick={() => onSelectMatch(m.match_id)}
-                  className={`${collapsed ? 'justify-center' : 'justify-start'} w-full inline-flex items-center gap-2 rounded-md border ${selectedMatchId === m.match_id ? 'border-zinc-600 bg-zinc-800 text-zinc-100' : 'border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900'} px-2 py-2 text-sm transition-colors`}
+                  className={`justify-center w-full inline-flex items-center gap-1 rounded-md border ${selectedMatchId === m.match_id ? 'border-zinc-600 bg-zinc-800 text-zinc-100' : 'border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900'} px-2 py-2 text-sm transition-colors`}
                 >
-                  {label}
+                  {collapsed ? (
+                    teams.replace(/nacional/gi, '').replace(/vs/gi, '').trim().slice(0, 2)
+                  ) : (
+                    <>
+                      <div className="text-left w-2/3">{teams}{m.category && <span className="text-zinc-400"> · {m.category}</span>}</div>
+                      <div className="text-xs text-zinc-400 w-1/3">{dateStr}</div>
+                    </>
+                  )}
                 </button>
               );
             })
