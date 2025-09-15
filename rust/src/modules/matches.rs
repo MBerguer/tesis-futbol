@@ -106,6 +106,66 @@ pub async fn get_match_gps_players_details() -> Json<Value> {
     }))
 }
 
+/// Resolve the raw GPS table name for a given stored match id
+/// GET /match/by-id/:match_id/table
+pub async fn resolve_table_for_match(
+    State(pool): State<PgPool>,
+    Path(match_id): Path<uuid::Uuid>,
+) -> Json<Value> {
+    // Strategy: if we have a mapping table (e.g., matches_gps_tables) use it; otherwise try to infer
+    // For now, infer by joining teams to build a fingerprint and find a table with that opponent short name in its name.
+    // Simple placeholder: look up away_team_name and try to match public tables that include it
+    let row = match sqlx::query!(
+        r#"
+        SELECT ta.name AS away_team_name, th.name AS home_team_name, m.match_date
+        FROM matches m
+        JOIN teams th ON th.team_id = m.home_team_id
+        JOIN teams ta ON ta.team_id = m.away_team_id
+        WHERE m.match_id = $1
+        "#,
+        match_id
+    ).fetch_one(&pool).await {
+        Ok(r) => r,
+        Err(e) => return Json(json!({"error": format!("match not found: {}", e)})),
+    };
+
+    // list public tables and try fuzzy match with away team name (normalized)
+    let tables = match sqlx::query!(
+        r#"
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+          AND table_name NOT LIKE '%_view'
+        "#
+    ).fetch_all(&pool).await {
+        Ok(v) => v,
+        Err(e) => return Json(json!({"error": format!("cannot list tables: {}", e)})),
+    };
+
+    let norm = |s: &str| s.chars()
+        .filter(|c| c.is_alphanumeric() || *c=='_' || *c=='-')
+        .collect::<String>()
+        .to_lowercase();
+
+    let away = norm(row.away_team_name.as_str());
+    let home = norm(row.home_team_name.as_str());
+
+    let mut candidate: Option<String> = None;
+    for t in tables.into_iter().filter_map(|r| r.table_name) {
+        let tn = t.to_lowercase();
+        if tn.contains(&away) || tn.contains(&home) {
+            candidate = Some(t);
+            break;
+        }
+    }
+
+    if let Some(table_name) = candidate {
+        Json(json!({"table": table_name}))
+    } else {
+        Json(json!({"table": null, "error": "no matching table found"}))
+    }
+}
+
 /// GET /match/table/:table_name/positions/window?center_sec=123&radius_sec=15
 /// Returns per-second positions in a rolling window around a GPS time (seconds since base)
 pub async fn get_positions_window(

@@ -2,10 +2,9 @@ use axum::{extract::{Path, State}, Json};
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
-use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::models::{Competition, EventType, Match, MatchPlayer, Player, Team};
+use crate::models::{EventType, Match, Player, Team};
 
 // Wrap pool in State
 type Db = PgPool;
@@ -121,16 +120,57 @@ pub async fn create_match(State(pool): State<Db>, Json(mp): Json<MatchPayload>) 
     Ok(Json(rec))
 }
 
-pub async fn list_matches(State(pool): State<Db>) -> Result<Json<Vec<Match>>, (axum::http::StatusCode, String)> {
-    let recs = sqlx::query_as!(
-        Match,
-        r#"SELECT match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence
-            FROM matches ORDER BY match_date DESC"#
+pub async fn list_matches(State(pool): State<Db>) -> Result<Json<Vec<serde_json::Value>>, (axum::http::StatusCode, String)> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT 
+          m.match_id,
+          m.competition_id,
+          m.match_date,
+          m.venue_id,
+          m.category,
+          m.home_team_id,
+          m.away_team_id,
+          m.result_home,
+          m.result_away,
+          m.youtube_link,
+          m.notes,
+          m.source_pdf_hash,
+          m.parse_confidence,
+          th.name AS home_team_name,
+          ta.name AS away_team_name
+        FROM matches m
+        JOIN teams th ON th.team_id = m.home_team_id
+        JOIN teams ta ON ta.team_id = m.away_team_id
+        ORDER BY m.match_date DESC
+        "#
     )
     .fetch_all(&pool)
     .await
     .map_err(internal_err)?;
-    Ok(Json(recs))
+
+    let data: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|r| json!({
+            "match_id": r.match_id,
+            "competition_id": r.competition_id,
+            "match_date": r.match_date,
+            "venue_id": r.venue_id,
+            "category": r.category,
+            "home_team_id": r.home_team_id,
+            "away_team_id": r.away_team_id,
+            "result_home": r.result_home,
+            "result_away": r.result_away,
+            "youtube_link": r.youtube_link,
+            "notes": r.notes,
+            "source_pdf_hash": r.source_pdf_hash,
+            "parse_confidence": r.parse_confidence,
+            "home_team_name": r.home_team_name,
+            "away_team_name": r.away_team_name,
+        }))
+        .collect();
+
+    Ok(Json(data))
 }
 
 // Lineup bulk upsert

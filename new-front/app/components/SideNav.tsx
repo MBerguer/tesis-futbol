@@ -11,7 +11,7 @@ interface SideNavProps {
   selectedTable: string | null;
   onSelect: (table: string) => void;
   loadingMatches: boolean;
-  matches: Array<{ match_id: string; match_date: string; category?: string | null; home_team_id: string; away_team_id: string; result_home: number; result_away: number }>;
+  matches: Array<{ match_id: string; match_date: string; category?: string | null; home_team_id: string; away_team_id: string; result_home: number; result_away: number; home_team_name?: string | null; away_team_name?: string | null }>;
   selectedMatchId: string | null;
   onSelectMatch: (matchId: string) => void;
 }
@@ -79,9 +79,13 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
             (matches || []).filter(m => {
               if (!query) return true;
               const q = query.toLowerCase();
-              return (m.category || '').toLowerCase().includes(q) || m.match_date.toLowerCase().includes(q) || m.match_id.toLowerCase().includes(q);
+              const home = (m.home_team_name || '').toLowerCase();
+              const away = (m.away_team_name || '').toLowerCase();
+              return (m.category || '').toLowerCase().includes(q) || m.match_date.toLowerCase().includes(q) || m.match_id.toLowerCase().includes(q) || home.includes(q) || away.includes(q);
             }).map((m) => {
-              const label = collapsed ? (new Date(m.match_date).toLocaleDateString()) : `${new Date(m.match_date).toLocaleDateString()}${m.category ? ' · ' + m.category : ''}`;
+              const dateStr = new Date(m.match_date).toLocaleDateString();
+              const teams = (m.home_team_name && m.away_team_name) ? `${m.home_team_name} vs ${m.away_team_name}` : `${m.home_team_id.slice(0,4)}… vs ${m.away_team_id.slice(0,4)}…`;
+              const label = collapsed ? dateStr : `${teams} · ${dateStr}${m.category ? ' · ' + m.category : ''}`;
               return (
                 <button
                   key={m.match_id}
@@ -89,7 +93,7 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
                   onClick={() => onSelectMatch(m.match_id)}
                   className={`${collapsed ? 'justify-center' : 'justify-start'} w-full inline-flex items-center gap-2 rounded-md border ${selectedMatchId === m.match_id ? 'border-zinc-600 bg-zinc-800 text-zinc-100' : 'border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900'} px-2 py-2 text-sm transition-colors`}
                 >
-                  {collapsed ? label : label}
+                  {label}
                 </button>
               );
             })

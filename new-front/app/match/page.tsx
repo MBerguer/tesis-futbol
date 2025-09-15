@@ -73,8 +73,9 @@ interface SprintInWorstCase {
 
 export default function Page() {
   const searchParams = useSearchParams();
-  const { reloadToken: globalReloadToken, selectedTable: selectedTableFromContext } = useMatchContext();
+  const { reloadToken: globalReloadToken, selectedTable: selectedTableFromContext, setSelectedTable } = useMatchContext();
   const selectedTable = selectedTableFromContext ?? searchParams.get('table');
+  const selectedMatchId = searchParams.get('match');
   const [selectedPlayer, setSelectedPlayer] = useState<string>("");
   const matchMetadata = {
     teamA: "Equipo A",
@@ -159,6 +160,26 @@ export default function Page() {
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
+  
+  // Resolve table from match id if needed
+  useEffect(() => {
+    if (selectedTable) return; // already set via query or context
+    const matchId = selectedMatchId;
+    if (!matchId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/match/by-id/${matchId}/table`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const table = data?.table as string | null;
+        if (!cancelled && table) {
+          setSelectedTable?.(table);
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, selectedMatchId, selectedTable, setSelectedTable]);
   
   const autoData = useMatchData(API_BASE, (selectedTable || null), reloadToken + globalReloadToken);
   const entriesAuto = autoData.entries;

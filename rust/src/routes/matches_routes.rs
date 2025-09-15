@@ -10,6 +10,7 @@ pub fn matches_routes(pool: PgPool) -> Router {
             "/:match_id/gps",
             get(matches::get_match_gps_players_details),
         )
+        .route("/by-id/:match_id/table", get(matches::resolve_table_for_match))
         .route("/:match_id/players", post(matches::submit_match_players))
         .route("/tables", get(matches::list_match_tables))
         .route(

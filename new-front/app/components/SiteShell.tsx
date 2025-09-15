@@ -68,9 +68,7 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
   };
 
   const handleMatchSelect = (matchId: string) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('match', matchId);
-    router.replace(`${pathname}?${url.searchParams.toString()}`);
+    router.replace(`/match?match=${matchId}`);
     try { localStorage.setItem('lastMatchId', matchId); } catch {}
     setReloadToken(x => x + 1);
   };
