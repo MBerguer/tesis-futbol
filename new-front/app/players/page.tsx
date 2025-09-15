@@ -52,6 +52,7 @@ type PlayerMaxMetrics = {
   max_speed_kmh: number;
   high_metabolic_distance_m: number;
   z6: { seconds: number; distance_m: number };
+  max_speed_detail?: { match_id?: string; gps_table_name?: string; second?: number; time?: string };
 };
 
 const rendimiento = [
@@ -388,6 +389,12 @@ export default function Page() {
                     <CardContent className="py-3">
                       <div className="text-sm text-zinc-300">{kpi.title}</div>
                       <div className="text-xl font-semibold">{kpi.value}</div>
+                      {kpi.title === "Velocidad Max." && (maxMetrics?.max_speed_detail?.time || maxMetrics?.max_speed_detail?.second !== undefined) ? (
+                        <div className="text-[11px] text-zinc-400 mt-1">
+                          {maxMetrics.max_speed_detail.time ? `minuto ${maxMetrics.max_speed_detail.time}` : `segundo ${Math.round(maxMetrics.max_speed_detail.second || 0)}`}
+                          {maxMetrics.max_speed_detail.gps_table_name ? ` · ${maxMetrics.max_speed_detail.gps_table_name}` : ""}
+                        </div>
+                      ) : null}
                       {kpi.link ? (
                         <a href={kpi.link} className="text-xs text-blue-400 hover:underline">ver detalles</a>
                       ) : null}
