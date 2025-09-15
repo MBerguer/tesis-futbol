@@ -1,10 +1,11 @@
 use axum::{extract::{Path, State}, Json};
+use axum::routing::delete;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::{EventType, Match, Player, Team};
+use crate::models::{Competition, EventType, Match, Player, Team, Venue};
 
 // Wrap pool in State
 type Db = PgPool;
@@ -29,6 +30,20 @@ pub async fn list_teams(State(pool): State<Db>) -> Result<Json<Vec<Team>>, (axum
         .await
         .map_err(internal_err)?;
     Ok(Json(recs))
+}
+
+pub async fn update_team(State(pool): State<Db>, Path(id): Path<Uuid>, Json(t): Json<Team>) -> Result<Json<Team>, (axum::http::StatusCode, String)> {
+    let rec = sqlx::query_as!(
+        Team,
+        r#"UPDATE teams SET name = $2, category = $3 WHERE team_id = $1 RETURNING team_id, name, category"#,
+        id, t.name, t.category
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+    Ok(Json(rec))
+}
+
+pub async fn delete_team(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    sqlx::query!("DELETE FROM teams WHERE team_id = $1", id).execute(&pool).await.map_err(internal_err)?;
+    Ok(Json(json!({"status":"ok"})))
 }
 
 // Players
@@ -230,6 +245,107 @@ pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<J
         "home_team_name": r.home_team_name,
         "away_team_name": r.away_team_name,
     })))
+}
+
+// Update/delete match
+#[derive(Deserialize)]
+pub struct MatchUpdatePayload {
+    pub competition_id: Option<Uuid>,
+    pub match_date: Option<chrono::DateTime<chrono::Utc>>,
+    pub venue_id: Option<Uuid>,
+    pub category: Option<String>,
+    pub home_team_id: Option<Uuid>,
+    pub away_team_id: Option<Uuid>,
+    pub result_home: Option<i32>,
+    pub result_away: Option<i32>,
+    pub youtube_link: Option<String>,
+    pub notes: Option<String>,
+}
+pub async fn update_match(State(pool): State<Db>, Path(id): Path<Uuid>, Json(mp): Json<MatchUpdatePayload>) -> Result<Json<Match>, (axum::http::StatusCode, String)> {
+    let rec = sqlx::query_as!(
+        Match,
+        r#"UPDATE matches SET
+             competition_id = COALESCE($2, competition_id),
+             match_date     = COALESCE($3, match_date),
+             venue_id       = COALESCE($4, venue_id),
+             category       = COALESCE($5, category),
+             home_team_id   = COALESCE($6, home_team_id),
+             away_team_id   = COALESCE($7, away_team_id),
+             result_home    = COALESCE($8, result_home),
+             result_away    = COALESCE($9, result_away),
+             youtube_link   = COALESCE($10, youtube_link),
+             notes          = COALESCE($11, notes)
+           WHERE match_id = $1
+           RETURNING match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence"#,
+        id, mp.competition_id, mp.match_date, mp.venue_id, mp.category, mp.home_team_id, mp.away_team_id, mp.result_home, mp.result_away, mp.youtube_link, mp.notes
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+    Ok(Json(rec))
+}
+pub async fn delete_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    sqlx::query!("DELETE FROM matches WHERE match_id = $1", id).execute(&pool).await.map_err(internal_err)?;
+    Ok(Json(json!({"status":"ok"})))
+}
+
+// Competitions CRUD
+pub async fn create_competition(State(pool): State<Db>, Json(mut c): Json<Competition>) -> Result<Json<Competition>, (axum::http::StatusCode, String)> {
+    if c.competition_id.is_nil() { c.competition_id = Uuid::new_v4(); }
+    let rec = sqlx::query_as!(
+        Competition,
+        r#"INSERT INTO competitions (competition_id, name, season)
+           VALUES ($1,$2,$3)
+           RETURNING competition_id, name, season"#,
+        c.competition_id, c.name, c.season
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+    Ok(Json(rec))
+}
+pub async fn list_competitions(State(pool): State<Db>) -> Result<Json<Vec<Competition>>, (axum::http::StatusCode, String)> {
+    let recs = sqlx::query_as!(Competition, r#"SELECT competition_id, name, season FROM competitions ORDER BY name"#)
+        .fetch_all(&pool).await.map_err(internal_err)?;
+    Ok(Json(recs))
+}
+pub async fn update_competition(State(pool): State<Db>, Path(id): Path<Uuid>, Json(c): Json<Competition>) -> Result<Json<Competition>, (axum::http::StatusCode, String)> {
+    let rec = sqlx::query_as!(
+        Competition,
+        r#"UPDATE competitions SET name = $2, season = $3 WHERE competition_id = $1
+           RETURNING competition_id, name, season"#,
+        id, c.name, c.season
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+    Ok(Json(rec))
+}
+pub async fn delete_competition(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    sqlx::query!("DELETE FROM competitions WHERE competition_id = $1", id).execute(&pool).await.map_err(internal_err)?;
+    Ok(Json(json!({"status":"ok"})))
+}
+
+// Venues CRUD
+pub async fn create_venue(State(pool): State<Db>, Json(mut v): Json<Venue>) -> Result<Json<Venue>, (axum::http::StatusCode, String)> {
+    if v.venue_id.is_nil() { v.venue_id = Uuid::new_v4(); }
+    let rec = sqlx::query_as!(
+        Venue,
+        r#"INSERT INTO venues (venue_id, name, city, latitude, longitude)
+           VALUES ($1,$2,$3,$4,$5)
+           RETURNING venue_id, name, city, latitude, longitude"#,
+        v.venue_id, v.name, v.city, v.latitude, v.longitude
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+    Ok(Json(rec))
+}
+pub async fn list_venues(State(pool): State<Db>) -> Result<Json<Vec<Venue>>, (axum::http::StatusCode, String)> {
+    let recs = sqlx::query_as!(Venue, r#"SELECT venue_id, name, city, latitude, longitude FROM venues ORDER BY name"#)
+        .fetch_all(&pool).await.map_err(internal_err)?;
+    Ok(Json(recs))
+}
+pub async fn update_venue(State(pool): State<Db>, Path(id): Path<Uuid>, Json(v): Json<Venue>) -> Result<Json<Venue>, (axum::http::StatusCode, String)> {
+    let rec = sqlx::query_as!(
+        Venue,
+        r#"UPDATE venues SET name = $2, city = $3, latitude = $4, longitude = $5 WHERE venue_id = $1
+           RETURNING venue_id, name, city, latitude, longitude"#,
+        id, v.name, v.city, v.latitude, v.longitude
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+    Ok(Json(rec))
+}
+pub async fn delete_venue(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    sqlx::query!("DELETE FROM venues WHERE venue_id = $1", id).execute(&pool).await.map_err(internal_err)?;
+    Ok(Json(json!({"status":"ok"})))
 }
 
 // Lineup bulk upsert
