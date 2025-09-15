@@ -11,4 +11,8 @@ pub fn players_routes() -> Router {
             "/:user_id/matches/:match_id",
             get(players::get_player_stats_match),
         )
+        .route(
+            "/:user_id/metrics/max",
+            get(players::get_player_max_metrics),
+        )
 }

@@ -5,7 +5,7 @@ import React from "react";
 type Competition = { competition_id: string; name: string; season?: string | null };
 type Venue = { venue_id: string; name: string; city?: string | null; latitude?: number | null; longitude?: number | null };
 type Team = { team_id: string; name: string; category?: string | null };
-type AdminMatch = { match_id: string; match_date: string; home_team_id: string; away_team_id: string; venue_id?: string | null; competition_id?: string | null; category?: string | null; result_home: number; result_away: number; youtube_link?: string | null; notes?: string | null; home_team_name?: string | null; away_team_name?: string | null };
+type AdminMatch = { match_id: string; match_date: string; home_team_id: string; away_team_id: string; venue_id?: string | null; competition_id?: string | null; category?: string | null; result_home: number; result_away: number; youtube_link?: string | null; notes?: string | null; gps_table_name?: string | null; home_team_name?: string | null; away_team_name?: string | null };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -217,6 +217,7 @@ export default function AdminPage() {
         result_away: matchForm.result_away ?? undefined,
         youtube_link: matchForm.youtube_link ?? undefined,
         notes: matchForm.notes ?? undefined,
+        gps_table_name: matchForm.gps_table_name ?? undefined,
       }) });
       setEditingMatchId(null); setMatchForm({});
       await refreshAll();
@@ -378,7 +379,7 @@ export default function AdminPage() {
           {matches.map(m => (
             <div key={m.match_id} className="border border-zinc-800 rounded p-3">
               {editingMatchId === m.match_id ? (
-                <div className="grid grid-cols-1 md:grid-cols-7 gap-2 items-center">
+                <div className="grid grid-cols-1 md:grid-cols-8 gap-2 items-center">
                   <input type="datetime-local" defaultValue={m.match_date?.slice(0,16)} onChange={e=>setMatchForm(s=>({...s, match_date: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm" />
                   <select defaultValue={m.home_team_id} onChange={e=>setMatchForm(s=>({...s, home_team_id: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm">
                     {teams.map(t=> <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
@@ -389,6 +390,7 @@ export default function AdminPage() {
                   <input placeholder="Category" defaultValue={m.category||''} onChange={e=>setMatchForm(s=>({...s, category: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm" />
                   <input placeholder="YouTube" defaultValue={m.youtube_link||''} onChange={e=>setMatchForm(s=>({...s, youtube_link: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm" />
                   <input placeholder="Notes" defaultValue={m.notes||''} onChange={e=>setMatchForm(s=>({...s, notes: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm" />
+                  <input placeholder="GPS table" defaultValue={m.gps_table_name||''} onChange={e=>setMatchForm(s=>({...s, gps_table_name: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm" />
                   <div className="flex gap-2">
                     <button disabled={saving} onClick={()=>saveMatch(m.match_id)} className="h-9 px-3 rounded border border-zinc-700">Save</button>
                     <button onClick={()=>{ setEditingMatchId(null); setMatchForm({}); }} className="h-9 px-3 rounded border border-zinc-800">Cancel</button>

@@ -81,6 +81,7 @@ pub struct Match {
     pub notes: Option<String>,
     pub source_pdf_hash: Option<String>,
     pub parse_confidence: Option<f32>,
+    pub gps_table_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, Clone)]

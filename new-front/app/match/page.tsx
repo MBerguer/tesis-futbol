@@ -95,6 +95,7 @@ interface SprintInWorstCase {
   parse_confidence: number | null;
   home_team_name?: string | null;
   away_team_name?: string | null;
+  gps_table_name?: string | null;
 }
 
 export default function Page() {
@@ -174,7 +175,7 @@ export default function Page() {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
   
-  // Resolve table from match id if needed
+  // Resolve table from match id if needed (prefer backend-provided gps_table_name)
   useEffect(() => {
     if (selectedTable) return; // already set via query or context
     const matchId = selectedMatchId;
@@ -182,12 +183,19 @@ export default function Page() {
     let cancelled = false;
     (async () => {
       try {
+        // 1) Try the richer match endpoint that now includes gps_table_name
+        const resMatch = await fetch(`${API_BASE}/api/matches/${matchId}`);
+        if (resMatch.ok) {
+          const md: MatchDetails = await resMatch.json();
+          const t = (md?.gps_table_name || null);
+          if (!cancelled && t) { setSelectedTable?.(t); return; }
+        }
+        // 2) Fallback to resolver endpoint
         const res = await fetch(`${API_BASE}/match/by-id/${matchId}/table`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const table = data?.table as string | null;
-        if (!cancelled && table) {
-          setSelectedTable?.(table);
+        if (res.ok) {
+          const data = await res.json();
+          const table = data?.table as string | null;
+          if (!cancelled && table) { setSelectedTable?.(table); }
         }
       } catch {}
     })();

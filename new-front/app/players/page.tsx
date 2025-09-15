@@ -46,6 +46,14 @@ type Person = {
   relacionMusculoHueso?: string | number | null;
 };
 
+type PlayerMaxMetrics = {
+  max_distance_m: number;
+  hsr_max_m: number;
+  max_speed_kmh: number;
+  high_metabolic_distance_m: number;
+  z6: { seconds: number; distance_m: number };
+};
+
 const rendimiento = [
   { name: "A", hsr: 100, distancia: 220 },
   { name: "B", hsr: 200, distancia: 300 },
@@ -74,6 +82,7 @@ export default function Page() {
   const [selectedPerson, setSelectedPerson] = React.useState<Person | null>(null);
   const [filter, setFilter] = React.useState<string>("");
   const [persons, setPersons] = React.useState<Person[]>([]);
+  const [maxMetrics, setMaxMetrics] = React.useState<PlayerMaxMetrics | null>(null);
   type FotoIndexItem = { nombreNorm: string; path: string };
   const [fotosIndex, setFotosIndex] = React.useState<FotoIndexItem[]>([]);
   React.useEffect(() => {
@@ -200,6 +209,32 @@ export default function Page() {
     if (!selectedPerson) return null;
     return persons.find(p => p.id === selectedPerson.id) ?? selectedPerson;
   }, [persons, selectedPerson]);
+
+  // Fetch player maximum metrics from API when selection changes
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const pid = selected?.id;
+      if (!pid) { setMaxMetrics(null); return; }
+      try {
+        const res = await fetch(`${API_BASE}/player/${pid}/metrics/max`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('failed');
+        const json = await res.json();
+        if (!cancelled) setMaxMetrics(json as PlayerMaxMetrics);
+      } catch (e) {
+        if (!cancelled) setMaxMetrics(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selected?.id]);
+
+  const kpis = React.useMemo(() => ([
+    { title: "Max. Dist", value: maxMetrics ? `${maxMetrics.max_distance_m} m` : "4013 m", link: "/match" },
+    { title: "HSR Max", value: maxMetrics ? `${maxMetrics.hsr_max_m} m` : "1653 m" },
+    { title: "Velocidad Max.", value: maxMetrics ? `${maxMetrics.max_speed_kmh} km/h` : "27 km/h" },
+    { title: "High Metab. Dist.", value: maxMetrics ? `${maxMetrics.high_metabolic_distance_m} m` : "550 m" },
+    { title: "z6", value: maxMetrics ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)` : '15" (229m)' },
+  ]), [maxMetrics]);
 
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
@@ -348,13 +383,7 @@ export default function Page() {
 
             <CardContent className="w-full mt-2">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                {[
-                  { title: "Max. Dist", value: "4013 m", link: "/match" },
-                  { title: "HSR Max", value: "1653 m" },
-                  { title: "Velocidad Max.", value: "27 km/h" },
-                  { title: "High Metab. Dist.", value: "550 m" },
-                  { title: "z6", value: "15\" (229m)" },
-                ].map((kpi) => (
+                {kpis.map((kpi) => (
                   <Card key={kpi.title} className="bg-zinc-900/60 border-zinc-800">
                     <CardContent className="py-3">
                       <div className="text-sm text-zinc-300">{kpi.title}</div>

@@ -1,6 +1,5 @@
 use axum::{extract::{Path, State}, Json};
 use axum::extract::Query;
-use axum::routing::delete;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
@@ -205,6 +204,7 @@ pub struct MatchPayload {
     pub youtube_link: Option<String>,
     pub notes: Option<String>,
     pub source_pdf_hash: Option<String>,
+    pub gps_table_name: Option<String>,
 }
 
 pub async fn create_match(State(pool): State<Db>, Json(mp): Json<MatchPayload>) -> Result<Json<Match>, (axum::http::StatusCode, String)> {
@@ -212,7 +212,7 @@ pub async fn create_match(State(pool): State<Db>, Json(mp): Json<MatchPayload>) 
     if let Some(ref h) = mp.source_pdf_hash {
         if let Some(existing) = sqlx::query_as!(
             Match,
-            r#"SELECT match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence
+            r#"SELECT match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence, gps_table_name
                FROM matches WHERE source_pdf_hash = $1"#,
             h
         )
@@ -225,10 +225,10 @@ pub async fn create_match(State(pool): State<Db>, Json(mp): Json<MatchPayload>) 
 
     let rec = sqlx::query_as!(
         Match,
-        r#"INSERT INTO matches (match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, youtube_link, notes, source_pdf_hash)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-           RETURNING match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence"#,
-        Uuid::new_v4(), mp.competition_id, mp.match_date, mp.venue_id, mp.category, mp.home_team_id, mp.away_team_id, mp.youtube_link, mp.notes, mp.source_pdf_hash
+        r#"INSERT INTO matches (match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, youtube_link, notes, source_pdf_hash, gps_table_name)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           RETURNING match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence, gps_table_name"#,
+        Uuid::new_v4(), mp.competition_id, mp.match_date, mp.venue_id, mp.category, mp.home_team_id, mp.away_team_id, mp.youtube_link, mp.notes, mp.source_pdf_hash, mp.gps_table_name
     )
     .fetch_one(&pool)
     .await
@@ -253,6 +253,7 @@ pub async fn list_matches(State(pool): State<Db>) -> Result<Json<Vec<serde_json:
           m.notes,
           m.source_pdf_hash,
           m.parse_confidence,
+          m.gps_table_name,
           th.name AS home_team_name,
           ta.name AS away_team_name
         FROM matches m
@@ -281,6 +282,7 @@ pub async fn list_matches(State(pool): State<Db>) -> Result<Json<Vec<serde_json:
             "notes": r.notes,
             "source_pdf_hash": r.source_pdf_hash,
             "parse_confidence": r.parse_confidence,
+            "gps_table_name": r.gps_table_name,
             "home_team_name": r.home_team_name,
             "away_team_name": r.away_team_name,
         }))
@@ -307,6 +309,7 @@ pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<J
           m.notes,
           m.source_pdf_hash,
           m.parse_confidence,
+          m.gps_table_name,
           th.name AS home_team_name,
           ta.name AS away_team_name,
           c.name  AS competition_name,
@@ -343,6 +346,7 @@ pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<J
         "notes": r.notes,
         "source_pdf_hash": r.source_pdf_hash,
         "parse_confidence": r.parse_confidence,
+        "gps_table_name": r.gps_table_name,
         "home_team_name": r.home_team_name,
         "away_team_name": r.away_team_name,
     })))
@@ -361,6 +365,7 @@ pub struct MatchUpdatePayload {
     pub result_away: Option<i32>,
     pub youtube_link: Option<String>,
     pub notes: Option<String>,
+    pub gps_table_name: Option<String>,
 }
 pub async fn update_match(State(pool): State<Db>, Path(id): Path<Uuid>, Json(mp): Json<MatchUpdatePayload>) -> Result<Json<Match>, (axum::http::StatusCode, String)> {
     let rec = sqlx::query_as!(
@@ -375,10 +380,11 @@ pub async fn update_match(State(pool): State<Db>, Path(id): Path<Uuid>, Json(mp)
              result_home    = COALESCE($8, result_home),
              result_away    = COALESCE($9, result_away),
              youtube_link   = COALESCE($10, youtube_link),
-             notes          = COALESCE($11, notes)
+             notes          = COALESCE($11, notes),
+             gps_table_name = COALESCE($12, gps_table_name)
            WHERE match_id = $1
-           RETURNING match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence"#,
-        id, mp.competition_id, mp.match_date, mp.venue_id, mp.category, mp.home_team_id, mp.away_team_id, mp.result_home, mp.result_away, mp.youtube_link, mp.notes
+           RETURNING match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence, gps_table_name"#,
+        id, mp.competition_id, mp.match_date, mp.venue_id, mp.category, mp.home_team_id, mp.away_team_id, mp.result_home, mp.result_away, mp.youtube_link, mp.notes, mp.gps_table_name
     ).fetch_one(&pool).await.map_err(internal_err)?;
     Ok(Json(rec))
 }

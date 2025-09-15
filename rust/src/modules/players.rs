@@ -112,3 +112,19 @@ pub async fn get_all_players_photos() -> Json<Value> {
         "fotos": serialized_fotos
     }))
 }
+
+// Placeholder: returns current hardcoded maximum metrics for a player across matches.
+// Later we will compute these by aggregating over matches and gps tables using pg_trgm.
+pub async fn get_player_max_metrics(Path(user_id): Path<i64>) -> Json<Value> {
+    let _uid = user_id; // reserved for future use
+    Json(json!({
+        "max_distance_m": 4013,
+        "hsr_max_m": 1653,
+        "max_speed_kmh": 27,
+        "high_metabolic_distance_m": 550,
+        "z6": {
+            "seconds": 15,
+            "distance_m": 229
+        }
+    }))
+}
