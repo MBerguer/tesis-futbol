@@ -81,6 +81,29 @@ body {
   }
 }
 
+/* Global dark scrollbars (shadcn-compatible) */
+@layer base {
+  * {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: hsl(var(--muted)) hsl(var(--background));
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted));
+    border-radius: 9999px;
+    border: 2px solid hsl(var(--background));
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground));
+  }
+}
+
 
 
 @layer base {
