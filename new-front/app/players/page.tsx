@@ -51,13 +51,35 @@ function calcAge(birthDate?: string | null) {
 export default function Page() {
   const [selectedPerson, setSelectedPerson] = React.useState<Person | null>(null);
   const [filter, setFilter] = React.useState<string>("");
+  const [selectedCategory, setSelectedCategory] = React.useState<string>("sub19");
 
   const persons = React.useMemo(() => personsData as Person[], []);
+  const categories = React.useMemo(() => {
+    const set = new Set<string>();
+    (persons as Person[]).forEach(p => { if (p.categoria) set.add((p.categoria as string).toLowerCase()); });
+    return Array.from(set).sort((a,b)=>a.localeCompare(b));
+  }, [persons]);
   const list = React.useMemo(() => {
     const f = filter.trim().toLowerCase();
-    if (!f) return persons;
-    return persons.filter(p => `${p.Jugador} ${p.nombre} ${p.categoria} ${p.Posicion}`.toLowerCase().includes(f));
-  }, [persons, filter]);
+    let arr = persons as Person[];
+    if (selectedCategory) arr = arr.filter(p => (p.categoria || "").toLowerCase() === selectedCategory);
+    if (!f) return arr;
+    return arr.filter(p => `${p.Jugador} ${p.nombre} ${p.categoria} ${p.Posicion}`.toLowerCase().includes(f));
+  }, [persons, filter, selectedCategory]);
+
+  // Select first player by default on initial load
+  React.useEffect(() => {
+    if (!selectedPerson && persons.length > 0) {
+      setSelectedPerson(persons[0]);
+    }
+  }, [persons, selectedPerson]);
+
+  // If current selection is filtered out, pick first in current list
+  React.useEffect(() => {
+    if (selectedPerson && !list.some(p => p.id === selectedPerson.id)) {
+      setSelectedPerson(list[0] ?? null);
+    }
+  }, [list, selectedPerson]);
 
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
@@ -67,7 +89,31 @@ export default function Page() {
             <CardTitle>Plantel</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="sticky top-0 z-10 mb-3">
+            <div className="sticky top-0 z-10 mb-3 space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {categories.map((cat)=>{
+                  const active = selectedCategory === cat;
+                  const label = cat;
+                  return (
+                    <Button
+                      key={cat}
+                      size="sm"
+                      variant={active?"default":"ghost"}
+                      className={`capitalize ${active?"bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40":"border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60 text-zinc-200"}`}
+                      onClick={()=> setSelectedCategory(cat)}>
+                      {label}
+                    </Button>
+                  );
+                })}
+                <Button
+                  size="sm"
+                  variant={selectedCategory?"ghost":"default"}
+                  className={`${selectedCategory?"border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60 text-zinc-200":"bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40"}`}
+                  onClick={()=>setSelectedCategory("")}
+                >
+                  Todos
+                </Button>
+              </div>
               <input
                 type="text"
                 placeholder="Buscar jugador…"
@@ -94,7 +140,7 @@ export default function Page() {
                         <div className="text-sm truncate">{person.Jugador || person.nombre}</div>
                         <div className="text-[11px] text-zinc-400 truncate">{person.Posicion || "—"}</div>
                       </div>
-                      <Badge variant="secondary" className="ml-auto capitalize">{person.categoria || ""}</Badge>
+                      <Badge variant="outline" className="ml-auto capitalize border-zinc-700 bg-zinc-900/60 text-zinc-200">{person.categoria || ""}</Badge>
                     </Button>
                   </li>
                 ))}
