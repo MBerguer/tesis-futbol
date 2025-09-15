@@ -150,16 +150,16 @@ pub async fn resolve_table_for_match(
     let away = norm(row.away_team_name.as_str());
     let home = norm(row.home_team_name.as_str());
 
-    let mut candidate: Option<String> = None;
+    let mut found: Option<String> = None;
     for t in tables.into_iter().filter_map(|r| r.table_name) {
-        let tn = t.to_lowercase();
-        if tn.contains(&away) || tn.contains(&home) {
-            candidate = Some(t);
+        let tn = norm(&t);
+        if tn.contains(&away) || tn.contains(&home) || away.contains(&tn) || home.contains(&tn) {
+            found = Some(t);
             break;
         }
     }
 
-    if let Some(table_name) = candidate {
+    if let Some(table_name) = found {
         Json(json!({"table": table_name}))
     } else {
         Json(json!({"table": null, "error": "no matching table found"}))
