@@ -195,7 +195,9 @@ pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<J
           ta.name AS away_team_name,
           c.name  AS competition_name,
           v.name  AS venue_name,
-          v.city  AS venue_city
+          v.city  AS venue_city,
+          v.latitude AS venue_latitude,
+          v.longitude AS venue_longitude
         FROM matches m
         JOIN teams th ON th.team_id = m.home_team_id
         JOIN teams ta ON ta.team_id = m.away_team_id
@@ -214,6 +216,8 @@ pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<J
         "venue_id": r.venue_id,
         "venue_name": r.venue_name,
         "venue_city": r.venue_city,
+        "venue_latitude": r.venue_latitude,
+        "venue_longitude": r.venue_longitude,
         "category": r.category,
         "home_team_id": r.home_team_id,
         "away_team_id": r.away_team_id,

@@ -37,6 +37,8 @@ pub struct Venue {
     pub venue_id: Uuid,
     pub name: String,
     pub city: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
