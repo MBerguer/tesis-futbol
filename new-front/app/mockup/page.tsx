@@ -7,8 +7,8 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/app/players/components/ui/card";
-import { Button } from "@/app/players/components/ui/button";
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
 import {
   Activity,
