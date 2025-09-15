@@ -20,6 +20,9 @@ import StadiumMap from "./components/StadiumMap";
 import PitchMap from "./components/PitchMap";
 import Spinner from "./components/Spinner";
 import { Button } from "../players/components/ui/button";
+import { Input } from "../players/components/ui/input";
+import { Label } from "../players/components/ui/label";
+import { Separator } from "../players/components/ui/separator";
 import { toAbsoluteTime as toAbsFromUtils, formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
 import { usePositionsWindow } from "./hooks/usePositionsWindow";
 import { stringToColorPair } from "./utils/colors";
@@ -751,51 +754,53 @@ export default function Page() {
               {showPatchPanel && (
                 <Card className="md:col-span-1 bg-zinc-900/50 border-zinc-800">
                   <CardHeader>
-                    <CardTitle>Periods Editor</CardTitle>
                     <div className="ml-auto">
                       <Button variant={'secondary'} onClick={()=>setShowPatchPanel(false)}>Close Editor</Button>
                     </div>
+                    <CardTitle>Periods Editor</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {!periods ? (
                       <div className="text-sm text-gray-600">No detected periods yet.</div>
                     ) : (
                       <div className="space-y-4 text-sm">
-                        <div>
-                          <div className="font-medium mb-1">Detected first half start</div>
+                        <div className="space-y-2">
+                          <Label className="font-medium text-zinc-300">Detected first half start</Label>
                           <div className="flex items-center gap-2">
-                            <span className="px-2 py-1 rounded bg-zinc-100">sec: {periods.detected_first_half_start ?? '—'}</span>
-                            <span className="px-2 py-1 rounded bg-zinc-100">time: {toAbsFromUtils(baseTime || null, periods.detected_first_half_start)}</span>
+                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">sec: {periods.detected_first_half_start ?? '—'}</span>
+                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">time: {toAbsFromUtils(baseTime || null, periods.detected_first_half_start)}</span>
                           </div>
                         </div>
-                        <div>
-                          <div className="font-medium mb-1">Detected second half start</div>
+                        <div className="space-y-2">
+                          <Label className="font-medium text-zinc-300">Detected second half start</Label>
                           <div className="flex items-center gap-2">
-                            <span className="px-2 py-1 rounded bg-zinc-100">sec: {periods.detected_second_half_start ?? '—'}</span>
-                            <span className="px-2 py-1 rounded bg-zinc-100">time: {toAbsFromUtils(baseTime || null, periods.detected_second_half_start)}</span>
+                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">sec: {periods.detected_second_half_start ?? '—'}</span>
+                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">time: {toAbsFromUtils(baseTime || null, periods.detected_second_half_start)}</span>
                           </div>
                         </div>
-                        <hr />
-                        <div>
-                          <div className="font-medium mb-1">Patched first half start (sec)</div>
-                          <input
+                        <Separator className="bg-zinc-800" />
+                        <div className="space-y-1">
+                          <Label className="font-medium text-zinc-300" htmlFor="fh-start">Patched first half start (sec)</Label>
+                          <Input
+                            id="fh-start"
                             type="number"
-                            className="w-full border rounded px-2 py-1"
+                            className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
                             value={patchedFirstHalfStart ?? ''}
                             onChange={(e)=>setPatchedFirstHalfStart(e.target.value === '' ? null : Number(e.target.value))}
                           />
                         </div>
-                        <div>
-                          <div className="font-medium mb-1">Patched second half start (sec)</div>
-                          <input
+                        <div className="space-y-1">
+                          <Label className="font-medium text-zinc-300" htmlFor="sh-start">Patched second half start (sec)</Label>
+                          <Input
+                            id="sh-start"
                             type="number"
-                            className="w-full border rounded px-2 py-1"
+                            className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
                             value={patchedSecondHalfStart ?? ''}
                             onChange={(e)=>setPatchedSecondHalfStart(e.target.value === '' ? null : Number(e.target.value))}
                           />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button variant={'outline'} onClick={()=>{
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button size={'sm'} variant={'outline'} onClick={()=>{
                             setPatchedFirstHalfStart(periods.detected_first_half_start ?? null);
                             setPatchedSecondHalfStart(periods.detected_second_half_start ?? null);
                             const fh = periods.detected_first_half_start ?? null;
@@ -805,7 +810,7 @@ export default function Page() {
                             const se = periods.detected_second_half_end ?? null;
                             setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
                           }}>Reset to detected</Button>
-                          <Button
+                          <Button size={'sm'} variant={'default'} className="bg-primary text-primary-foreground hover:bg-primary/90"
                             onClick={async()=>{
                               if (!selectedTable) return;
                               const body = {
@@ -825,23 +830,25 @@ export default function Page() {
                             }}
                           >Save patched</Button>
                         </div>
-                        <hr />
-                        <div>
-                          <div className="font-medium mb-1">First half duration (mm:ss)</div>
-                          <input
+                        <Separator className="bg-zinc-800" />
+                        <div className="space-y-1">
+                          <Label className="font-medium text-zinc-300" htmlFor="fh-dur">First half duration (mm:ss)</Label>
+                          <Input
+                            id="fh-dur"
                             type="text"
                             placeholder="45:00"
-                            className="w-full border rounded px-2 py-1"
+                            className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
                             value={formatMmSsFromSeconds(patchedFirstHalfDuration)}
                             onChange={(e)=> setPatchedFirstHalfDuration(parseMmSsToSeconds(e.target.value))}
                           />
                         </div>
-                        <div>
-                          <div className="font-medium mb-1">Second half duration (mm:ss)</div>
-                          <input
+                        <div className="space-y-1">
+                          <Label className="font-medium text-zinc-300" htmlFor="sh-dur">Second half duration (mm:ss)</Label>
+                          <Input
+                            id="sh-dur"
                             type="text"
                             placeholder="45:00"
-                            className="w-full border rounded px-2 py-1"
+                            className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
                             value={formatMmSsFromSeconds(patchedSecondHalfDuration)}
                             onChange={(e)=> setPatchedSecondHalfDuration(parseMmSsToSeconds(e.target.value))}
                           />
