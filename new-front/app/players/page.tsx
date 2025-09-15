@@ -52,7 +52,7 @@ type PlayerMaxMetrics = {
   max_speed_kmh: number;
   high_metabolic_distance_m: number;
   z6: { seconds: number; distance_m: number };
-  max_speed_detail?: { match_id?: string; gps_table_name?: string; second?: number; time?: string };
+  max_speed_detail?: { match_id?: string; gps_table_name?: string; minute?: string; time?: string; manual_first_half_start?: number|null };
 };
 
 const rendimiento = [
@@ -232,7 +232,7 @@ export default function Page() {
   const kpis = React.useMemo(() => ([
     { title: "Max. Dist", value: maxMetrics ? `${maxMetrics.max_distance_m} m` : "4013 m", link: "/match" },
     { title: "HSR Max", value: maxMetrics ? `${maxMetrics.hsr_max_m} m` : "1653 m" },
-    { title: "Velocidad Max.", value: maxMetrics ? `${maxMetrics.max_speed_kmh} km/h` : "27 km/h" },
+    { title: "Velocidad Max.", value: maxMetrics ? `${(Math.round(maxMetrics.max_speed_kmh * 100) / 100).toFixed(2)} km/h` : "27 km/h" },
     { title: "High Metab. Dist.", value: maxMetrics ? `${maxMetrics.high_metabolic_distance_m} m` : "550 m" },
     { title: "z6", value: maxMetrics ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)` : '15" (229m)' },
   ]), [maxMetrics]);
@@ -389,9 +389,9 @@ export default function Page() {
                     <CardContent className="py-3">
                       <div className="text-sm text-zinc-300">{kpi.title}</div>
                       <div className="text-xl font-semibold">{kpi.value}</div>
-                      {kpi.title === "Velocidad Max." && (maxMetrics?.max_speed_detail?.time || maxMetrics?.max_speed_detail?.second !== undefined) ? (
-                        <div className="text-[11px] text-zinc-400 mt-1">
-                          {maxMetrics.max_speed_detail.time ? `minuto ${maxMetrics.max_speed_detail.time}` : `segundo ${Math.round(maxMetrics.max_speed_detail.second || 0)}`}
+                      {kpi.title === "Velocidad Max." && (maxMetrics?.max_speed_detail?.minute || maxMetrics?.max_speed_detail?.time) ? (
+                        <div className="text-[11px] text-zinc-400 mt-1" title={`tiempo real: ${maxMetrics.max_speed_detail.time ?? '—'} | inicio PT manual: ${maxMetrics.max_speed_detail.manual_first_half_start ?? '—'}s`}>
+                          {maxMetrics.max_speed_detail.minute ? `minuto ${maxMetrics.max_speed_detail.minute}` : `minuto —`}
                           {maxMetrics.max_speed_detail.gps_table_name ? ` · ${maxMetrics.max_speed_detail.gps_table_name}` : ""}
                         </div>
                       ) : null}

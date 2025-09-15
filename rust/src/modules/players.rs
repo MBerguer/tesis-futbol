@@ -121,8 +121,9 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     let mut max_speed_kmh: f64 = 27.0;
     let mut max_speed_match_id: Option<uuid::Uuid> = None;
     let mut max_speed_table: Option<String> = None;
-    let mut max_speed_second: Option<f64> = None;
+    let mut max_speed_minute: Option<String> = None; // formatted MM:SS based on elapsed
     let mut max_speed_time: Option<String> = None; // raw time from table
+    let mut manual_first_half_start: Option<i32> = None;
 
     // Other placeholders to keep previous response stable
     let max_distance_m: i64 = 4013;
@@ -205,18 +206,26 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
 
                 if let Some(row) = row_opt {
                     let speed: f64 = row.try_get("speed").unwrap_or(0.0);
-                    let sec: f64 = row.try_get("sec").unwrap_or(0.0);
                     let raw_time: Option<String> = row.try_get::<String,_>("time").ok();
                     let minute_str: Option<String> = row.try_get::<String,_>("minute_str").ok();
                     if speed > 0.0 && speed > max_speed_kmh {
                         max_speed_kmh = speed;
-                        max_speed_second = Some(sec);
                         max_speed_match_id = Some(r.match_id);
                         max_speed_table = Some(table_ident);
-                        max_speed_time = minute_str.or(raw_time);
+                        max_speed_minute = minute_str;
+                        max_speed_time = raw_time;
                     }
                 }
             }
+        }
+
+        // If we know the table, try to fetch manual_first_half_start from match_periods
+        if max_speed_table.is_some() {
+            let mp_row = sqlx::query!(
+                r#"SELECT manual_first_half_start FROM match_periods WHERE match_name = $1"#,
+                max_speed_table.clone().unwrap()
+            ).fetch_optional(&pool).await.ok().flatten();
+            if let Some(r) = mp_row { manual_first_half_start = r.manual_first_half_start; }
         }
     }
 
@@ -229,8 +238,9 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
         "max_speed_detail": {
             "match_id": max_speed_match_id,
             "gps_table_name": max_speed_table,
-            "second": max_speed_second,
-            "time": max_speed_time
+            "minute": max_speed_minute,
+            "time": max_speed_time,
+            "manual_first_half_start": manual_first_half_start
         }
     }))
 }
