@@ -26,7 +26,7 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
   }, [tables, query]);
 
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-72'} transition-all duration-200 ease-in-out bg-zinc-900/60 border-r border-zinc-800 min-h-screen flex flex-col`}>      
+    <aside className={`${collapsed ? 'w-16' : 'w-72'} sticky top-0 h-screen overflow-hidden transition-all duration-200 ease-in-out bg-zinc-900/60 border-r border-zinc-800 flex flex-col`}>      
       <div className="flex items-center gap-2 px-3 py-3 border-b border-zinc-800">
         <button
           aria-label="Toggle sidebar"
@@ -45,8 +45,8 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
         <div className="px-3 py-3 border-b border-zinc-800 flex flex-col gap-2">
           <div className="text-xs uppercase text-zinc-500">Sections</div>
           <nav className="flex flex-col gap-1">
-            <Link href="/players" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Players</Link>
-            <Link href="/plantel" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Plantel</Link>
+            <Link href="/players" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Active Players</Link>
+            <Link href="/plantel" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Full Plantel</Link>
             <Link href="/week-preparation" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Week preparation</Link>
             <Link href="/admin" className="rounded-md px-2 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Admin</Link>
           </nav>

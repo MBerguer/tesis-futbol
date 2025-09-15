@@ -74,6 +74,70 @@ export default function Page() {
   const [selectedPerson, setSelectedPerson] = React.useState<Person | null>(null);
   const [filter, setFilter] = React.useState<string>("");
   const [persons, setPersons] = React.useState<Person[]>([]);
+  type FotoIndexItem = { nombreNorm: string; path: string };
+  const [fotosIndex, setFotosIndex] = React.useState<FotoIndexItem[]>([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/player/photos`, { cache: 'no-store' });
+        const json = await res.json();
+        const normalize = (s: string) => s
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const arr = Array.isArray(json?.fotos) ? json.fotos : [];
+        const idx: FotoIndexItem[] = arr
+          .filter((f: any) => f && typeof f.nombre === 'string' && f.nombre.trim() && typeof f.path === 'string' && f.path.trim())
+          .map((f: any) => ({ nombreNorm: normalize(f.nombre as string), path: f.path as string }));
+        if (!cancelled) setFotosIndex(idx);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const trigramSet = React.useCallback((s: string) => {
+    const str = `  ${s}  `; // pad
+    const set = new Set<string>();
+    for (let i = 0; i < str.length - 2; i++) {
+      set.add(str.slice(i, i + 3));
+    }
+    return set;
+  }, []);
+
+  const similarity = React.useCallback((a: string, b: string) => {
+    if (!a || !b) return 0;
+    const A = trigramSet(a);
+    const B = trigramSet(b);
+    let inter = 0;
+    A.forEach((t) => { if (B.has(t)) inter++; });
+    const union = A.size + B.size - inter;
+    return union === 0 ? 0 : inter / union;
+  }, [trigramSet]);
+
+  const findBestPhoto = React.useCallback((name: string): string | undefined => {
+    const normalize = (s: string) => s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const n = normalize(name);
+    if (!n) return undefined;
+    let bestS = 0;
+    let bestPath: string | undefined = undefined;
+    for (const f of fotosIndex) {
+      const s = similarity(n, f.nombreNorm);
+      if (s > bestS) { bestS = s; bestPath = f.path; }
+    }
+    return bestS >= 0.28 ? bestPath : undefined; // threshold tuned lightly
+  }, [fotosIndex, similarity]);
   const list = React.useMemo(() => {
     const f = filter.trim().toLowerCase();
     if (!f) return persons;
@@ -90,6 +154,10 @@ export default function Page() {
           const normalized: Person[] = data.map((p: any) => ({
             ...p,
             id: p.id ?? p.Documento_de_Identidad ?? undefined,
+            path_foto: (() => {
+              const display = (p.Jugador ?? p.nombre ?? '') as string;
+              return findBestPhoto(display);
+            })()
           }));
           setPersons(normalized);
           if (normalized.length > 0) setSelectedPerson(normalized[0]);
@@ -100,6 +168,18 @@ export default function Page() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Re-enrich photos when the fotosIndex arrives
+  React.useEffect(() => {
+    if (fotosIndex.length === 0 || persons.length === 0) return;
+    setPersons(prev => prev.map(p => {
+      const display = (p.Jugador ?? p.nombre ?? '') as string;
+      const best = findBestPhoto(display);
+      return best && best !== p.path_foto ? { ...p, path_foto: best } : p;
+    }));
+    // do not add findBestPhoto as dep to avoid function identity changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fotosIndex]);
 
   // Select first player by default on initial load
   React.useEffect(() => {
@@ -114,6 +194,12 @@ export default function Page() {
       setSelectedPerson(list[0] ?? null);
     }
   }, [list, selectedPerson]);
+
+  // Always use the freshest instance of the selected person from persons (keeps path_foto in sync)
+  const selected = React.useMemo(() => {
+    if (!selectedPerson) return null;
+    return persons.find(p => p.id === selectedPerson.id) ?? selectedPerson;
+  }, [persons, selectedPerson]);
 
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
@@ -142,7 +228,7 @@ export default function Page() {
                       className="w-full justify-start gap-2 h-auto py-2 border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60"
                       onClick={() => setSelectedPerson(person)}
                     >
-                      <Avatar className="h-7 w-7">
+                      <Avatar className="h-4 w-4">
                         <AvatarImage alt={person.Jugador ?? undefined} src={person.path_foto || undefined} />
                         <AvatarFallback>{(person.Jugador || person.nombre || "?").slice(0,1)}</AvatarFallback>
                       </Avatar>
@@ -160,40 +246,40 @@ export default function Page() {
       </aside>
 
       <section className="w-full lg:w-3/4">
-        {!selectedPerson ? (
+        {!selected ? (
           <Card className="bg-zinc-900/50 border-zinc-800"><CardHeader><CardTitle>Selecciona un jugador</CardTitle></CardHeader></Card>
         ) : (
           <Card className="bg-zinc-900/50 border-zinc-800">
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 <User className="w-5 h-5" />
-                <span className="truncate">{selectedPerson.Jugador || selectedPerson.nombre}</span>
+                <span className="truncate">{selected.Jugador || selected.nombre}</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col md:flex-row gap-6">
-              <div className="md:w-1/3">
-                <Avatar className="w-full h-auto rounded-md overflow-hidden">
-                  <AvatarImage alt={selectedPerson.Jugador ?? undefined} src={selectedPerson.path_foto || undefined} className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
-                  <AvatarFallback className="h-72 text-3xl">{(selectedPerson.Jugador || selectedPerson.nombre || "?").slice(0,1)}</AvatarFallback>
+              <div className="md:w-1/5">
+                <Avatar className="h-auto w-full rounded-md overflow-hidden mx-auto">
+                  <AvatarImage alt={selected.Jugador ?? undefined} src={selected.path_foto || undefined} className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
+                  <AvatarFallback className="h-44 text-2xl">{(selected.Jugador || selected.nombre || "?").slice(0,1)}</AvatarFallback>
                 </Avatar>
               </div>
               <div className="md:flex-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                  <div className="flex items-center gap-2"><User className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Alias:</span> {selectedPerson.nombre || "—"}</div>
-                  <div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Edad:</span> {calcAge(selectedPerson.Fecha_Nacimiento) ?? "—"}</div>
-                  <div className="flex items-center gap-2"><Tag className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Posición:</span> {selectedPerson.Posicion || "—"}</div>
-                  <div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Fecha Nac.:</span> {selectedPerson.Fecha_Nacimiento || "—"}</div>
-                  <div className="flex items-center gap-2"><FileText className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Documento:</span> {selectedPerson.Documento_de_Identidad ?? "—"}</div>
-                  <div className="flex items-center gap-2"><Stamp className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Pasaporte:</span> {selectedPerson.Pasaporte || "—"}</div>
-                  <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Teléfono:</span> {selectedPerson.Telefono || "—"}</div>
-                  <div className="flex items-center gap-2"><Smartphone className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Celular:</span> {selectedPerson.Celular || "—"}</div>
-                  <div className="sm:col-span-2 flex items-center gap-2"><Mail className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Email:</span> {selectedPerson.Email || "—"}</div>
-                  <div className="sm:col-span-2 flex items-center gap-2"><HeartPulse className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Cobertura Médica:</span> {selectedPerson.Cobertura_Medica || "—"}</div>
-                  <div className="sm:col-span-2 flex items-center gap-2"><GraduationCap className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Estudios:</span> {selectedPerson.Estudios || "—"}</div>
-                  <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Oriundo:</span> {selectedPerson.Oriundo || "—"}</div>
-                  <div className="flex items-center gap-2"><Building2 className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Club de Origen:</span> {selectedPerson.Club_de_Origen || "—"}</div>
-                  <div className="flex items-center gap-2"><Percent className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">% Origen:</span> {selectedPerson.Club_de_Origen_Porcentaje || "—"}</div>
-                  <div className="sm:col-span-2 flex items-center gap-2"><ListIcon className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Medidas personales:</span> {selectedPerson.personalMetrics || "—"}</div>
+                  <div className="flex items-center gap-2"><User className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Alias:</span> {selected.nombre || "—"}</div>
+                  <div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Edad:</span> {calcAge(selected.Fecha_Nacimiento) ?? "—"}</div>
+                  <div className="flex items-center gap-2"><Tag className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Posición:</span> {selected.Posicion || "—"}</div>
+                  <div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Fecha Nac.:</span> {selected.Fecha_Nacimiento || "—"}</div>
+                  <div className="flex items-center gap-2"><FileText className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Documento:</span> {selected.Documento_de_Identidad ?? "—"}</div>
+                  <div className="flex items-center gap-2"><Stamp className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Pasaporte:</span> {selected.Pasaporte || "—"}</div>
+                  <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Teléfono:</span> {selected.Telefono || "—"}</div>
+                  <div className="flex items-center gap-2"><Smartphone className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Celular:</span> {selected.Celular || "—"}</div>
+                  <div className="sm:col-span-2 flex items-center gap-2"><Mail className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Email:</span> {selected.Email || "—"}</div>
+                  <div className="sm:col-span-2 flex items-center gap-2"><HeartPulse className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Cobertura Médica:</span> {selected.Cobertura_Medica || "—"}</div>
+                  <div className="sm:col-span-2 flex items-center gap-2"><GraduationCap className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Estudios:</span> {selected.Estudios || "—"}</div>
+                  <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Oriundo:</span> {selected.Oriundo || "—"}</div>
+                  <div className="flex items-center gap-2"><Building2 className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Club de Origen:</span> {selected.Club_de_Origen || "—"}</div>
+                  <div className="flex items-center gap-2"><Percent className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">% Origen:</span> {selected.Club_de_Origen_Porcentaje || "—"}</div>
+                  <div className="sm:col-span-2 flex items-center gap-2"><ListIcon className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Medidas personales:</span> {selected.personalMetrics || "—"}</div>
                 </div>
 
                 <Separator className="my-4 bg-zinc-800" />
@@ -202,19 +288,19 @@ export default function Page() {
                   <Card className="bg-zinc-900/60 border-zinc-800">
                     <CardContent className="pt-4">
                       <div className="text-xs text-zinc-400">Masa F0</div>
-                      <div className="text-2xl font-semibold">{selectedPerson.masaF0 || "—"}</div>
+                      <div className="text-2xl font-semibold">{selected?.masaF0 || "—"}</div>
                     </CardContent>
                   </Card>
                   <Card className="bg-zinc-900/60 border-zinc-800">
                     <CardContent className="pt-4">
                       <div className="text-xs text-zinc-400">Sumatoria 6 Pliegues</div>
-                      <div className="text-2xl font-semibold">{selectedPerson.sumatoriaPliegues || "—"}</div>
+                      <div className="text-2xl font-semibold">{selected?.sumatoriaPliegues || "—"}</div>
                     </CardContent>
                   </Card>
                   <Card className="bg-zinc-900/60 border-zinc-800">
                     <CardContent className="pt-4">
                       <div className="text-xs text-zinc-400">Relación Músculo-Hueso</div>
-                      <div className="text-2xl font-semibold">{selectedPerson.relacionMusculoHueso || "—"}</div>
+                      <div className="text-2xl font-semibold">{selected?.relacionMusculoHueso || "—"}</div>
                     </CardContent>
                   </Card>
                 </div>
