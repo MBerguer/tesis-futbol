@@ -176,24 +176,44 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
         for r in rows {
             if let Some(table) = r.gps_table_name {
                 let table_ident = table.replace('"', ""); // sanitize quotes
-                let sql = format!(
-                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), base AS (\n   SELECT MIN(time) AS min_time FROM \"{}\" t, best b WHERE t.player_display_name = b.player_display_name\n ), top AS (\n   SELECT t.player_display_name, t.time, t.speed\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n   ORDER BY t.speed DESC NULLS LAST\n   LIMIT 1\n )\n SELECT top.player_display_name, top.speed, top.time AS time,\n        EXTRACT(EPOCH FROM (to_timestamp(top.time,'HH24:MI:SS.MS') - to_timestamp(base.min_time,'HH24:MI:SS.MS'))) AS sec\n FROM top, base",
-                    table_ident, table_ident, table_ident
+                let view_name = format!("{}_sql_player_gemini_processed_view", table_ident);
+                let sql_view = format!(
+                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), top AS (\n   SELECT t.player_display_name, t.time, t.elapsed_time, t.speed\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n   ORDER BY t.speed DESC NULLS LAST\n   LIMIT 1\n )\n SELECT top.player_display_name, top.speed, top.time AS time, top.elapsed_time AS sec,\n        (floor(top.elapsed_time/60))::int || ':' || lpad((floor(top.elapsed_time) % 60)::int::text, 2, '0') AS minute_str\n FROM top",
+                    view_name, view_name
                 );
-                if let Ok(row) = sqlx::query(&sql)
+
+                let mut row_opt = sqlx::query(&sql_view)
                     .bind(&display_name)
-                    .fetch_one(&pool)
+                    .fetch_optional(&pool)
                     .await
-                {
+                    .ok()
+                    .flatten();
+
+                if row_opt.is_none() {
+                    // Fallback to raw table if the view doesn't exist or query failed
+                    let sql_raw = format!(
+                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), base AS (\n   SELECT MIN(time) AS min_time FROM \"{}\" t, best b WHERE t.player_display_name = b.player_display_name\n ), top AS (\n   SELECT t.player_display_name, t.time, t.speed\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n   ORDER BY t.speed DESC NULLS LAST\n   LIMIT 1\n )\n SELECT top.player_display_name, top.speed, top.time AS time,\n        EXTRACT(EPOCH FROM (to_timestamp(top.time,'HH24:MI:SS.MS') - to_timestamp(base.min_time,'HH24:MI:SS.MS'))) AS sec,\n        (floor(EXTRACT(EPOCH FROM (to_timestamp(top.time,'HH24:MI:SS.MS') - to_timestamp(base.min_time,'HH24:MI:SS.MS'))) / 60))::int || ':' || lpad((floor(EXTRACT(EPOCH FROM (to_timestamp(top.time,'HH24:MI:SS.MS') - to_timestamp(base.min_time,'HH24:MI:SS.MS')))) % 60)::int::text, 2, '0') AS minute_str\n FROM top, base",
+                        table_ident, table_ident, table_ident
+                    );
+                    row_opt = sqlx::query(&sql_raw)
+                        .bind(&display_name)
+                        .fetch_optional(&pool)
+                        .await
+                        .ok()
+                        .flatten();
+                }
+
+                if let Some(row) = row_opt {
                     let speed: f64 = row.try_get("speed").unwrap_or(0.0);
                     let sec: f64 = row.try_get("sec").unwrap_or(0.0);
                     let raw_time: Option<String> = row.try_get::<String,_>("time").ok();
+                    let minute_str: Option<String> = row.try_get::<String,_>("minute_str").ok();
                     if speed > 0.0 && speed > max_speed_kmh {
                         max_speed_kmh = speed;
                         max_speed_second = Some(sec);
                         max_speed_match_id = Some(r.match_id);
                         max_speed_table = Some(table_ident);
-                        max_speed_time = raw_time;
+                        max_speed_time = minute_str.or(raw_time);
                     }
                 }
             }
