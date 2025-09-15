@@ -192,10 +192,15 @@ pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<J
           m.source_pdf_hash,
           m.parse_confidence,
           th.name AS home_team_name,
-          ta.name AS away_team_name
+          ta.name AS away_team_name,
+          c.name  AS competition_name,
+          v.name  AS venue_name,
+          v.city  AS venue_city
         FROM matches m
         JOIN teams th ON th.team_id = m.home_team_id
         JOIN teams ta ON ta.team_id = m.away_team_id
+        LEFT JOIN competitions c ON c.competition_id = m.competition_id
+        LEFT JOIN venues v ON v.venue_id = m.venue_id
         WHERE m.match_id = $1
         "#,
         id
@@ -204,8 +209,11 @@ pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<J
     Ok(Json(json!({
         "match_id": r.match_id,
         "competition_id": r.competition_id,
+        "competition_name": r.competition_name,
         "match_date": r.match_date,
         "venue_id": r.venue_id,
+        "venue_name": r.venue_name,
+        "venue_city": r.venue_city,
         "category": r.category,
         "home_team_id": r.home_team_id,
         "away_team_id": r.away_team_id,

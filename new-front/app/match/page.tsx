@@ -71,34 +71,36 @@ interface SprintInWorstCase {
   worst_case_distance_covered: number;
 }
 
+  interface MatchDetails {
+  match_id: string;
+  competition_id: string | null;
+  competition_name?: string | null;
+  match_date: string;
+  venue_id: string | null;
+  venue_name?: string | null;
+  venue_city?: string | null;
+  category: string | null;
+  home_team_id: string;
+  away_team_id: string;
+  result_home: number;
+  result_away: number;
+  youtube_link: string | null;
+  notes: string | null;
+  source_pdf_hash: string | null;
+  parse_confidence: number | null;
+  home_team_name?: string | null;
+  away_team_name?: string | null;
+}
+
 export default function Page() {
   const searchParams = useSearchParams();
   const { reloadToken: globalReloadToken, selectedTable: selectedTableFromContext, setSelectedTable } = useMatchContext();
   const selectedTable = selectedTableFromContext ?? searchParams.get('table');
   const selectedMatchId = searchParams.get('match');
   const [selectedPlayer, setSelectedPlayer] = useState<string>("");
-  const matchMetadata = {
-    teamA: "Equipo A",
-    teamB: "Equipo B",
-    date: "1 de enero de 2022",
-    location: "Nombre del Estadio",
-    referee: "Juan Pérez",
-    attendance: "50,000",
-    result: {
-      teamAScore: 2,
-      teamBScore: 1,
-    },
-    goals: [
-      { player: "Jugador A", team: "Equipo A", minute: 10 },
-      { player: "Jugador B", team: "Equipo B", minute: 20 },
-      { player: "Jugador C", team: "Equipo A", minute: 30 },
-    ],
-    yellowCards: [
-      { player: "Jugador D", team: "Equipo A", minute: 15 },
-      { player: "Jugador E", team: "Equipo B", minute: 25 },
-    ],
-    redCards: [{ player: "Jugador F", team: "Equipo A", minute: 60 }],
-  };
+  const [matchDetails, setMatchDetails] = useState<MatchDetails | null>(null);
+  const [matchDetailsLoading, setMatchDetailsLoading] = useState<boolean>(false);
+  const [matchDetailsError, setMatchDetailsError] = useState<string | null>(null);
   const [players, setPlayers] = useState<string[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
   const [entries, setEntries] = useState<MatchEntry[]>([]);
@@ -182,18 +184,49 @@ export default function Page() {
     return () => { cancelled = true; };
   }, [API_BASE, selectedMatchId, selectedTable, setSelectedTable]);
 
-  // Fetch youtube link from match details when match id is present
+  // Fetch match details (incl. youtube link) when match id is present
   useEffect(() => {
     const matchId = selectedMatchId;
-    if (!matchId) { setYoutubeLink(null); return; }
+    if (!matchId) { setYoutubeLink(null); setMatchDetails(null); setMatchDetailsError(null); setMatchDetailsLoading(false); return; }
     let cancelled = false;
     (async () => {
       try {
+        setMatchDetailsLoading(true);
+        setMatchDetailsError(null);
         const res = await fetch(`${API_BASE}/api/matches/${matchId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled) setYoutubeLink(data?.youtube_link || null);
-      } catch { if (!cancelled) setYoutubeLink(null); }
+        if (!res.ok) {
+          const txt = await res.text().catch(()=>"error");
+          console.error('Failed to fetch match details', res.status, txt);
+          // Fallback: fetch list and pick the item by id
+          try {
+            const resList = await fetch(`${API_BASE}/api/matches`);
+            if (resList.ok) {
+              const arr: MatchDetails[] = await resList.json();
+              const found = Array.isArray(arr) ? arr.find(m => m.match_id === matchId) : null;
+              if (!cancelled && found) {
+                setMatchDetails(found);
+                setYoutubeLink(found.youtube_link || null);
+                setMatchDetailsError(null);
+                return;
+              }
+            }
+          } catch (e2) {
+            console.error('Fallback list fetch failed', e2);
+          }
+          if (!cancelled) setMatchDetailsError(`HTTP ${res.status}: ${txt}`);
+          return;
+        }
+        const data: MatchDetails = await res.json();
+        if (!cancelled) {
+          setMatchDetails(data);
+          setYoutubeLink(data?.youtube_link || null);
+        }
+      } catch (e) { 
+        console.error('Error fetching match details', e);
+        if (!cancelled) { setYoutubeLink(null); setMatchDetailsError('Network error'); }
+      } finally {
+        if (!cancelled) setMatchDetailsLoading(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [API_BASE, selectedMatchId]);
@@ -369,26 +402,57 @@ export default function Page() {
                   <CardTitle>Details</CardTitle>
                 </CardHeader>
                 <CardContent className="h-[660px] md:h-[760px]">
-                  {!selectedTable ? (
+                  {!selectedMatchId ? (
                     <div className="text-sm text-gray-600">Select a match to view details.</div>
-                  ) : (
+                  ) : matchDetailsLoading ? (
                     <div className="space-y-2">
-                      <p className="text-lg font-semibold">{matchMetadata.teamA} vs {matchMetadata.teamB}</p>
-                      <p>Date: {matchMetadata.date}</p>
-                      <p>Location: {matchMetadata.location}</p>
-                      <p>Referee: {matchMetadata.referee}</p>
-                      <p>Attendance: {matchMetadata.attendance}</p>
-                      <div className="mt-2">
-                        <p className="font-medium">Result:</p>
-                        <p>{matchMetadata.teamA} {matchMetadata.result.teamAScore} - {matchMetadata.teamB} {matchMetadata.result.teamBScore}</p>
-                        <p className="mt-1 font-medium">Goals:</p>
-                        <ul className="list-disc pl-5">
-                          {matchMetadata.goals.map((g, i)=> (
-                            <li key={i}>{g.player} ({g.team}) - {g.minute}'</li>
-                          ))}
-                        </ul>
-                      </div>
+                      <Skeleton className="h-5" />
+                      <Skeleton className="h-5" />
+                      <Skeleton className="h-5" />
                     </div>
+                  ) : matchDetailsError ? (
+                    <div className="text-sm text-red-400">Failed to load match details. {matchDetailsError}</div>
+                  ) : (
+                    matchDetails == null ? (
+                      <div className="text-sm text-gray-600">No info.</div>
+                    ) : (() => { const md = matchDetails as MatchDetails; return (
+                      <div className="space-y-2 text-sm">
+                        <p className="text-lg font-semibold">
+                          {(md.home_team_name || (md.home_team_id?.slice(0,8)+"…"))} vs {(md.away_team_name || (md.away_team_id?.slice(0,8)+"…"))}
+                        </p>
+                        <p>
+                          <span className="text-zinc-400">Date:</span> {md.match_date ? new Date(md.match_date).toLocaleString() : 'No info'}
+                        </p>
+                        <p>
+                          <span className="text-zinc-400">Competition:</span> {md.competition_name || 'No info'}
+                        </p>                        
+                        <p>
+                          <span className="text-zinc-400">Venue:</span> {md.venue_name ? `${md.venue_name}${md.venue_city ? ' · ' + md.venue_city : ''}` : 'No info'}
+                        </p>
+                        <p>
+                          <span className="text-zinc-400">Result:</span> {md.result_home} - {md.result_away}
+                        </p>
+                        <p>
+                          <span className="text-zinc-400">YouTube:</span> {md.youtube_link ? (<a href={md.youtube_link} className="underline" target="_blank" rel="noreferrer">{md.youtube_link}</a>) : 'No info'}
+                        </p>
+                        <hr className="border-zinc-800" />
+                        <p>
+                          <span className="text-zinc-400">Home team:</span> {md.home_team_name || 'No info'}
+                        </p>
+                        <p>
+                          <span className="text-zinc-400">Away team:</span> {md.away_team_name || 'No info'}
+                        </p>                        
+                        <p>
+                          <span className="text-zinc-400">Parse confidence:</span> {md.parse_confidence ?? 'No info'}
+                        </p>
+                        <p>
+                          <span className="text-zinc-400">Source PDF hash:</span> {md.source_pdf_hash || 'No info'}
+                        </p>
+                        <p>
+                          <span className="text-zinc-400">Notes:</span> {md.notes || 'No info'}
+                        </p>
+                      </div>
+                    ); })()
                   )}
                 </CardContent>
                 </Card>
