@@ -2,6 +2,7 @@
 import React from "react";
 import { Slider } from "@/components/ui/slider";
 import { TimelineMarkers, TimelineMarker } from "@/components/ui/timeline-markers";
+import { ProgressVideo } from "@/components/ui/progressVideo";
 
 type YouTubePlayer = any;
 
@@ -158,9 +159,9 @@ export default function YouTubeVideo({
   return (
     <>
       <div className="flex">
-        <div className="sticky h-[38px] w-full h top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">        
+        <div className="sticky w-full h top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">        
           <div className="w-full mt-2 relative h-24 overflow-visible">
-            <Slider
+            <ProgressVideo
               min={0}
               max={Math.max(0, duration || 0)}
               step={1}
@@ -178,9 +179,29 @@ export default function YouTubeVideo({
                 onMarkerClick={(m)=>{
                   if (typeof m.at === 'number') seekToFn(m.at)
                 }}
-                clusterRadius={16}
                 trackTop={32}
                 trackHeight={20}
+                formatTooltip={(m)=>{
+                  const minute = Math.floor((m.at||0)/60)
+                  const mm = String(minute).padStart(2,'0')
+                  const type = (m as any)?.data?.type
+                  if (type === 'sprint') {
+                    const d = (m as any).data || {}
+                    return `${mm}' · Sprint #${d.sprintId}${d.player?` – ${d.player}`:''}`
+                  }
+                  if (type === 'yellow' || type === 'red') {
+                    const d = (m as any).data || {}
+                    return `${mm}' · ${type === 'yellow' ? 'Yellow card' : 'Red card'}${d.player?` – ${d.player}`:''}`
+                  }
+                  if (type === 'sub') {
+                    const d = (m as any).data || {}
+                    return `${mm}' · Substitution${d.playerOut||d.playerIn?` – ${d.playerOut||''}${(d.playerOut&&d.playerIn)?' ↔ ':''}${d.playerIn||''}`:''}`
+                  }
+                  if (type === 'goal') {
+                    return `${mm}' · Goal`
+                  }
+                  return `${mm}'`
+                }}
               />
             )}
           </div>

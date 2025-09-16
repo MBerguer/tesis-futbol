@@ -490,7 +490,7 @@ export default function Page() {
     for (const sp of sprintsInWorstCases) {
       if (typeof sp.sprint_start_sec === 'number') {
         const at = toVideoSec(sp.sprint_start_sec);
-        out.push({ id: `sprint-${sp.sprint_id}`, at, type: 'emoji', side: 'top', content: '🏃', label: `Sprint #${sp.sprint_id}` });
+        out.push({ id: `sprint-${sp.sprint_id}`, at, type: 'emoji', side: 'bottom', content: '🏃', label: `Sprint #${sp.sprint_id}`, data: { type: 'sprint', player: sp.player_display_name, sprintId: sp.sprint_id } });
       }
     }
     // Map match events using minute and added_time fields → to video seconds
@@ -505,13 +505,13 @@ export default function Page() {
       const at = Math.max(0, (inSecondHalf ? fhDur : 0) + withinHalfMin * 60 + (added || 0) * 60);
       const type = String(ev.type || '').toLowerCase();
       if (type.includes('goal')) {
-        out.push({ id: `goal-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '⚽', label: `${ev.team_name || ''} Goal` });
+        out.push({ id: `goal-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '⚽', label: `${ev.team_name || ''} Goal`, data: { type: 'goal', minute: m, team: ev.team_name } });
       } else if (type.includes('yellow')) {
-        out.push({ id: `yc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🟡', label: `${ev.team_name || ''} Yellow` });
+        out.push({ id: `yc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🟡', label: `${ev.team_name || ''} Yellow`, data: { type: 'yellow', player: ev.jugador, team: ev.team_name, minute: m } });
       } else if (type.includes('red')) {
-        out.push({ id: `rc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🔴', label: `${ev.team_name || ''} Red` });
+        out.push({ id: `rc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🔴', label: `${ev.team_name || ''} Red`, data: { type: 'red', player: ev.jugador, team: ev.team_name, minute: m } });
       } else if (type.includes('sub')) {
-        out.push({ id: `sub-${ev.event_id || at}`, at, type: 'emoji', side: 'top', content: '🔁', label: `${ev.team_name || ''} Substitution` });
+        out.push({ id: `sub-${ev.event_id || at}`, at, type: 'emoji', side: 'top', content: '🔁', label: `${ev.team_name || ''} Substitution`, data: { type: 'sub', playerOut: ev.related_jugador, playerIn: ev.jugador, team: ev.team_name, minute: m } });
       }
     }
     return out;
@@ -792,7 +792,7 @@ export default function Page() {
                         </div>
                         <div className="p-2">
                           <div className="h-[660px] md:h-[760px]">
-                            <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
+                            <div className="sticky z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
                               <div className="flex items-center gap-2 py-2">
                                 <label className="text-xs text-zinc-400">Orientation</label>
                                 <Slider

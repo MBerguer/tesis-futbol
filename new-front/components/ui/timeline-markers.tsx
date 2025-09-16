@@ -22,6 +22,7 @@ export function TimelineMarkers({
   onMarkerClick,
   trackTop = 0,
   trackHeight = 16,
+  formatTooltip,
 }: {
   min?: number
   max: number
@@ -30,6 +31,7 @@ export function TimelineMarkers({
   onMarkerClick?: (marker: TimelineMarker) => void
   trackTop?: number
   trackHeight?: number
+  formatTooltip?: (marker: TimelineMarker) => string
 }) {
   const range = Math.max(1, max - min)
 
@@ -42,7 +44,7 @@ export function TimelineMarkers({
         const color = m.color || "#60a5fa"
         const baseProps = {
           key: String(m.id ?? `m-${gi}`),
-          title: m.label || String(m.id),
+          title: (typeof formatTooltip === 'function' ? formatTooltip(m) : (m.label || String(m.id))),
           onClick: (e: React.MouseEvent) => {
             e.preventDefault()
             e.stopPropagation()

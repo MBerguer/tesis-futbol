@@ -1,0 +1,36 @@
+"use client"
+
+import * as React from "react"
+import * as SliderPrimitive from "@radix-ui/react-slider"
+
+import { cn } from "@/lib/utils"
+
+export interface AppSliderProps
+  extends React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> {
+  trackClassName?: string
+  thumbClassName?: string
+}
+
+const ProgressVideo = React.forwardRef<
+  React.ElementRef<typeof SliderPrimitive.Root>,
+  AppSliderProps
+>(({ className, trackClassName, thumbClassName, ...props }, ref) => (
+  <SliderPrimitive.Root
+    ref={ref}
+    className={cn(
+      "top-[30px] relative flex w-full touch-none select-none items-center",
+      className
+    )}
+    {...props}
+  >
+    <SliderPrimitive.Track className={cn("relative h-1.5 w-full grow overflow-hidden rounded-full bg-secondary", trackClassName)}>
+      <SliderPrimitive.Range className="absolute h-full bg-primary" />
+    </SliderPrimitive.Track>
+    <SliderPrimitive.Thumb className={cn("block h-4 w-4 rounded-full border border-primary/40 bg-background shadow transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50", thumbClassName)} />
+  </SliderPrimitive.Root>
+))
+ProgressVideo.displayName = SliderPrimitive.Root.displayName
+
+export { ProgressVideo }
+
+
