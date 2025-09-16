@@ -7,18 +7,19 @@ import { useMatchData } from "./hooks/useMatchData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PeriodsSummary from "./components/PeriodsSummary";
 import AvgSpeedChart from "./components/AvgSpeedChart";
-import Skeleton from "./components/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import TopProgress from "./components/TopProgress";
 import ThresholdLegend from "./components/ThresholdLegend";
 import PlayerDetailCard from "./components/PlayerDetailCard";
 import UnifiedVideo from "./components/UnifiedVideo";
 import StadiumMap from "./components/StadiumMap";
 import PitchMap from "./components/PitchMap";
-import Spinner from "./components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2 } from "lucide-react";
 import { formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
 import { usePositionsWindow } from "./hooks/usePositionsWindow";
 import { stringToColorPair } from "./utils/colors";
@@ -566,7 +567,7 @@ export default function Page() {
                 <CardHeader>
                   <CardTitle>Periods
                   {loadingPeriods && (
-                    <Spinner />
+                    <Loader2 className="h-4 w-4 animate-spin ml-2 text-muted-foreground" />
                   )}
                   </CardTitle>
                   {!loadingPeriods && periods && (
@@ -600,8 +601,12 @@ export default function Page() {
                 <Card className="h-full bg-zinc-900/50 border-zinc-800">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-3">
-                      <button onClick={()=>setEventsTab('events')} className={`px-3 py-1.5 rounded border ${eventsTab==='events'?'border-zinc-600 bg-zinc-800 text-zinc-100':'border-zinc-800 text-zinc-300 hover:border-zinc-700'}`}>Events</button>
-                      <button onClick={()=>setEventsTab('lineup')} className={`px-3 py-1.5 rounded border ${eventsTab==='lineup'?'border-zinc-600 bg-zinc-800 text-zinc-100':'border-zinc-800 text-zinc-300 hover:border-zinc-700'}`}>Lineup minutes</button>
+                      <Tabs value={eventsTab} onValueChange={(v)=>setEventsTab(v as any)}>
+                        <TabsList>
+                          <TabsTrigger value="events">Events</TabsTrigger>
+                          <TabsTrigger value="lineup">Lineup minutes</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -677,7 +682,7 @@ export default function Page() {
                   <CardTitle className="flex items-center gap-2">
                     Average Speed Over Time
                     {loadingEntries&&(
-                      <Spinner />
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     )}
 
                   {!showPatchPanel && (
@@ -770,7 +775,7 @@ export default function Page() {
                                 </div>
                                 <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
                                   {loadingPlayers ? (
-                                    <Spinner />
+                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                                   ) : players.length === 0 ? (
                                     <div className="text-sm text-gray-600">No players found.</div>
                                   ) : (
@@ -908,7 +913,7 @@ export default function Page() {
                           >
                             <span className="inline-flex items-center gap-1 justify-center w-full">
                               <span>{savingPeriods ? "Saving..." : "Save changes"}</span>
-                              {savingPeriods && <Spinner size={14} />}
+                              {savingPeriods && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                             </span>
                           </Button>
                         </div>
