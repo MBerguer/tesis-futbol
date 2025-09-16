@@ -72,6 +72,8 @@ interface SprintInWorstCase {
   min_speed_reached_within_sprint: number;
   max_speed_reached_within_sprint: number;
   worst_case_distance_covered: number;
+  sprint_start_sec?: number;
+  sprint_end_sec?: number;
 }
 
   interface MatchDetails {
@@ -888,6 +890,8 @@ export default function Page() {
                       entries={playersGrouped[p]}
                       windows={playerHighlights[norm(p)]}
                       sprints={sprintsGrouped[p]}
+                      firstHalfStart={periods?.detected_first_half_start ?? null}
+                      secondHalfStart={periods?.detected_second_half_start ?? null}
                     />
                   );
                 })}
@@ -900,7 +904,7 @@ export default function Page() {
             </div>
           )}
 
-          {selectedTable && showPlayersSection && (
+          {/* {selectedTable && showPlayersSection && (
             <Card className="col-span-2 bg-zinc-900/50 border-zinc-800">
               <CardHeader><CardTitle>Player Speeds Over Time</CardTitle></CardHeader>
               <CardContent>
@@ -911,7 +915,7 @@ export default function Page() {
                 )}
               </CardContent>
             </Card>
-          )}
+          )} */}
       </div>
     </main>
   );

@@ -42,6 +42,8 @@ export interface SprintInWorstCase {
   min_speed_reached_within_sprint: number;
   max_speed_reached_within_sprint: number;
   worst_case_distance_covered: number;
+  sprint_start_sec?: number;
+  sprint_end_sec?: number;
 }
 
 export interface SprintsInWorstCases { sprints_in_worst_cases: SprintInWorstCase[] }

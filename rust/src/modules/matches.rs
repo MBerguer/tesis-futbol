@@ -882,6 +882,7 @@ pub async fn get_sprints_in_worst_cases(
                 time,
                 speed,
                 distancia_total_calc,
+                seconds_since_midnight,
                 LAG(distancia_total_calc) OVER (PARTITION BY player_display_name ORDER BY time) AS prev_hsr,
                 LEAD(distancia_total_calc) OVER (PARTITION BY player_display_name ORDER BY time) AS next_hsr
             FROM public.{}
@@ -892,6 +893,7 @@ pub async fn get_sprints_in_worst_cases(
                 time,
                 speed,
                 distancia_total_calc,
+                seconds_since_midnight,
                 SUM(CASE 
                     WHEN prev_hsr = 0 AND distancia_total_calc > 0 THEN 1 
                     ELSE 0 
@@ -904,6 +906,8 @@ pub async fn get_sprints_in_worst_cases(
                 sprint_id,
                 MIN(time) AS sprint_start_time,
                 MAX(time) AS sprint_end_time,
+                MIN(seconds_since_midnight)::double precision AS sprint_start_sec,
+                MAX(seconds_since_midnight)::double precision AS sprint_end_sec,
                 SUM(distancia_total_calc) AS total_sprint_distance,
                 MIN(speed) AS min_speed_reached_within_sprint,
                 MAX(speed) AS max_speed_reached_within_sprint
@@ -920,6 +924,8 @@ pub async fn get_sprints_in_worst_cases(
             ss.total_sprint_distance,
             ss.min_speed_reached_within_sprint,
             ss.max_speed_reached_within_sprint,
+            ss.sprint_start_sec,
+            ss.sprint_end_sec,
             mw.distance_covered,
             ss.sprint_id
         FROM max_minute_window mw
@@ -948,6 +954,8 @@ pub async fn get_sprints_in_worst_cases(
                 "end_second": parse_interval_to_seconds(&row.try_get::<String, _>("end_second").unwrap_or_default()),
                 "sprint_start_time": row.try_get::<String, _>("sprint_start_time").unwrap_or_default(),
                 "sprint_end_time": row.try_get::<String, _>("sprint_end_time").unwrap_or_default(),
+                "sprint_start_sec": row.try_get::<f64, _>("sprint_start_sec").unwrap_or(0.0),
+                "sprint_end_sec": row.try_get::<f64, _>("sprint_end_sec").unwrap_or(0.0),
                 "total_sprint_distance": row.try_get::<f64, _>("total_sprint_distance").unwrap_or(0.0),
                 "min_speed_reached_within_sprint": row.try_get::<f64, _>("min_speed_reached_within_sprint").unwrap_or(0.0),
                 "max_speed_reached_within_sprint": row.try_get::<f64, _>("max_speed_reached_within_sprint").unwrap_or(0.0),
