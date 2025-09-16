@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "./components/ui/avatar";
-import { Mail, Phone, Smartphone, User, Ruler, Activity, Calendar, FileText, Stamp, HeartPulse, GraduationCap, MapPin, Building2, Percent, Tag, List as ListIcon } from "lucide-react";
+import { Mail, Phone, Smartphone, User, Ruler, Activity, Calendar, FileText, Stamp, HeartPulse, GraduationCap, MapPin, Building2, Percent, Tag, List as ListIcon, Loader2 } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -20,6 +20,9 @@ import {
   ComposedChart,
   Legend,
 } from "recharts";
+
+// Reuse time helpers from the match view
+import { formatMmSsFromSeconds } from "@/app/match/utils/time";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -229,13 +232,52 @@ export default function Page() {
     return () => { cancelled = true; };
   }, [selected?.id]);
 
+  // Helpers to derive soccer minute from absolute time-of-day, using same logic as match view
+  const parseHmsToSec = React.useCallback((t?: string | null): number | undefined => {
+    if (!t) return undefined;
+    const m = t.match(/^(\d{2}):(\d{2}):(\d{2})(?:[\.:](\d+))?/);
+    if (!m) return undefined;
+    const h = parseInt(m[1] || "0", 10);
+    const mi = parseInt(m[2] || "0", 10);
+    const s = parseInt(m[3] || "0", 10);
+    return h * 3600 + mi * 60 + s;
+  }, []);
+
+  const soccerMinute = React.useMemo(() => {
+    const d = maxMetrics?.max_speed_detail;
+    if (!d) return undefined;
+    const absSec = parseHmsToSec(d.time);
+    const fh = typeof d.manual_first_half_start === "number" ? d.manual_first_half_start : undefined;
+    if (absSec === undefined || fh === undefined) return undefined;
+    const halftime = 15 * 60; // fallback if we don't have detected halftime
+    const sh = fh + 45 * 60 + halftime;
+    if (absSec >= sh) {
+      const delta = Math.max(0, Math.round(absSec - sh));
+      return formatMmSsFromSeconds(45 * 60 + delta);
+    }
+    if (absSec >= fh) {
+      const delta = Math.max(0, Math.round(absSec - fh));
+      return formatMmSsFromSeconds(delta);
+    }
+    return undefined;
+  }, [maxMetrics?.max_speed_detail, parseHmsToSec]);
+
+  const matchHref = React.useMemo(() => {
+    const d = maxMetrics?.max_speed_detail;
+    const id = d?.match_id;
+    const table = d?.gps_table_name;
+    if (id) return `/match?match=${id}`;
+    if (table) return `/match?table=${encodeURIComponent(table)}`;
+    return "/match";
+  }, [maxMetrics?.max_speed_detail]);
+
   const kpis = React.useMemo(() => ([
     { title: "Max. Dist", value: maxMetrics ? `${maxMetrics.max_distance_m} m` : "4013 m", link: "/match" },
     { title: "HSR Max", value: maxMetrics ? `${maxMetrics.hsr_max_m} m` : "1653 m" },
-    { title: "Velocidad Max.", value: maxMetrics ? `${(Math.round(maxMetrics.max_speed_kmh * 100) / 100).toFixed(2)} km/h` : "27 km/h" },
+    { title: "Velocidad Max.", value: maxMetrics ? `${(Math.round(maxMetrics.max_speed_kmh * 100) / 100).toFixed(2)} km/h` : "27 km/h", link: matchHref },
     { title: "High Metab. Dist.", value: maxMetrics ? `${maxMetrics.high_metabolic_distance_m} m` : "550 m" },
     { title: "z6", value: maxMetrics ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)` : '15" (229m)' },
-  ]), [maxMetrics]);
+  ]), [maxMetrics, matchHref]);
 
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
@@ -388,15 +430,18 @@ export default function Page() {
                   <Card key={kpi.title} className="bg-zinc-900/60 border-zinc-800">
                     <CardContent className="py-3">
                       <div className="text-sm text-zinc-300">{kpi.title}</div>
-                      <div className="text-xl font-semibold">{kpi.value}</div>
+                      <div className="text-xl font-semibold">
+                        {kpi.title === "Velocidad Max." && !maxMetrics ? (
+                          <Loader2 className="inline-block h-4 w-4 animate-spin text-zinc-400" />
+                        ) : (
+                          kpi.value
+                        )}
+                      </div>
                       {kpi.title === "Velocidad Max." && (maxMetrics?.max_speed_detail?.minute || maxMetrics?.max_speed_detail?.time) ? (
-                        <div className="text-[11px] text-zinc-400 mt-1" title={`tiempo real: ${maxMetrics.max_speed_detail.time ?? '—'} | inicio PT manual: ${maxMetrics.max_speed_detail.manual_first_half_start ?? '—'}s`}>
-                          {maxMetrics.max_speed_detail.minute ? `minuto ${maxMetrics.max_speed_detail.minute}` : `minuto —`}
+                        <a href={matchHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline" title={`tiempo real: ${maxMetrics.max_speed_detail.time ?? '—'} | inicio PT manual: ${maxMetrics.max_speed_detail.manual_first_half_start ?? '—'}s`}>
+                          {`minuto ${soccerMinute ?? '—'}`}
                           {maxMetrics.max_speed_detail.gps_table_name ? ` · ${maxMetrics.max_speed_detail.gps_table_name}` : ""}
-                        </div>
-                      ) : null}
-                      {kpi.link ? (
-                        <a href={kpi.link} className="text-xs text-blue-400 hover:underline">ver detalles</a>
+                        </a>
                       ) : null}
                     </CardContent>
                   </Card>
