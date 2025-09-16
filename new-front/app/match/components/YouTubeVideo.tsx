@@ -134,7 +134,7 @@ export default function YouTubeVideo({
   const seekToFn = (t: number) => {
     const p = playerRef.current;
     if (!p) return;
-    const clamped = Math.max(0, Math.min(t, duration || 0));
+    const clamped = Math.max(0, Number.isFinite(t) ? t : 0);
     try {
       p.seekTo(clamped, true);
     } catch {}
@@ -144,7 +144,10 @@ export default function YouTubeVideo({
 
   React.useEffect(() => {
     if (seekTo === undefined) return;
-    seekToFn(seekTo || 0);
+    const target = seekTo || 0;
+    // apply once, then clear to avoid re-seeking on progress updates
+    const id = requestAnimationFrame(()=> seekToFn(target));
+    return () => cancelAnimationFrame(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seekTo]);
 

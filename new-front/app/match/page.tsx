@@ -120,6 +120,7 @@ export default function Page() {
   const [videoTimeSec, setVideoTimeSec] = useState<number>(0);
   const [youtubeLink, setYoutubeLink] = useState<string | null>(null);
   const handleVideoSecondChange = React.useCallback((s: number)=> setVideoTimeSec(s), []);
+  const [pendingSeek, setPendingSeek] = useState<number | undefined>(undefined);
   const [showPatchPanel, setShowPatchPanel] = useState<boolean>(false);
   const [patchedFirstHalfStart, setPatchedFirstHalfStart] = useState<number | null>(null);
   const [patchedSecondHalfStart, setPatchedSecondHalfStart] = useState<number | null>(null);
@@ -408,6 +409,11 @@ export default function Page() {
   const [showInfo, setShowInfo] = useState<boolean>(true);
   const [showAnalysis, setShowAnalysis] = useState<boolean>(true);
   const [showPlayersSection, setShowPlayersSection] = useState<boolean>(false);
+  useEffect(() => {
+    if (pendingSeek === undefined) return;
+    const closeEnough = Math.abs((videoTimeSec || 0) - (pendingSeek || 0)) <= 0.75;
+    if (closeEnough) setPendingSeek(undefined);
+  }, [videoTimeSec, pendingSeek]);
   
   useEffect(() => {
     if (!periods) return;
@@ -681,11 +687,12 @@ export default function Page() {
                       />
 
                       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-2">
+                        <div className="p-2" id="unified-video">
                           <UnifiedVideo
                             youtubeId={searchParams.get('yt')}
                             videoUrl={youtubeLink || searchParams.get('video') || undefined}
                             onSecondChange={handleVideoSecondChange}
+                            seekTo={pendingSeek}
                           />
                         </div>
                         <div className="p-2">
@@ -890,8 +897,21 @@ export default function Page() {
                       entries={playersGrouped[p]}
                       windows={playerHighlights[norm(p)]}
                       sprints={sprintsGrouped[p]}
+                      onOpenAnalysisAt={(abs, sec, playerName)=>{
+                        console.log('onOpenAnalysisAt', abs, sec);
+                        if (typeof abs === 'number') {
+                          setVideoTimeSec(abs);
+                          setPendingSeek(abs);
+                          const el = document.getElementById('unified-video');
+                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                        if (playerName) {
+                          setPinnedPlayers(prev => ({ ...prev, [playerName]: true }));
+                        }
+                      }}
                       firstHalfStart={periods?.detected_first_half_start ?? null}
                       secondHalfStart={periods?.detected_second_half_start ?? null}
+                      firstHalfEnd={periods?.detected_first_half_end ?? null}
                     />
                   );
                 })}

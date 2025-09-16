@@ -14,6 +14,8 @@ export interface SprintItem {
   total_sprint_distance: number;
   min_speed_reached_within_sprint: number;
   max_speed_reached_within_sprint: number;
+  sprint_start_sec?: number;
+  sprint_end_sec?: number;
 }
 
 function PlayerDetailCardBase({
@@ -23,14 +25,16 @@ function PlayerDetailCardBase({
   sprints,
   onOpenAnalysisAt,
   firstHalfStart,
+  firstHalfEnd,
   secondHalfStart,
 }: {
   name: string;
   entries: MiniEntry[];
   windows?: Array<{ start: number; end: number; distance?: number}>;
   sprints?: SprintItem[];
-  onOpenAnalysisAt?: (absoluteSecond?: number | null) => void;
+  onOpenAnalysisAt?: (absoluteSecond?: number | null, sprintStartSec?: number | null, playerName?: string | null) => void;
   firstHalfStart?: number | null;
+  firstHalfEnd?: number | null;
   secondHalfStart?: number | null;
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -101,7 +105,26 @@ function PlayerDetailCardBase({
       }
     }
     return formatHms(startSec);
-  }, [firstHalfStart, secondHalfStart]);
+  }, [firstHalfStart, secondHalfStart, firstHalfEnd]);
+
+  const toYoutubeClock = React.useCallback((startSec: number) => {
+    const fh = typeof firstHalfStart === 'number' ? firstHalfStart : undefined;
+    const sh = typeof secondHalfStart === 'number' ? secondHalfStart : undefined;
+    const fe = typeof firstHalfEnd === 'number' ? firstHalfEnd : undefined;
+    if (typeof fh === 'number' && typeof sh === 'number') {
+      if (startSec >= sh) {
+        const delta = Math.max(0, Math.round(startSec - sh));
+        const fhDur = typeof fe === 'number' && typeof fh === 'number' ? Math.max(0, fe - fh) : 2700; // fallback 45min
+        return fhDur + delta;
+      }
+      if (startSec >= fh) {
+        const delta = Math.max(0, Math.round(startSec - fh));
+        return delta;
+      }
+    }
+    return startSec;
+  }, [firstHalfStart, secondHalfStart, firstHalfEnd]);
+
 
   const parseHmsToSec = (t?: string) => {
     if (!t) return 0;
@@ -122,7 +145,7 @@ function PlayerDetailCardBase({
               <span className="inline-flex items-center rounded-md font-bold text-base bg-pink-900/50 px-1.5 py-0.5">
               Start: {formatHms(w.start)}
               </span>
-              <span className="inline-flex items-center rounded-md font-bold text-base bg-green-900/50 px-1.5 py-0.5">
+              <span className="inline-flex items-center rounded-md font-bold text-base bg-blue-900/50 px-1.5 py-0.5">
                 Minute: {toSoccerClock(w.start)}
               </span>
               <span className="inline-flex items-center rounded-md font-bold text-base bg-green-900/50 px-1.5 py-0.5">
@@ -148,7 +171,11 @@ function PlayerDetailCardBase({
             {sprints!.map((sp)=> (
               <div key={sp.sprint_id} className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/50 px-2 py-1">
                 <div className="text-zinc-300">
-                  <button className="underline decoration-dotted hover:text-zinc-100" onClick={()=>{}}>
+                  <button className="underline decoration-dotted hover:text-zinc-100" onClick={()=>{
+                    if (!onOpenAnalysisAt) return;
+                    
+                    onOpenAnalysisAt(toYoutubeClock(sp.sprint_start_sec || 0), sp.sprint_start_sec, sp.player_display_name || null);
+                  }}>
                     Sprint #{sp.sprint_id}
                   </button>
                 </div>
@@ -194,6 +221,16 @@ function PlayerDetailCardBase({
                       return [String(value), name];
                     }}
                     labelFormatter={(label: any) => `${formatHms(Number(label))} (${Math.round(Number(label))}s)`}
+                    contentStyle={{
+                      backgroundColor: 'rgba(24,24,27,0.95)',
+                      border: '1px solid #27272a',
+                      borderRadius: 8,
+                      color: '#e5e7eb',
+                      boxShadow: '0 6px 24px rgba(0,0,0,0.6)'
+                    }}
+                    labelStyle={{ color: '#a1a1aa' }}
+                    itemStyle={{ color: '#e5e7eb' }}
+                    wrapperStyle={{ outline: 'none' }}
                   />
                 </LineChart>
               </ResponsiveContainer>
