@@ -23,6 +23,7 @@ import {
 
 // Reuse time helpers from the match view
 import { formatMmSsFromSeconds } from "@/app/match/utils/time";
+import { Progress } from "@/components/ui/progress";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -56,6 +57,7 @@ type PlayerMaxMetrics = {
   high_metabolic_distance_m: number;
   z6: { seconds: number; distance_m: number };
   max_speed_detail?: { match_id?: string; gps_table_name?: string; minute?: string; time?: string; manual_first_half_start?: number|null };
+  max_distance_detail?: { match_id?: string; gps_table_name?: string };
 };
 
 const rendimiento = [
@@ -87,6 +89,7 @@ export default function Page() {
   const [filter, setFilter] = React.useState<string>("");
   const [persons, setPersons] = React.useState<Person[]>([]);
   const [maxMetrics, setMaxMetrics] = React.useState<PlayerMaxMetrics | null>(null);
+  const [loadingMetrics, setLoadingMetrics] = React.useState<boolean>(false);
   type FotoIndexItem = { nombreNorm: string; path: string };
   const [fotosIndex, setFotosIndex] = React.useState<FotoIndexItem[]>([]);
   React.useEffect(() => {
@@ -219,7 +222,9 @@ export default function Page() {
     let cancelled = false;
     (async () => {
       const pid = selected?.id;
-      if (!pid) { setMaxMetrics(null); return; }
+      setLoadingMetrics(true);
+      setMaxMetrics(null);
+      if (!pid) { setLoadingMetrics(false); return; }
       try {
         const res = await fetch(`${API_BASE}/player/${pid}/metrics/max`, { cache: 'no-store' });
         if (!res.ok) throw new Error('failed');
@@ -227,6 +232,8 @@ export default function Page() {
         if (!cancelled) setMaxMetrics(json as PlayerMaxMetrics);
       } catch (e) {
         if (!cancelled) setMaxMetrics(null);
+      } finally {
+        if (!cancelled) setLoadingMetrics(false);
       }
     })();
     return () => { cancelled = true; };
@@ -271,16 +278,65 @@ export default function Page() {
     return "/match";
   }, [maxMetrics?.max_speed_detail]);
 
+  const maxDistanceHref = React.useMemo(() => {
+    const d = maxMetrics?.max_distance_detail;
+    const id = d?.match_id;
+    const table = d?.gps_table_name;
+    if (id) return `/match?match=${id}`;
+    if (table) return `/match?table=${encodeURIComponent(table)}`;
+    return "/match";
+  }, [maxMetrics?.max_distance_detail]);
+
+  const [maxDistanceMatchLabel, setMaxDistanceMatchLabel] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const d = maxMetrics?.max_distance_detail;
+    setMaxDistanceMatchLabel(null);
+    if (!d) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (d.match_id) {
+          const res = await fetch(`${API_BASE}/api/matches/${d.match_id}`);
+          if (res.ok) {
+            const md = await res.json();
+            const home = md?.home_team_name || md?.home_team_id?.slice(0, 8);
+            const away = md?.away_team_name || md?.away_team_id?.slice(0, 8);
+            const label = home && away ? `${home} vs ${away}` : undefined;
+            if (!cancelled && label) setMaxDistanceMatchLabel(label);
+          }
+        } else if (d.gps_table_name) {
+          const res = await fetch(`${API_BASE}/api/matches`);
+          if (res.ok) {
+            const arr = await res.json();
+            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            if (found) {
+              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const label = home && away ? `${home} vs ${away}` : undefined;
+              if (!cancelled && label) setMaxDistanceMatchLabel(label);
+            }
+          }
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, maxMetrics?.max_distance_detail]);
+
   const kpis = React.useMemo(() => ([
-    { title: "Max. Dist", value: maxMetrics ? `${maxMetrics.max_distance_m} m` : "4013 m", link: "/match" },
+    { title: "Max. Dist", value: maxMetrics ? `${maxMetrics.max_distance_m} m` : "—", link: maxDistanceHref },
     { title: "HSR Max", value: maxMetrics ? `${maxMetrics.hsr_max_m} m` : "1653 m" },
     { title: "Velocidad Max.", value: maxMetrics ? `${(Math.round(maxMetrics.max_speed_kmh * 100) / 100).toFixed(2)} km/h` : "27 km/h", link: matchHref },
     { title: "High Metab. Dist.", value: maxMetrics ? `${maxMetrics.high_metabolic_distance_m} m` : "550 m" },
     { title: "z6", value: maxMetrics ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)` : '15" (229m)' },
-  ]), [maxMetrics, matchHref]);
+  ]), [maxMetrics, matchHref, maxDistanceHref]);
 
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
+      {loadingMetrics && (
+        <div className="fixed left-0 right-0 top-0 z-40">
+          <Progress value={65} className="h-0.5 bg-zinc-800" />
+        </div>
+      )}
       <aside className="w-full lg:w-1/4">
         <Card className="bg-zinc-900/50 border-zinc-800">
           <CardHeader>
@@ -431,12 +487,17 @@ export default function Page() {
                     <CardContent className="py-3">
                       <div className="text-sm text-zinc-300">{kpi.title}</div>
                       <div className="text-xl font-semibold">
-                        {kpi.title === "Velocidad Max." && !maxMetrics ? (
+                        {((kpi.title === "Velocidad Max." || kpi.title === "Max. Dist") && loadingMetrics) ? (
                           <Loader2 className="inline-block h-4 w-4 animate-spin text-zinc-400" />
                         ) : (
                           kpi.value
                         )}
                       </div>
+                      {kpi.title === "Max. Dist" && maxMetrics?.max_distance_detail ? (
+                        <a href={maxDistanceHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
+                          {maxDistanceMatchLabel || 'ver match'}
+                        </a>
+                      ) : null}
                       {kpi.title === "Velocidad Max." && (maxMetrics?.max_speed_detail?.minute || maxMetrics?.max_speed_detail?.time) ? (
                         <a href={matchHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline" title={`tiempo real: ${maxMetrics.max_speed_detail.time ?? '—'} | inicio PT manual: ${maxMetrics.max_speed_detail.manual_first_half_start ?? '—'}s`}>
                           {`minuto ${soccerMinute ?? '—'}`}

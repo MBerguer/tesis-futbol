@@ -119,11 +119,14 @@ pub async fn get_all_players_photos() -> Json<Value> {
 pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     // Defaults (fallbacks)
     let mut max_speed_kmh: f64 = 27.0;
+    let mut max_distance_m_val: f64 = 4013.0;
     let mut max_speed_match_id: Option<uuid::Uuid> = None;
     let mut max_speed_table: Option<String> = None;
     let mut max_speed_minute: Option<String> = None; // formatted MM:SS based on elapsed
     let mut max_speed_time: Option<String> = None; // raw time from table
     let mut manual_first_half_start: Option<i32> = None;
+    let mut max_distance_match_id: Option<uuid::Uuid> = None;
+    let mut max_distance_table: Option<String> = None;
 
     // Other placeholders to keep previous response stable
     let max_distance_m: i64 = 4013;
@@ -211,9 +214,43 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                     if speed > 0.0 && speed > max_speed_kmh {
                         max_speed_kmh = speed;
                         max_speed_match_id = Some(r.match_id);
-                        max_speed_table = Some(table_ident);
+                        max_speed_table = Some(table_ident.clone());
                         max_speed_minute = minute_str;
                         max_speed_time = raw_time;
+                    }
+                }
+
+                // Compute total distance for this player in this match
+                // Try processed view first
+                let sql_dist_view = format!(
+                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(COALESCE(t.distancia_total_calc,0))::double precision AS total_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name",
+                    view_name, view_name
+                );
+                let mut dist_row_opt = sqlx::query(&sql_dist_view)
+                    .bind(&display_name)
+                    .fetch_optional(&pool)
+                    .await
+                    .ok()
+                    .flatten();
+                if dist_row_opt.is_none() {
+                    // Fallback to raw table
+                    let sql_dist_raw = format!(
+                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(COALESCE(t.distancia_total_calc,0))::double precision AS total_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name",
+                        table_ident, table_ident
+                    );
+                    dist_row_opt = sqlx::query(&sql_dist_raw)
+                        .bind(&display_name)
+                        .fetch_optional(&pool)
+                        .await
+                        .ok()
+                        .flatten();
+                }
+                if let Some(drow) = dist_row_opt {
+                    let total_distance: f64 = drow.try_get("total_distance").unwrap_or(0.0);
+                    if total_distance > max_distance_m_val {
+                        max_distance_m_val = total_distance;
+                        max_distance_match_id = Some(r.match_id);
+                        max_distance_table = Some(table_ident);
                     }
                 }
             }
@@ -230,7 +267,7 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     }
 
     Json(json!({
-        "max_distance_m": max_distance_m,
+        "max_distance_m": (max_distance_m_val.round() as i64),
         "hsr_max_m": hsr_max_m,
         "max_speed_kmh": max_speed_kmh,
         "high_metabolic_distance_m": high_metabolic_distance_m,
@@ -241,6 +278,10 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
             "minute": max_speed_minute,
             "time": max_speed_time,
             "manual_first_half_start": manual_first_half_start
+        },
+        "max_distance_detail": {
+            "match_id": max_distance_match_id,
+            "gps_table_name": max_distance_table
         }
     }))
 }
