@@ -121,6 +121,10 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     let mut max_speed_kmh: f64 = 27.0;
     let mut max_distance_m_val: f64 = 4013.0;
     let mut hsr_max_m_val: f64 = 0.0;
+    let mut hmld_25_5_val: f64 = 0.0;
+    let mut hmld_18_val: f64 = 0.0;
+    let mut z6_seconds_val: f64 = 0.0;
+    let mut z6_distance_val: f64 = 0.0;
     let mut max_speed_match_id: Option<uuid::Uuid> = None;
     let mut max_speed_table: Option<String> = None;
     let mut max_speed_minute: Option<String> = None; // formatted MM:SS based on elapsed
@@ -130,6 +134,12 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     let mut max_distance_table: Option<String> = None;
     let mut hsr_max_match_id: Option<uuid::Uuid> = None;
     let mut hsr_max_table: Option<String> = None;
+    let mut hmld_25_5_match_id: Option<uuid::Uuid> = None;
+    let mut hmld_25_5_table: Option<String> = None;
+    let mut hmld_18_match_id: Option<uuid::Uuid> = None;
+    let mut hmld_18_table: Option<String> = None;
+    let mut z6_match_id: Option<uuid::Uuid> = None;
+    let mut z6_table: Option<String> = None;
 
     // Other placeholders to keep previous response stable
     let max_distance_m: i64 = 4013;
@@ -139,6 +149,7 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     let z6_distance_m: i64 = 229;
     // Default threshold for HSR computation
     let hsr_threshold_kmh: f64 = 19.8;
+    let z6_threshold_kmh: f64 = 25.2;
 
     // Connect to DB
     let dbconfig = DbConfig::new();
@@ -287,7 +298,79 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                     if hsr_distance > hsr_max_m_val {
                         hsr_max_m_val = hsr_distance;
                         hsr_max_match_id = Some(r.match_id);
-                        hsr_max_table = Some(table_ident);
+                        hsr_max_table = Some(table_ident.clone());
+                    }
+                }
+
+                // Compute HMLD values (25.5 and 18)
+                let sql_hmld_view = format!(
+                    "WITH best AS (\n   SELECT player_display_name, player_id\n   FROM \"{}\"\n   GROUP BY player_display_name, player_id\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), metabolic AS (\n   SELECT t.player_id, t.player_display_name, t.time, t.speed/3.6 AS speed_ms, t.instantaneous_acceleration,\n     COALESCE( EXTRACT(EPOCH FROM to_timestamp(t.time,'HH24:MI:SS.MS')::time) - EXTRACT(EPOCH FROM LAG(to_timestamp(t.time,'HH24:MI:SS.MS')::time) OVER (PARTITION BY t.player_id ORDER BY to_timestamp(t.time,'HH24:MI:SS.MS')::time)), 0) AS delta_time\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n ), filtered AS (\n   SELECT player_id, player_display_name, speed_ms, instantaneous_acceleration, delta_time, speed_ms * (1 + 0.1 * instantaneous_acceleration) AS metabolic_power\n   FROM metabolic\n   WHERE delta_time > 0 AND delta_time < 0.5\n )\n SELECT\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 25.5 AND speed_ms > 5.5), 0)::double precision AS hmld_25_5,\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 18 AND speed_ms > 5.5), 0)::double precision AS hmld_18\n FROM filtered",
+                    view_name, view_name
+                );
+                let mut hmld_row_opt = sqlx::query(&sql_hmld_view)
+                    .bind(&display_name)
+                    .fetch_optional(&pool)
+                    .await
+                    .ok()
+                    .flatten();
+                if hmld_row_opt.is_none() {
+                    let sql_hmld_raw = format!(
+                        "WITH best AS (\n   SELECT player_display_name, player_id\n   FROM \"{}\"\n   GROUP BY player_display_name, player_id\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), metabolic AS (\n   SELECT t.player_id, t.player_display_name, t.time, t.speed/3.6 AS speed_ms, t.instantaneous_acceleration,\n     COALESCE( EXTRACT(EPOCH FROM to_timestamp(t.time,'HH24:MI:SS.MS')::time) - EXTRACT(EPOCH FROM LAG(to_timestamp(t.time,'HH24:MI:SS.MS')::time) OVER (PARTITION BY t.player_id ORDER BY to_timestamp(t.time,'HH24:MI:SS.MS')::time)), 0) AS delta_time\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n ), filtered AS (\n   SELECT player_id, player_display_name, speed_ms, instantaneous_acceleration, delta_time, speed_ms * (1 + 0.1 * instantaneous_acceleration) AS metabolic_power\n   FROM metabolic\n   WHERE delta_time > 0 AND delta_time < 0.5\n )\n SELECT\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 25.5 AND speed_ms > 5.5), 0)::double precision AS hmld_25_5,\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 18 AND speed_ms > 5.5), 0)::double precision AS hmld_18\n FROM filtered",
+                        table_ident, table_ident
+                    );
+                    hmld_row_opt = sqlx::query(&sql_hmld_raw)
+                        .bind(&display_name)
+                        .fetch_optional(&pool)
+                        .await
+                        .ok()
+                        .flatten();
+                }
+                if let Some(hmrow) = hmld_row_opt {
+                    let v25: f64 = hmrow.try_get("hmld_25_5").unwrap_or(0.0);
+                    let v18: f64 = hmrow.try_get("hmld_18").unwrap_or(0.0);
+                    if v25 > hmld_25_5_val {
+                        hmld_25_5_val = v25;
+                        hmld_25_5_match_id = Some(r.match_id);
+                        hmld_25_5_table = Some(table_ident.clone());
+                    }
+                    if v18 > hmld_18_val {
+                        hmld_18_val = v18;
+                        hmld_18_match_id = Some(r.match_id);
+                        hmld_18_table = Some(table_ident.clone());
+                    }
+                }
+
+                // Compute Z6: seconds and distance (per second speed max > threshold)
+                let sql_z6_view = format!(
+                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), per_sec AS (\n   SELECT floor(t.seconds_since_midnight)::int AS sec, MAX(COALESCE(t.speed,0)) AS max_speed, SUM(COALESCE(t.distancia_total_calc,0)) AS sum_dist\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n   GROUP BY 1\n )\n SELECT SUM(CASE WHEN max_speed > {} THEN 1 ELSE 0 END)::double precision AS z6_seconds,\n        SUM(CASE WHEN max_speed > {} THEN sum_dist ELSE 0 END)::double precision AS z6_distance\n FROM per_sec",
+                    view_name, view_name, z6_threshold_kmh, z6_threshold_kmh
+                );
+                let mut z6_row_opt = sqlx::query(&sql_z6_view)
+                    .bind(&display_name)
+                    .fetch_optional(&pool)
+                    .await
+                    .ok()
+                    .flatten();
+                if z6_row_opt.is_none() {
+                    let sql_z6_raw = format!(
+                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), per_sec AS (\n   SELECT floor(EXTRACT(EPOCH FROM (to_timestamp(t.time,'HH24:MI:SS.MS')::time)))::int AS sec, MAX(COALESCE(t.speed,0)) AS max_speed, SUM(COALESCE(t.distancia_total_calc,0)) AS sum_dist\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n   GROUP BY 1\n )\n SELECT SUM(CASE WHEN max_speed > {} THEN 1 ELSE 0 END)::double precision AS z6_seconds,\n        SUM(CASE WHEN max_speed > {} THEN sum_dist ELSE 0 END)::double precision AS z6_distance\n FROM per_sec",
+                        table_ident, table_ident, z6_threshold_kmh, z6_threshold_kmh
+                    );
+                    z6_row_opt = sqlx::query(&sql_z6_raw)
+                        .bind(&display_name)
+                        .fetch_optional(&pool)
+                        .await
+                        .ok()
+                        .flatten();
+                }
+                if let Some(zrow) = z6_row_opt {
+                    let secs: f64 = zrow.try_get("z6_seconds").unwrap_or(0.0);
+                    let dist: f64 = zrow.try_get("z6_distance").unwrap_or(0.0);
+                    if secs > z6_seconds_val {
+                        z6_seconds_val = secs;
+                        z6_distance_val = dist;
+                        z6_match_id = Some(r.match_id);
+                        z6_table = Some(table_ident.clone());
                     }
                 }
             }
@@ -307,8 +390,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
         "max_distance_m": (max_distance_m_val.round() as i64),
         "hsr_max_m": (hsr_max_m_val.round() as i64),
         "max_speed_kmh": max_speed_kmh,
-        "high_metabolic_distance_m": high_metabolic_distance_m,
-        "z6": { "seconds": z6_seconds, "distance_m": z6_distance_m },
+        "high_metabolic_distance_m": (hmld_25_5_val.round() as i64),
+        "z6": { "seconds": (z6_seconds_val.round() as i64), "distance_m": (z6_distance_val.round() as i64) },
         "max_speed_detail": {
             "match_id": max_speed_match_id,
             "gps_table_name": max_speed_table,
@@ -323,6 +406,12 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
         "hsr_max_detail": {
             "match_id": hsr_max_match_id,
             "gps_table_name": hsr_max_table
-        }
+        },
+        "hmld": { "m25_5": hmld_25_5_val, "m18": hmld_18_val },
+        "hmld_detail": {
+            "m25_5": { "match_id": hmld_25_5_match_id, "gps_table_name": hmld_25_5_table },
+            "m18": { "match_id": hmld_18_match_id, "gps_table_name": hmld_18_table }
+        },
+        "z6_detail": { "match_id": z6_match_id, "gps_table_name": z6_table }
     }))
 }

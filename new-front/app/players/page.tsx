@@ -56,9 +56,12 @@ type PlayerMaxMetrics = {
   max_speed_kmh: number;
   high_metabolic_distance_m: number;
   z6: { seconds: number; distance_m: number };
+  z6_detail?: { match_id?: string; gps_table_name?: string };
   max_speed_detail?: { match_id?: string; gps_table_name?: string; minute?: string; time?: string; manual_first_half_start?: number|null };
   max_distance_detail?: { match_id?: string; gps_table_name?: string };
   hsr_max_detail?: { match_id?: string; gps_table_name?: string };
+  hmld?: { m25_5?: number; m18?: number };
+  hmld_detail?: { m25_5?: { match_id?: string; gps_table_name?: string }, m18?: { match_id?: string; gps_table_name?: string } };
 };
 
 const rendimiento = [
@@ -297,6 +300,58 @@ export default function Page() {
     return "/match";
   }, [maxMetrics?.hsr_max_detail]);
 
+  const hmld25Href = React.useMemo(() => {
+    const d = maxMetrics?.hmld_detail?.m25_5;
+    const id = d?.match_id;
+    const table = d?.gps_table_name;
+    if (id) return `/match?match=${id}`;
+    if (table) return `/match?table=${encodeURIComponent(table)}`;
+    return "/match";
+  }, [maxMetrics?.hmld_detail?.m25_5]);
+  const z6Href = React.useMemo(() => {
+    const d = maxMetrics?.z6_detail;
+    const id = d?.match_id;
+    const table = d?.gps_table_name;
+    if (id) return `/match?match=${id}`;
+    if (table) return `/match?table=${encodeURIComponent(table)}`;
+    return "/match";
+  }, [maxMetrics?.z6_detail]);
+
+  const [z6MatchLabel, setZ6MatchLabel] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const d = maxMetrics?.z6_detail;
+    setZ6MatchLabel(null);
+    if (!d) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (d.match_id) {
+          const res = await fetch(`${API_BASE}/api/matches/${d.match_id}`);
+          if (res.ok) {
+            const md = await res.json();
+            const home = md?.home_team_name || md?.home_team_id?.slice(0, 8);
+            const away = md?.away_team_name || md?.away_team_id?.slice(0, 8);
+            const label = home && away ? `${home} vs ${away}` : undefined;
+            if (!cancelled && label) setZ6MatchLabel(label);
+          }
+        } else if (d.gps_table_name) {
+          const res = await fetch(`${API_BASE}/api/matches`);
+          if (res.ok) {
+            const arr = await res.json();
+            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            if (found) {
+              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const label = home && away ? `${home} vs ${away}` : undefined;
+              if (!cancelled && label) setZ6MatchLabel(label);
+            }
+          }
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, maxMetrics?.z6_detail]);
+
   const [maxDistanceMatchLabel, setMaxDistanceMatchLabel] = React.useState<string | null>(null);
   React.useEffect(() => {
     const d = maxMetrics?.max_distance_detail;
@@ -367,13 +422,48 @@ export default function Page() {
     return () => { cancelled = true; };
   }, [API_BASE, maxMetrics?.hsr_max_detail]);
 
+  const [hmld25MatchLabel, setHmld25MatchLabel] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const d = maxMetrics?.hmld_detail?.m25_5;
+    setHmld25MatchLabel(null);
+    if (!d) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (d.match_id) {
+          const res = await fetch(`${API_BASE}/api/matches/${d.match_id}`);
+          if (res.ok) {
+            const md = await res.json();
+            const home = md?.home_team_name || md?.home_team_id?.slice(0, 8);
+            const away = md?.away_team_name || md?.away_team_id?.slice(0, 8);
+            const label = home && away ? `${home} vs ${away}` : undefined;
+            if (!cancelled && label) setHmld25MatchLabel(label);
+          }
+        } else if (d.gps_table_name) {
+          const res = await fetch(`${API_BASE}/api/matches`);
+          if (res.ok) {
+            const arr = await res.json();
+            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            if (found) {
+              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const label = home && away ? `${home} vs ${away}` : undefined;
+              if (!cancelled && label) setHmld25MatchLabel(label);
+            }
+          }
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, maxMetrics?.hmld_detail?.m25_5]);
+
   const kpis = React.useMemo(() => ([
     { title: "Max. Dist", value: maxMetrics ? `${maxMetrics.max_distance_m} m` : "—", link: maxDistanceHref },
     { title: "HSR Max", value: maxMetrics ? `${maxMetrics.hsr_max_m} m` : "—", link: hsrHref },
     { title: "Velocidad Max.", value: maxMetrics ? `${(Math.round(maxMetrics.max_speed_kmh * 100) / 100).toFixed(2)} km/h` : "27 km/h", link: matchHref },
-    { title: "High Metab. Dist.", value: maxMetrics ? `${maxMetrics.high_metabolic_distance_m} m` : "550 m" },
-    { title: "z6", value: maxMetrics ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)` : '15" (229m)' },
-  ]), [maxMetrics, matchHref, maxDistanceHref, hsrHref]);
+    { title: `HMLD ${maxMetrics ? `(25.5 · 18)` : ''}`, value: maxMetrics ? `${Math.round(maxMetrics.hmld?.m25_5 ?? 0)} m · ${Math.round(maxMetrics.hmld?.m18 ?? 0)} m` : "—" },
+    { title: "z6", value: maxMetrics ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)` : '—', link: z6Href },
+  ]), [maxMetrics, matchHref, maxDistanceHref, hsrHref, z6Href]);
 
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
@@ -532,12 +622,22 @@ export default function Page() {
                     <CardContent className="py-3">
                       <div className="text-sm text-zinc-300">{kpi.title}</div>
                       <div className="text-xl font-semibold">
-                        {((kpi.title === "Velocidad Max." || kpi.title === "Max. Dist" || kpi.title === "HSR Max") && loadingMetrics) ? (
+                        {(loadingMetrics && (kpi.title === "Velocidad Max." || kpi.title === "Max. Dist" || kpi.title === "HSR Max" || kpi.title.startsWith("HMLD") || kpi.title === "z6")) ? (
                           <Loader2 className="inline-block h-4 w-4 animate-spin text-zinc-400" />
                         ) : (
                           kpi.value
                         )}
                       </div>
+                      {kpi.title.startsWith("HMLD") && maxMetrics?.hmld_detail ? (
+                        <a href={hmld25Href} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
+                          {hmld25MatchLabel || 'ver match'}
+                        </a>
+                      ) : null}
+                      {kpi.title === "z6" && maxMetrics?.z6_detail ? (
+                        <a href={z6Href} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
+                          {z6MatchLabel || 'ver match'}
+                        </a>
+                      ) : null}
                       {kpi.title === "Max. Dist" && maxMetrics?.max_distance_detail ? (
                         <a href={maxDistanceHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
                           {maxDistanceMatchLabel || 'ver match'}
