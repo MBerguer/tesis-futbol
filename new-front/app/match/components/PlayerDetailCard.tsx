@@ -27,6 +27,7 @@ function PlayerDetailCardBase({
   firstHalfStart,
   firstHalfEnd,
   secondHalfStart,
+  secondHalfEnd,
 }: {
   name: string;
   entries: MiniEntry[];
@@ -36,6 +37,7 @@ function PlayerDetailCardBase({
   firstHalfStart?: number | null;
   firstHalfEnd?: number | null;
   secondHalfStart?: number | null;
+  secondHalfEnd?: number | null;
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = React.useState<boolean>(false);
@@ -97,7 +99,7 @@ function PlayerDetailCardBase({
     if (typeof fh === 'number' && typeof sh === 'number') {
       if (startSec >= sh) {
         const delta = Math.max(0, Math.round(startSec - sh));
-        return `45+${formatMmSs(delta)}`;
+        return `${formatMmSs(45*60+delta)}`;
       }
       if (startSec >= fh) {
         const delta = Math.max(0, Math.round(startSec - fh));
@@ -105,7 +107,7 @@ function PlayerDetailCardBase({
       }
     }
     return formatHms(startSec);
-  }, [firstHalfStart, secondHalfStart, firstHalfEnd]);
+  }, [firstHalfStart, secondHalfStart, firstHalfEnd, secondHalfEnd]);
 
   const toYoutubeClock = React.useCallback((startSec: number) => {
     const fh = typeof firstHalfStart === 'number' ? firstHalfStart : undefined;
@@ -123,7 +125,7 @@ function PlayerDetailCardBase({
       }
     }
     return startSec;
-  }, [firstHalfStart, secondHalfStart, firstHalfEnd]);
+  }, [firstHalfStart, secondHalfStart, firstHalfEnd, secondHalfEnd]);
 
 
   const parseHmsToSec = (t?: string) => {
@@ -142,14 +144,15 @@ function PlayerDetailCardBase({
         <div className="flex flex-wrap gap-1.5">
           {normWindows.map((w, i)=> (
             <React.Fragment key={i}>
-              <span className="inline-flex items-center rounded-md font-bold text-base bg-pink-900/50 px-1.5 py-0.5">
-              Start: {formatHms(w.start)}
-              </span>
+              
               <span className="inline-flex items-center rounded-md font-bold text-base bg-blue-900/50 px-1.5 py-0.5">
                 Minute: {toSoccerClock(w.start)}
               </span>
               <span className="inline-flex items-center rounded-md font-bold text-base bg-green-900/50 px-1.5 py-0.5">
                 {typeof w.distance === 'number' ? <> Distance: {w.distance.toFixed(2)} m</> : null}
+              </span>
+              <span className="inline-flex items-center rounded-md font-bold text-base bg-pink-900/50 px-1.5 py-0.5">
+                Start: {formatHms(w.start)}
               </span>
             </React.Fragment>
           ))}
@@ -190,6 +193,29 @@ function PlayerDetailCardBase({
     );
   }, [expanded, isVisible, sprints]);
 
+  // Normalize: build per-second series between match start/end, filling missing seconds with speed 0
+  const normalizedEntries = React.useMemo(() => {
+    const rawStart = typeof firstHalfStart === 'number' ? Math.floor(firstHalfStart) : Math.floor(entries[0]?.seconds_since_midnight ?? 0);
+    const rawEnd = typeof secondHalfEnd === 'number' ? Math.floor(secondHalfEnd) : Math.floor(entries[entries.length - 1]?.seconds_since_midnight ?? rawStart);
+    const start = Math.max(0, rawStart - 60); // extend 1 minute before
+    const end = rawEnd + 60; // extend 1 minute after
+    if (!(isFinite(start) && isFinite(end)) || end <= start) return [] as MiniEntry[];
+    const bySec = new Map<number, number>();
+    for (const e of entries) {
+      const sec = Math.floor(e.seconds_since_midnight);
+      if (!isFinite(sec)) continue;
+      bySec.set(sec, Number(e.speed) || 0);
+    }
+    const out: MiniEntry[] = [];
+    for (let s = start; s <= end; s++) {
+      out.push({ player_display_name: name, seconds_since_midnight: s, speed: bySec.get(s) ?? 0 });
+    }
+    return out;
+  }, [entries, firstHalfStart, secondHalfEnd, name]);
+
+  const axisStart = Math.max(0, Math.floor((typeof firstHalfStart === 'number' ? firstHalfStart : (normalizedEntries[0]?.seconds_since_midnight ?? 0)) - 60));
+  const axisEnd = Math.floor((typeof secondHalfEnd === 'number' ? secondHalfEnd : (normalizedEntries[normalizedEntries.length - 1]?.seconds_since_midnight ?? axisStart)) + 60);
+
   return (
     <div
       ref={containerRef}
@@ -207,13 +233,13 @@ function PlayerDetailCardBase({
           {isVisible ? (
             <div className="h-28 rounded-md border border-zinc-800 bg-zinc-900/60 p-2">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={entries} margin={{ top: 2, right: 0, left: -20, bottom: 0 }}>
-                  <XAxis type="number" dataKey="seconds_since_midnight" domain={["dataMin","dataMax"]} hide tickFormatter={formatHms} />
+                <LineChart data={normalizedEntries} margin={{ top: 2, right: 0, left: -20, bottom: 0 }}>
+                  <XAxis type="number" dataKey="seconds_since_midnight" domain={[axisStart, axisEnd]} hide tickFormatter={formatHms} />
                   <YAxis hide domain={[0, 36]} />
                   {normWindows.map((w, idx)=> (
                     <ReferenceArea key={idx} x1={w.start} x2={w.end} stroke="#ff6aa7" fill="#9f184f" strokeDasharray="4 2" />
                   ))}
-                  <Line type="monotone" dot={false} dataKey="speed" stroke="#3b82f6" strokeWidth={1.5} isAnimationActive={false} animationDuration={0.5} />
+                  <Line type="monotone" dot={false} dataKey="speed" stroke="#3b82f6" strokeWidth={1.5} isAnimationActive={true} animationDuration={0.5} />
                   <Tooltip 
                     cursor={{ stroke: '#94a3b8', strokeDasharray: '3 3' }}
                     formatter={(value: any, name: any) => {

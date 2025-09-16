@@ -912,6 +912,7 @@ export default function Page() {
                       firstHalfStart={periods?.detected_first_half_start ?? null}
                       secondHalfStart={periods?.detected_second_half_start ?? null}
                       firstHalfEnd={periods?.detected_first_half_end ?? null}
+                      secondHalfEnd={periods?.detected_second_half_end ?? null}
                     />
                   );
                 })}
