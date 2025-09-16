@@ -120,6 +120,7 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     // Defaults (fallbacks)
     let mut max_speed_kmh: f64 = 27.0;
     let mut max_distance_m_val: f64 = 4013.0;
+    let mut hsr_max_m_val: f64 = 0.0;
     let mut max_speed_match_id: Option<uuid::Uuid> = None;
     let mut max_speed_table: Option<String> = None;
     let mut max_speed_minute: Option<String> = None; // formatted MM:SS based on elapsed
@@ -127,6 +128,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     let mut manual_first_half_start: Option<i32> = None;
     let mut max_distance_match_id: Option<uuid::Uuid> = None;
     let mut max_distance_table: Option<String> = None;
+    let mut hsr_max_match_id: Option<uuid::Uuid> = None;
+    let mut hsr_max_table: Option<String> = None;
 
     // Other placeholders to keep previous response stable
     let max_distance_m: i64 = 4013;
@@ -134,6 +137,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     let high_metabolic_distance_m: i64 = 550;
     let z6_seconds: i64 = 15;
     let z6_distance_m: i64 = 229;
+    // Default threshold for HSR computation
+    let hsr_threshold_kmh: f64 = 19.8;
 
     // Connect to DB
     let dbconfig = DbConfig::new();
@@ -250,7 +255,39 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                     if total_distance > max_distance_m_val {
                         max_distance_m_val = total_distance;
                         max_distance_match_id = Some(r.match_id);
-                        max_distance_table = Some(table_ident);
+                        max_distance_table = Some(table_ident.clone());
+                    }
+                }
+
+                // Compute HSR (> threshold) total distance for this match
+                let sql_hsr_view = format!(
+                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(CASE WHEN COALESCE(t.speed,0) > {} THEN COALESCE(t.distancia_total_calc,0) ELSE 0 END)::double precision AS hsr_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name",
+                    view_name, hsr_threshold_kmh, view_name
+                );
+                let mut hsr_row_opt = sqlx::query(&sql_hsr_view)
+                    .bind(&display_name)
+                    .fetch_optional(&pool)
+                    .await
+                    .ok()
+                    .flatten();
+                if hsr_row_opt.is_none() {
+                    let sql_hsr_raw = format!(
+                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(CASE WHEN COALESCE(t.speed,0) > {} THEN COALESCE(t.distancia_total_calc,0) ELSE 0 END)::double precision AS hsr_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name",
+                        table_ident, hsr_threshold_kmh, table_ident
+                    );
+                    hsr_row_opt = sqlx::query(&sql_hsr_raw)
+                        .bind(&display_name)
+                        .fetch_optional(&pool)
+                        .await
+                        .ok()
+                        .flatten();
+                }
+                if let Some(hrow) = hsr_row_opt {
+                    let hsr_distance: f64 = hrow.try_get("hsr_distance").unwrap_or(0.0);
+                    if hsr_distance > hsr_max_m_val {
+                        hsr_max_m_val = hsr_distance;
+                        hsr_max_match_id = Some(r.match_id);
+                        hsr_max_table = Some(table_ident);
                     }
                 }
             }
@@ -268,7 +305,7 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
 
     Json(json!({
         "max_distance_m": (max_distance_m_val.round() as i64),
-        "hsr_max_m": hsr_max_m,
+        "hsr_max_m": (hsr_max_m_val.round() as i64),
         "max_speed_kmh": max_speed_kmh,
         "high_metabolic_distance_m": high_metabolic_distance_m,
         "z6": { "seconds": z6_seconds, "distance_m": z6_distance_m },
@@ -282,6 +319,10 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
         "max_distance_detail": {
             "match_id": max_distance_match_id,
             "gps_table_name": max_distance_table
+        },
+        "hsr_max_detail": {
+            "match_id": hsr_max_match_id,
+            "gps_table_name": hsr_max_table
         }
     }))
 }

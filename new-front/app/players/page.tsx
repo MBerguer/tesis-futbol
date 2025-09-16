@@ -58,6 +58,7 @@ type PlayerMaxMetrics = {
   z6: { seconds: number; distance_m: number };
   max_speed_detail?: { match_id?: string; gps_table_name?: string; minute?: string; time?: string; manual_first_half_start?: number|null };
   max_distance_detail?: { match_id?: string; gps_table_name?: string };
+  hsr_max_detail?: { match_id?: string; gps_table_name?: string };
 };
 
 const rendimiento = [
@@ -287,6 +288,15 @@ export default function Page() {
     return "/match";
   }, [maxMetrics?.max_distance_detail]);
 
+  const hsrHref = React.useMemo(() => {
+    const d = maxMetrics?.hsr_max_detail;
+    const id = d?.match_id;
+    const table = d?.gps_table_name;
+    if (id) return `/match?match=${id}`;
+    if (table) return `/match?table=${encodeURIComponent(table)}`;
+    return "/match";
+  }, [maxMetrics?.hsr_max_detail]);
+
   const [maxDistanceMatchLabel, setMaxDistanceMatchLabel] = React.useState<string | null>(null);
   React.useEffect(() => {
     const d = maxMetrics?.max_distance_detail;
@@ -322,13 +332,48 @@ export default function Page() {
     return () => { cancelled = true; };
   }, [API_BASE, maxMetrics?.max_distance_detail]);
 
+  const [hsrMatchLabel, setHsrMatchLabel] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const d = maxMetrics?.hsr_max_detail;
+    setHsrMatchLabel(null);
+    if (!d) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (d.match_id) {
+          const res = await fetch(`${API_BASE}/api/matches/${d.match_id}`);
+          if (res.ok) {
+            const md = await res.json();
+            const home = md?.home_team_name || md?.home_team_id?.slice(0, 8);
+            const away = md?.away_team_name || md?.away_team_id?.slice(0, 8);
+            const label = home && away ? `${home} vs ${away}` : undefined;
+            if (!cancelled && label) setHsrMatchLabel(label);
+          }
+        } else if (d.gps_table_name) {
+          const res = await fetch(`${API_BASE}/api/matches`);
+          if (res.ok) {
+            const arr = await res.json();
+            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            if (found) {
+              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const label = home && away ? `${home} vs ${away}` : undefined;
+              if (!cancelled && label) setHsrMatchLabel(label);
+            }
+          }
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, maxMetrics?.hsr_max_detail]);
+
   const kpis = React.useMemo(() => ([
     { title: "Max. Dist", value: maxMetrics ? `${maxMetrics.max_distance_m} m` : "—", link: maxDistanceHref },
-    { title: "HSR Max", value: maxMetrics ? `${maxMetrics.hsr_max_m} m` : "1653 m" },
+    { title: "HSR Max", value: maxMetrics ? `${maxMetrics.hsr_max_m} m` : "—", link: hsrHref },
     { title: "Velocidad Max.", value: maxMetrics ? `${(Math.round(maxMetrics.max_speed_kmh * 100) / 100).toFixed(2)} km/h` : "27 km/h", link: matchHref },
     { title: "High Metab. Dist.", value: maxMetrics ? `${maxMetrics.high_metabolic_distance_m} m` : "550 m" },
     { title: "z6", value: maxMetrics ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)` : '15" (229m)' },
-  ]), [maxMetrics, matchHref, maxDistanceHref]);
+  ]), [maxMetrics, matchHref, maxDistanceHref, hsrHref]);
 
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
@@ -487,7 +532,7 @@ export default function Page() {
                     <CardContent className="py-3">
                       <div className="text-sm text-zinc-300">{kpi.title}</div>
                       <div className="text-xl font-semibold">
-                        {((kpi.title === "Velocidad Max." || kpi.title === "Max. Dist") && loadingMetrics) ? (
+                        {((kpi.title === "Velocidad Max." || kpi.title === "Max. Dist" || kpi.title === "HSR Max") && loadingMetrics) ? (
                           <Loader2 className="inline-block h-4 w-4 animate-spin text-zinc-400" />
                         ) : (
                           kpi.value
@@ -496,6 +541,11 @@ export default function Page() {
                       {kpi.title === "Max. Dist" && maxMetrics?.max_distance_detail ? (
                         <a href={maxDistanceHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
                           {maxDistanceMatchLabel || 'ver match'}
+                        </a>
+                      ) : null}
+                      {kpi.title === "HSR Max" && maxMetrics?.hsr_max_detail ? (
+                        <a href={hsrHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
+                          {hsrMatchLabel || 'ver match'}
                         </a>
                       ) : null}
                       {kpi.title === "Velocidad Max." && (maxMetrics?.max_speed_detail?.minute || maxMetrics?.max_speed_detail?.time) ? (
