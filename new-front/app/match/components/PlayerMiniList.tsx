@@ -3,7 +3,7 @@
 import React from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, ReferenceArea } from "recharts";
 
-export interface MiniEntry { player_display_name: string; speed: number; centralized_elapsed_time: number }
+export interface MiniEntry { player_display_name: string; speed: number; seconds_since_midnight: number }
 
 interface Props {
   entries: MiniEntry[];
@@ -19,7 +19,7 @@ export default function PlayerMiniList({ entries, highlightedPlayer, onHover, si
     for (const e of entries) {
       (m[e.player_display_name] ||= []).push(e);
     }
-    Object.keys(m).forEach(k => m[k].sort((a,b)=>a.centralized_elapsed_time-b.centralized_elapsed_time));
+    Object.keys(m).forEach(k => m[k].sort((a,b)=>a.seconds_since_midnight-b.seconds_since_midnight));
     return m;
   }, [entries]);
   const players = Object.keys(byPlayer);
@@ -50,12 +50,12 @@ export default function PlayerMiniList({ entries, highlightedPlayer, onHover, si
             <div className="h-10">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={byPlayer[p]} margin={{ top: 2, right: 0, left: -20, bottom: 0 }}>
-                  <XAxis type="number" dataKey="centralized_elapsed_time" domain={["dataMin","dataMax"]} allowDataOverflow hide />
+                  <XAxis type="number" dataKey="seconds_since_midnight" domain={["dataMin","dataMax"]} allowDataOverflow hide />
                   <YAxis hide domain={[0, 36]} />
                   {(() => {
                     const arr = byPlayer[p];
-                    const minX = arr.length ? arr[0].centralized_elapsed_time : undefined;
-                    const maxX = arr.length ? arr[arr.length - 1].centralized_elapsed_time : undefined;
+                    const minX = arr.length ? arr[0].seconds_since_midnight : undefined;
+                    const maxX = arr.length ? arr[arr.length - 1].seconds_since_midnight : undefined;
                     const hs = highlights?.[norm(p)] || [];
                     try { console.debug('mini-highlight-range', {p, norm: norm(p), minX, maxX, windows: hs}); } catch {}
                     if (minX === undefined || maxX === undefined || hs.length === 0) return null as any;

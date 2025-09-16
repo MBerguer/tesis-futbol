@@ -7,8 +7,7 @@ import { toAbsoluteTime as toAbsFromUtils } from "../utils/time";
 export interface AvgPoint { second: number; speed: number | null }
 
 interface AvgSpeedChartProps {
-  entries: { player_display_name: string; speed: number; centralized_elapsed_time: number }[];
-  baseTime: string | null;
+  entries: { player_display_name: string; speed: number; seconds_since_midnight: number }[];
   thresholds?: { match: number; halftime: number; kickoff: number } | null;
   periods?: {
     detected_first_half_start?: number;
@@ -24,14 +23,14 @@ interface AvgSpeedChartProps {
   patchedSecondHalfStart?: number | null;
 }
 
-export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, kickoffSpike, cursorSecond, patchedFirstHalfStart, patchedSecondHalfStart }: AvgSpeedChartProps) {
+export default function AvgSpeedChart({ entries, thresholds, periods, kickoffSpike, cursorSecond, patchedFirstHalfStart, patchedSecondHalfStart }: AvgSpeedChartProps) {
   // build avg series per second (>=2 players) in km/h
   const series = React.useMemo<AvgPoint[]>(() => {
     if (!entries || entries.length === 0) return [];
     const secondToSpeeds: Map<number, number[]> = new Map();
     const secondToPlayers: Map<number, Set<string>> = new Map();
     for (const e of entries) {
-      const sec = Math.floor(e.centralized_elapsed_time);
+      const sec = Math.floor(e.seconds_since_midnight);
       if (!secondToSpeeds.has(sec)) secondToSpeeds.set(sec, []);
       // Convert from m/s to km/h for charting --> * 3.6
       secondToSpeeds.get(sec)!.push(e.speed);
@@ -56,7 +55,7 @@ export default function AvgSpeedChart({ entries, baseTime, thresholds, periods, 
     return out;
   }, [entries]);
 
-  const toAbsoluteTime = (sec?: number) => toAbsFromUtils(baseTime, sec);
+  const toAbsoluteTime = (sec?: number) => toAbsFromUtils(sec);
 
   // x ticks at key points
   const ticks = React.useMemo(() => {

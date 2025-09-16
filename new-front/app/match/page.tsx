@@ -35,7 +35,7 @@ interface MatchEntry {
   player_display_name: string;
   time: string;
   speed: number;
-  centralized_elapsed_time: number;
+  seconds_since_midnight: number;
 }
 
 interface MatchPeriods {
@@ -115,7 +115,6 @@ export default function Page() {
   const [kickoffSpike, setKickoffSpike] = useState<number | null>(null);
   const [thresholds, setThresholds] = useState<{ match: number; halftime: number; kickoff: number } | null>(null);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
-  const [baseTime, setBaseTime] = useState<string | null>(null);
   const [videoTimeSec, setVideoTimeSec] = useState<number>(0);
   const [youtubeLink, setYoutubeLink] = useState<string | null>(null);
   const handleVideoSecondChange = React.useCallback((s: number)=> setVideoTimeSec(s), []);
@@ -151,8 +150,7 @@ export default function Page() {
       return h*3600 + mi*60 + s;
     };
     const derived = (entries && entries.length > 0) ? entries.map(e=>e.time).filter(Boolean).sort()[0] : null;
-    const baseOffset = parseTimeToSec(baseTime || derived || null);
-
+    
     const halftimeStart = (periods?.detected_first_half_end?? periods?.detected_halftime_start) ?? null;
     const halftimeEnd = (periods?.detected_second_half_start ?? periods?.detected_halftime_end) ?? null;
     const halftimeDuration = (halftimeStart !== null && halftimeEnd !== null) ? Math.max(0, halftimeEnd - halftimeStart) : 0;
@@ -160,17 +158,17 @@ export default function Page() {
     const map: Record<string, Array<{start:number; end:number; distance?: number, start_adj: number, end_adj: number, start_abs: number, end_abs: number}>> = {};
     for (const wc of worstCases) {
       const key = norm(wc.player_display_name || '');
-      const start = (wc.start_second || 0) - baseOffset;
-      const end = (wc.end_second || 0) - baseOffset;
+      const start = (wc.start_second || 0);
+      const end = (wc.end_second || 0);
       const startAbs = wc.start_second || 0;
       const endAbs = wc.end_second || 0;
       const halftimeAdj = (halftimeEnd !== null && startAbs >= halftimeEnd) ? halftimeDuration : 0;
-      const start_adj = (startAbs - baseOffset) - halftimeAdj;
-      const end_adj = (endAbs - baseOffset) - halftimeAdj;
+      const start_adj = (startAbs) - halftimeAdj;
+      const end_adj = (endAbs) - halftimeAdj;
       (map[key] ||= []).push({ start, end, distance: wc.distance_covered, start_adj, end_adj, start_abs: startAbs, end_abs: endAbs });
     }
     return map;
-  }, [worstCases, baseTime, entries, periods]);
+  }, [worstCases, entries, periods]);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
@@ -292,7 +290,6 @@ export default function Page() {
     if (periodsAuto) setPeriods(periodsAuto);
     if (thresholdsAuto) setThresholds(thresholdsAuto);
     if (typeof kickoffSpikeAuto === 'number' || kickoffSpikeAuto === null) setKickoffSpike(kickoffSpikeAuto);
-    if (baseTimeAuto) setBaseTime(baseTimeAuto);
     if (worstCasesAuto) { setWorstCases(worstCasesAuto); setShowWorstCases(worstCasesAuto.length > 0); }
     if (sprintsAuto) { setSprintsInWorstCases(sprintsAuto); setShowSprints(sprintsAuto.length > 0); }
     setLoadingEntries(loadingEntriesAuto);
@@ -313,7 +310,6 @@ export default function Page() {
     setShowSprints(false);
     setKickoffSpike(null);
     setThresholds(null);
-    setBaseTime(null);
   }, [selectedTable]);
 
   useEffect(() => {
@@ -388,7 +384,7 @@ export default function Page() {
   const playersGrouped = React.useMemo(() => {
     const byPlayer: Record<string, typeof entries> = {} as any;
     entries.forEach(e => { (byPlayer[e.player_display_name] ||= []).push(e); });
-    Object.keys(byPlayer).forEach(k => byPlayer[k].sort((a,b)=>a.centralized_elapsed_time-b.centralized_elapsed_time));
+    Object.keys(byPlayer).forEach(k => byPlayer[k].sort((a,b)=>a.seconds_since_midnight-b.seconds_since_midnight));
     return byPlayer;
   }, [entries]);
 
@@ -538,7 +534,6 @@ export default function Page() {
                     </div>
                   ) : (
                     <PeriodsSummary
-                      baseTime={baseTime}
                       detected_first_half_start={periods.detected_first_half_start}
                       detected_first_half_end={periods.detected_first_half_end}
                       detected_second_half_start={periods.detected_second_half_start}
@@ -661,7 +656,6 @@ export default function Page() {
                     <>
                       <AvgSpeedChart
                         entries={entries}
-                        baseTime={baseTime || derivedBaseTime}
                         thresholds={thresholds}
                         periods={periods}
                         kickoffSpike={kickoffSpike}
@@ -776,14 +770,14 @@ export default function Page() {
                           <Label className="font-medium text-zinc-300">Detected first half start</Label>
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">sec: {periods.detected_first_half_start ?? '—'}</span>
-                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">time: {toAbsFromUtils(baseTime || null, periods.detected_first_half_start)}</span>
+                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">time: { periods.detected_first_half_start}</span>
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label className="font-medium text-zinc-300">Detected second half start</Label>
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">sec: {periods.detected_second_half_start ?? '—'}</span>
-                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">time: {toAbsFromUtils(baseTime || null, periods.detected_second_half_start)}</span>
+                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">time: {periods.detected_second_half_start}</span>
                           </div>
                         </div>
                         <Separator className="bg-zinc-800" />
@@ -913,7 +907,7 @@ export default function Page() {
                 {entries.length === 0 ? (
                   <Skeleton className="h-[500px]" />
                 ) : (
-                  <PlayersChart entries={entries} baseTime={baseTime || derivedBaseTime} />
+                  <PlayersChart entries={entries} baseTime={derivedBaseTime} />
                 )}
               </CardContent>
             </Card>

@@ -15,9 +15,9 @@ export function formatMatchTime(seconds?: number) {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-export function toAbsoluteTime(baseTime: string | null | undefined, sec?: number) {
-  if (!baseTime || sec === undefined || sec === null) return "-";
-  const [hh, mm, ssms] = baseTime.split(":");
+export function toAbsoluteTime(sec?: number) {
+  if (sec === undefined || sec === null) return "-";
+  const [hh, mm, ssms] = "00:00:00".split(":");
   const ssInt = parseInt((ssms || "0").split(".")[0] || '0', 10);
   const baseSeconds = parseInt(hh || '0', 10) * 3600 + parseInt(mm || '0', 10) * 60 + ssInt;
   const target = Math.floor(baseSeconds + Math.floor(sec));

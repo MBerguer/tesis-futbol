@@ -167,7 +167,8 @@ pub async fn resolve_table_for_match(
 }
 
 /// GET /match/table/:table_name/positions/window?center_sec=123&radius_sec=15
-/// Returns per-second positions in a rolling window around a GPS time (seconds since base)
+/// Returns per-second positions in a rolling window around a GPS time
+/// Uses seconds_since_midnight when available; otherwise derives from time
 pub async fn get_positions_window(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
@@ -176,44 +177,26 @@ pub async fn get_positions_window(
     let center_sec: i64 = params.get("center_sec").and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
     let radius_sec: i64 = params.get("radius_sec").and_then(|s| s.parse::<i64>().ok()).unwrap_or(15);
 
-    // logging removed
-
-    // Build SQL assuming table has columns: player_display_name, time, centralized_elapsed_time, lat, lon, speed
-    // If centralized_elapsed_time is not present, approximate via time vs min(time) as in other endpoints
-    let has_centralized_query = format!(
-        "SELECT column_name FROM information_schema.columns WHERE table_name = '{}' AND column_name = 'centralized_elapsed_time'",
-        table_name
+    let (sql, bind_center_low, bind_center_high) = (
+        format!(
+            "SELECT t.player_display_name,
+                    (t.seconds_since_midnight)::double precision AS sec,
+                    t.lat, t.lon, t.speed
+             FROM \"{}_sql_player_gemini_processed_view\" t
+             WHERE (t.seconds_since_midnight)::double precision BETWEEN $1 AND $2
+             ORDER BY sec",
+            table_name
+        ),
+        center_sec - radius_sec,
+        center_sec + radius_sec,
     );
-    let has_cent = sqlx::query(&has_centralized_query).fetch_optional(&pool).await.ok().flatten().is_some();
-    // logging removed
-
-    let (sql, bind_center_low, bind_center_high) = if has_cent {
-        (
-            format!(
-                "WITH mp AS (\n                   SELECT detected_first_half_start::double precision AS d1,\n                          detected_second_half_start::double precision AS d2,\n                          manual_first_half_start::double precision   AS m1,\n                          manual_second_half_start::double precision  AS m2\n                   FROM match_periods WHERE match_name = $3\n                 ),\n                 src AS (\n                   SELECT t.player_display_name, (t.centralized_elapsed_time)::double precision AS sec0, t.lat, t.lon, t.speed FROM \"{}\" t\n                 ),\n                 adj AS (\n                   SELECT s.player_display_name,\n                          s.lat, s.lon, s.speed,\n                          s.sec0 + CASE WHEN s.sec0 < COALESCE(mp.d2, 9e9) THEN COALESCE(mp.d1 - mp.m1, 0) ELSE COALESCE(mp.d2 - mp.m2, 0) END AS sec\n                   FROM src s, mp\n                 )\n                 SELECT player_display_name, sec, lat, lon, speed FROM adj WHERE sec BETWEEN $1 AND $2 ORDER BY sec",
-                table_name
-            ),
-            center_sec - radius_sec,
-            center_sec + radius_sec,
-        )
-    } else {
-        // compute centralized using min(time)
-        (
-            format!(
-                "WITH base AS (SELECT MIN(time) AS min_time FROM \"{}\"),\n                 mp AS (\n                   SELECT detected_first_half_start::double precision AS d1,\n                          detected_second_half_start::double precision AS d2,\n                          manual_first_half_start::double precision   AS m1,\n                          manual_second_half_start::double precision  AS m2\n                   FROM match_periods WHERE match_name = $3\n                 ),\n                 raw AS (\n                   SELECT t.player_display_name,\n                          EXTRACT(EPOCH FROM (to_timestamp(t.time,'HH24:MI:SS.MS') - to_timestamp(b.min_time,'HH24:MI:SS.MS'))) AS sec0,\n                          t.lat, t.lon, t.speed\n                   FROM \"{}\" t CROSS JOIN base b\n                 ),\n                 adj AS (\n                   SELECT r.player_display_name, r.lat, r.lon, r.speed,\n                          r.sec0 + CASE WHEN r.sec0 < COALESCE(mp.d2, 9e9) THEN COALESCE(mp.d1 - mp.m1, 0) ELSE COALESCE(mp.d2 - mp.m2, 0) END AS sec\n                   FROM raw r, mp\n                 )\n                 SELECT player_display_name, sec, lat, lon, speed FROM adj WHERE sec BETWEEN $1 AND $2 ORDER BY sec",
-                table_name, table_name
-            ),
-            center_sec - radius_sec,
-            center_sec + radius_sec,
-        )
-    };
+    
 
     // logging removed
 
     let rows = match sqlx::query(&sql)
         .bind(bind_center_low)
         .bind(bind_center_high)
-        .bind(&table_name)
         .fetch_all(&pool)
         .await
     {
@@ -245,7 +228,7 @@ pub async fn get_positions_window(
 ///
 /// Pasos (idénticos al notebook):
 /// - centralizar tiempo por jugador y luego contra el mínimo global
-/// - construir `Second = floor(centralized_elapsed_time)`
+/// - construir `Second = floor(seconds_since_midnight)`
 /// - calcular `second_avg_speed` aplicando:
 ///   * mínimo de jugadores por segundo (2 en el md efectivo)
 ///   * rellenar huecos con velocidad 0
@@ -357,17 +340,16 @@ pub async fn detect_match_periods_notebook(
         data.push(m);
     }
 
-    // centralizar tiempos como en get_match_entries_with_centralized_time (idéntico criterio)
-    let min_time_string = data
-        .iter()
-        .filter_map(|r| r.get("time").and_then(|v| v.as_str()))
-        .min()
-        .unwrap_or("")
-        .to_string();
+    // seconds since midnight from device time (replace centralized idea)
     for r in data.iter_mut() {
         if let Some(t) = r.get("time").and_then(|v| v.as_str()) {
-            let secs = diff_in_seconds(&min_time_string, t);
-            r.insert("centralized_elapsed_time".into(), Value::from(secs));
+            // parse HH:MM:SS(.MS) to seconds
+            let parts: Vec<&str> = t.split(':').collect();
+            let h = parts.get(0).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+            let m = parts.get(1).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+            let s = parts.get(2).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+            let secs = h * 3600.0 + m * 60.0 + s;
+            r.insert("seconds_since_midnight".into(), Value::from(secs));
         }
     }
 
@@ -383,7 +365,7 @@ pub async fn detect_match_periods_notebook(
     let mut second_to_players: HashMap<i64, HashSet<String>> = HashMap::new();
     for r in &data {
         if let (Some(sec), Some(speed), Some(player)) = (
-            r.get("centralized_elapsed_time").and_then(|v| v.as_f64()).map(|s| s.floor() as i64),
+            r.get("seconds_since_midnight").and_then(|v| v.as_f64()).map(|s| s.floor() as i64),
             r.get("speed").and_then(|v| v.as_f64()),
             r.get("player_display_name").and_then(|v| v.as_str()),
         ) {
@@ -523,6 +505,13 @@ pub async fn detect_match_periods_notebook(
     .execute(&pool)
     .await;
 
+    // compute base time from the underlying table/view
+    let base_time_query = format!("SELECT MIN(time) AS min_time FROM \"{}\"", table_name);
+    let base_row = sqlx::query(&base_time_query).fetch_one(&pool).await.ok();
+    let base_time: String = base_row
+        .and_then(|r| r.try_get::<String, _>("min_time").ok())
+        .unwrap_or_default();
+
     Json(json!({
         "match_name": table_name,
         "detected_first_half_start": first_half_start,
@@ -532,7 +521,7 @@ pub async fn detect_match_periods_notebook(
         "detected_second_half_start": second_half_start,
         "detected_second_half_end": second_half_end,
         "using_manual": false, // should be false, since we just detected them, and there is no possible way are not using manual periods
-        "base_time": min_time_string,
+        "base_time": base_time,
         "kickoff_spike_sec": kickoff_spike_sec,
         "thresholds": {"match": velocidad_partido, "halftime": velocidad_partido_entretiempo, "kickoff": 20.0}
     }))
@@ -591,7 +580,7 @@ pub async fn get_match_players(
     }))
 }
 
-pub async fn get_match_entries_with_centralized_time(
+pub async fn get_match_entries_seconds_since_midnight(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
 ) -> Json<Value> {
@@ -656,28 +645,15 @@ pub async fn get_match_entries_with_centralized_time(
 
     let earliest_timestamp = earliest_timestamp.unwrap();
 
-    // Now get all entries with centralized time
+    // Now get all entries using seconds since midnight (device time-of-day)
     let entries_query = format!(
         r#"
-        WITH first_timestamps AS (
-            SELECT 
-                player_display_name,
-                MIN(time) as first_time
-            FROM "{}"
-            GROUP BY player_display_name
-        )
         SELECT 
             t.*,
-            EXTRACT(EPOCH FROM (
-                (to_timestamp(t.time, 'HH24:MI:SS.MS') - to_timestamp(ft.first_time, 'HH24:MI:SS.MS')) + 
-                (to_timestamp(ft.first_time, 'HH24:MI:SS.MS') - to_timestamp('{}', 'HH24:MI:SS.MS'))
-            ))::text as centralized_elapsed_time
+            EXTRACT(EPOCH FROM (to_timestamp(t.time, 'HH24:MI:SS.MS')::time))::text as seconds_since_midnight
         FROM "{}" t
-        JOIN first_timestamps ft ON t.player_display_name = ft.player_display_name
         ORDER BY t.time
         "#,
-        table_name,
-        earliest_timestamp.format("%H:%M:%S.%f").to_string(),
         table_name
     );
 
@@ -711,10 +687,10 @@ pub async fn get_match_entries_with_centralized_time(
         .into_iter()
         .map(|row| {
             let mut entry = json!({});
-            // Add centralized_elapsed_time first
-            if let Ok(value) = row.try_get::<String, _>("centralized_elapsed_time") {
+            // Add seconds_since_midnight first
+            if let Ok(value) = row.try_get::<String, _>("seconds_since_midnight") {
                 if let Ok(num) = value.parse::<f64>() {
-                    entry["centralized_elapsed_time"] = json!(num);
+                    entry["seconds_since_midnight"] = json!(num);
                 }
             }
             // Add other columns
@@ -738,7 +714,7 @@ pub async fn get_match_entries_with_centralized_time(
     for entry in entries_json {
         if let (Some(player), Some(_time)) = (
             entry["player_display_name"].as_str(),
-            entry["centralized_elapsed_time"].as_f64(),
+            entry["seconds_since_midnight"].as_f64(),
         ) {
             player_entries
                 .entry(player.to_string())
@@ -752,14 +728,14 @@ pub async fn get_match_entries_with_centralized_time(
     for (_player, mut entries) in player_entries {
         // Ordenar por tiempo
         entries.sort_by(|a, b| {
-            a["centralized_elapsed_time"]
+            a["seconds_since_midnight"]
                 .as_f64()
-                .partial_cmp(&b["centralized_elapsed_time"].as_f64())
+                .partial_cmp(&b["seconds_since_midnight"].as_f64())
                 .unwrap()
         });
         let mut last_time = None;
         for entry in entries {
-            let time = entry["centralized_elapsed_time"].as_f64().unwrap();
+            let time = entry["seconds_since_midnight"].as_f64().unwrap();
             if last_time.is_none() || (time - last_time.unwrap()) >= 10.0 {
                 filtered_entries.push(entry.clone());
                 last_time = Some(time);
@@ -889,7 +865,7 @@ pub async fn detect_and_store_match_periods(
     }
 
     // 1. Leer todos los datos de la tabla del partido
-    let query = format!("SELECT * FROM \"{}\" ORDER BY time", table_name);
+    let query = format!("SELECT * FROM \"{}\"_sql_player_gemini_processed_view ORDER BY time", table_name);
     let rows = match sqlx::query(&query).fetch_all(&pool).await {
         Ok(r) => r,
         Err(e) => {
@@ -928,17 +904,17 @@ pub async fn detect_and_store_match_periods(
 
     // 3. Usar elapsed_time existente o calcular centralized_elapsed_time si no existe
     let has_elapsed_time = columns.iter().any(|c| c == "elapsed_time");
-    let has_centralized = columns.iter().any(|c| c == "centralized_elapsed_time");
+    let has_centralized = columns.iter().any(|c| c == "seconds_since_midnight");
     
     if has_elapsed_time && !has_centralized {
-        // Usar elapsed_time existente como centralized_elapsed_time
+        // Usar elapsed_time existente como seconds_since_midnight
         for row in data.iter_mut() {
             if let Some(elapsed) = row.get("elapsed_time").and_then(|v| v.as_f64()) {
-                row.insert("centralized_elapsed_time".to_string(), Value::from(elapsed));
+                row.insert("seconds_since_midnight".to_string(), Value::from(elapsed));
             }
         }
     } else if !has_centralized {
-        // Calcular centralized_elapsed_time desde cero
+        // Calcular seconds_since_midnight desde cero
         let mut _min_time = None;
         _min_time = data
             .iter()
@@ -950,7 +926,7 @@ pub async fn detect_and_store_match_periods(
             for row in data.iter_mut() {
                 if let Some(time) = row.get("time").and_then(|v| v.as_str()) {
                     let secs = diff_in_seconds(min_time, time);
-                    row.insert("centralized_elapsed_time".to_string(), Value::from(secs));
+                    row.insert("seconds_since_midnight".to_string(), Value::from(secs));
                 }
             }
         }
@@ -970,15 +946,15 @@ pub async fn detect_and_store_match_periods(
     
     // Debug: verificar si hay datos de velocidad
     let speed_data_count = data.iter().filter(|row| {
-        row.get("centralized_elapsed_time").and_then(|v| v.as_f64()).is_some() &&
+        row.get("seconds_since_midnight").and_then(|v| v.as_f64()).is_some() &&
         row.get("speed").and_then(|v| v.as_f64()).is_some()
     }).count();
     println!("Data points with both elapsed_time and speed: {}", speed_data_count);
     
     // Debug: verificar rango de tiempos
     if let (Some(min_time), Some(max_time)) = (
-        data.iter().filter_map(|row| row.get("centralized_elapsed_time").and_then(|v| v.as_f64())).min_by(|a, b| a.partial_cmp(b).unwrap()),
-        data.iter().filter_map(|row| row.get("centralized_elapsed_time").and_then(|v| v.as_f64())).max_by(|a, b| a.partial_cmp(b).unwrap())
+        data.iter().filter_map(|row| row.get("seconds_since_midnight").and_then(|v| v.as_f64())).min_by(|a, b| a.partial_cmp(b).unwrap()),
+        data.iter().filter_map(|row| row.get("seconds_since_midnight").and_then(|v| v.as_f64())).max_by(|a, b| a.partial_cmp(b).unwrap())
     ) {
         println!("Time range: {} to {} seconds ({} to {} minutes)", 
                  min_time, max_time, 
@@ -993,7 +969,7 @@ pub async fn detect_and_store_match_periods(
 
     for row in &data {
         let sec_opt = row
-            .get("centralized_elapsed_time")
+            .get("seconds_since_midnight")
             .and_then(|v| v.as_f64())
             .map(|s| s.floor() as i64);
         let speed_opt = row.get("speed").and_then(|v| v.as_f64());

@@ -19,7 +19,7 @@ pub fn matches_routes(pool: PgPool) -> Router {
         )
         .route(
             "/table/:table_name/entries",
-            get(matches::get_match_entries_with_centralized_time),
+            get(matches::get_match_entries_seconds_since_midnight),
         )
         .route(
             "/table/:table_name/periods/detect-notebook",

@@ -6,7 +6,7 @@ export interface MatchEntry {
   player_display_name: string;
   time: string;
   speed: number;
-  centralized_elapsed_time: number;
+  seconds_since_midnight: number;
 }
 
 export interface MatchEntries { entries: MatchEntry[] }

@@ -3,7 +3,7 @@
 import React from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, ReferenceArea } from "recharts";
 
-export interface MiniEntry { player_display_name: string; speed: number; centralized_elapsed_time: number }
+export interface MiniEntry { player_display_name: string; speed: number; seconds_since_midnight: number }
 export interface SprintItem {
   player_display_name: string;
   sprint_id: number;
@@ -47,8 +47,8 @@ function PlayerDetailCardBase({
   const initials = React.useMemo(() => name.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase(), [name]);
   const normWindows = React.useMemo(() => {
     if (!isVisible || !entries || entries.length === 0) return [] as Array<{start:number; end:number; distance?: number}>;
-    const minX = entries[0].centralized_elapsed_time;
-    const maxX = entries[entries.length-1].centralized_elapsed_time;
+    const minX = entries[0].seconds_since_midnight;
+    const maxX = entries[entries.length-1].seconds_since_midnight;
     return (windows || [])
       .map(w=>{
         const startRaw = (typeof w.start_adj === 'number') ? w.start_adj : w.start;
@@ -142,7 +142,7 @@ function PlayerDetailCardBase({
             <div className="h-28 rounded-md border border-zinc-800 bg-zinc-900/60 p-2">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={entries} margin={{ top: 2, right: 0, left: -20, bottom: 0 }}>
-                  <XAxis type="number" dataKey="centralized_elapsed_time" domain={["dataMin","dataMax"]} allowDataOverflow hide />
+                  <XAxis type="number" dataKey="seconds_since_midnight" domain={["dataMin","dataMax"]} allowDataOverflow hide />
                   <YAxis hide domain={[0, 36]} />
                   {normWindows.map((w, idx)=> (
                     <ReferenceArea key={idx} x1={w.start} x2={w.end} fill="rgb(131 24 67)" ifOverflow="extendDomain" />

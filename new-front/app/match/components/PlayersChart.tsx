@@ -8,7 +8,7 @@ export interface MatchEntry {
   player_display_name: string;
   time: string;
   speed: number;
-  centralized_elapsed_time: number;
+  seconds_since_midnight: number;
 }
 
 interface PlayersChartProps {
@@ -24,17 +24,17 @@ export default function PlayersChart({ entries, baseTime }: PlayersChartProps) {
       if (!dataByPlayer[entry.player_display_name]) dataByPlayer[entry.player_display_name] = [];
       dataByPlayer[entry.player_display_name].push(entry);
     });
-    Object.keys(dataByPlayer).forEach((p) => dataByPlayer[p].sort((a, b) => a.centralized_elapsed_time - b.centralized_elapsed_time));
+    Object.keys(dataByPlayer).forEach((p) => dataByPlayer[p].sort((a, b) => a.seconds_since_midnight - b.seconds_since_midnight));
     return dataByPlayer;
   }, [entries]);
 
-  const allTimes = React.useMemo(() => Array.from(new Set(entries.map((e) => e.centralized_elapsed_time))).sort((a, b) => a - b), [entries]);
+  const allTimes = React.useMemo(() => Array.from(new Set(entries.map((e) => e.seconds_since_midnight))).sort((a, b) => a - b), [entries]);
 
   const chartData = React.useMemo(() => {
     return allTimes.map((time) => {
-      const row: any = { centralized_elapsed_time: time };
+      const row: any = { seconds_since_midnight: time };
       Object.keys(playerData).forEach((player) => {
-        const found = playerData[player].find((e) => e.centralized_elapsed_time === time);
+        const found = playerData[player].find((e) => e.seconds_since_midnight === time);
         row[player] = found ? found.speed : null;
       });
       return row;
@@ -55,7 +55,7 @@ export default function PlayersChart({ entries, baseTime }: PlayersChartProps) {
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="centralized_elapsed_time" tickFormatter={(s) => toAbsoluteTime(s)} label={{ value: 'Clock (HH:MM:SS)', position: 'insideBottom', offset: -5 }} />
+          <XAxis dataKey="seconds_since_midnight" tickFormatter={(s) => toAbsoluteTime(s)} label={{ value: 'Clock (HH:MM:SS)', position: 'insideBottom', offset: -5 }} />
           <YAxis label={{ value: 'Speed', angle: -90, position: 'insideLeft' }} />
           <Tooltip labelFormatter={(l:any)=> toAbsoluteTime(l)} />
           <Legend />
