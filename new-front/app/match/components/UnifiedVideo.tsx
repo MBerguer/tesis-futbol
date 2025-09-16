@@ -10,12 +10,14 @@ export default function UnifiedVideo({
   onSecondChange,
   seekTo,
   markers,
+  onMarkerClick,
 }: {
   videoUrl?: string | null;
   youtubeId?: string | null;
   onSecondChange?: (sec: number) => void;
   seekTo?: number | null;
   markers?: TimelineMarker[];
+  onMarkerClick?: (m: TimelineMarker) => void;
 }) {
   const resolved = React.useMemo(() => {
     if (youtubeId && youtubeId.trim().length > 0) {
@@ -41,7 +43,7 @@ export default function UnifiedVideo({
 
   if (resolved.kind === "yt") {
     if (!resolved.id) return <div className="text-sm text-gray-600">Invalid YouTube URL/ID.</div>;
-    return <YouTubeVideo videoId={resolved.id} onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} markers={markers} />;
+    return <YouTubeVideo videoId={resolved.id} onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} markers={markers} onMarkerClick={onMarkerClick} />;
   }
   return <VideoComponent onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} />;
 }

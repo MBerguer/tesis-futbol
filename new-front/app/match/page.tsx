@@ -788,6 +788,15 @@ export default function Page() {
                             onSecondChange={handleVideoSecondChange}
                             seekTo={pendingSeek}
                             markers={videoMarkers}
+                            onMarkerClick={(m)=>{
+                              const d: any = (m as any).data || {}
+                              const player = d.player || d.playerIn || d.playerOut || d.player_display_name || null
+                              if (player) {
+                                setPinnedPlayers(prev => ({ ...prev, [player]: true }))
+                              }
+                              const el = document.getElementById('unified-video')
+                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            }}
                           />
                         </div>
                         <div className="p-2">
@@ -1065,6 +1074,7 @@ export default function Page() {
                         if (typeof abs === 'number') {
                           setVideoTimeSec(abs);
                           setPendingSeek(abs);
+                          try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: abs })); } catch {}
                           const el = document.getElementById('unified-video');
                           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }

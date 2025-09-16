@@ -176,8 +176,19 @@ function PlayerDetailCardBase({
                 <div className="text-zinc-300">
                   <button className="underline decoration-dotted hover:text-zinc-100" onClick={()=>{
                     if (!onOpenAnalysisAt) return;
-                    
-                    onOpenAnalysisAt(toYoutubeClock(sp.sprint_start_sec || 0), sp.sprint_start_sec, sp.player_display_name || null);
+                    const target = toYoutubeClock(sp.sprint_start_sec || 0)
+                    onOpenAnalysisAt(target, sp.sprint_start_sec, sp.player_display_name || null);
+                    try {
+                      const el = document.getElementById('unified-video'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } catch {}
+                    try {
+                      const evt = new CustomEvent('tf:seek', { detail: target });
+                      document.dispatchEvent(evt);
+                      // fire again shortly after to cover timing issues
+                      setTimeout(() => {
+                        try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: target })); } catch {}
+                      }, 120);
+                    } catch {}
                   }}>
                     Sprint #{sp.sprint_id}
                   </button>

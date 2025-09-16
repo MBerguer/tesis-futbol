@@ -11,11 +11,13 @@ export default function YouTubeVideo({
   onSecondChange,
   seekTo,
   markers,
+  onMarkerClick,
 }: {
   videoId: string;
   onSecondChange?: (sec: number) => void;
   seekTo?: number;
   markers?: TimelineMarker[];
+  onMarkerClick?: (m: TimelineMarker) => void;
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const playerRef = React.useRef<YouTubePlayer | null>(null);
@@ -147,6 +149,17 @@ export default function YouTubeVideo({
     if (onSecondChange) onSecondChange(clamped);
   };
 
+  // Listen for global seek events to make programmatic seeks robust
+  React.useEffect(() => {
+    const handler = (e: any) => {
+      const val = e?.detail;
+      const t = Number(typeof val === 'object' && val ? (val.t ?? val.time ?? val.second ?? val.sec) : val);
+      if (Number.isFinite(t)) seekToFn(t);
+    };
+    document.addEventListener('tf:seek', handler as any);
+    return () => document.removeEventListener('tf:seek', handler as any);
+  }, []);
+
   React.useEffect(() => {
     if (seekTo === undefined) return;
     const target = seekTo || 0;
@@ -178,6 +191,7 @@ export default function YouTubeVideo({
                 markers={markers || []}
                 onMarkerClick={(m)=>{
                   if (typeof m.at === 'number') seekToFn(m.at)
+                  if (onMarkerClick) onMarkerClick(m)
                 }}
                 trackTop={32}
                 trackHeight={20}
