@@ -6,14 +6,10 @@ import { useMatchContext } from "./context";
 import { useMatchData } from "./hooks/useMatchData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PeriodsSummary from "./components/PeriodsSummary";
-import PlayersChart from "./components/PlayersChart";
 import AvgSpeedChart from "./components/AvgSpeedChart";
-import WorstCasesTable from "./components/WorstCasesTable";
-import SprintsTable from "./components/SprintsTable";
 import Skeleton from "./components/Skeleton";
 import TopProgress from "./components/TopProgress";
 import ThresholdLegend from "./components/ThresholdLegend";
-import PlayerMiniList from "./components/PlayerMiniList";
 import PlayerDetailCard from "./components/PlayerDetailCard";
 import UnifiedVideo from "./components/UnifiedVideo";
 import StadiumMap from "./components/StadiumMap";
@@ -23,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { toAbsoluteTime as toAbsFromUtils, formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
+import { formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
 import { usePositionsWindow } from "./hooks/usePositionsWindow";
 import { stringToColorPair } from "./utils/colors";
 
@@ -105,7 +101,6 @@ export default function Page() {
   const { reloadToken: globalReloadToken, selectedTable: selectedTableFromContext, setSelectedTable } = useMatchContext();
   const selectedTable = selectedTableFromContext ?? searchParams.get('table');
   const selectedMatchId = searchParams.get('match');
-  const [selectedPlayer, setSelectedPlayer] = useState<string>("");
   const [matchDetails, setMatchDetails] = useState<MatchDetails | null>(null);
   const [matchDetailsLoading, setMatchDetailsLoading] = useState<boolean>(false);
   const [matchDetailsError, setMatchDetailsError] = useState<string | null>(null);
@@ -126,6 +121,10 @@ export default function Page() {
   const [patchedSecondHalfStart, setPatchedSecondHalfStart] = useState<number | null>(null);
   const [patchedFirstHalfDuration, setPatchedFirstHalfDuration] = useState<number | null>(null);
   const [patchedSecondHalfDuration, setPatchedSecondHalfDuration] = useState<number | null>(null);
+  const [fhDurInput, setFhDurInput] = useState<string>("");
+  const [shDurInput, setShDurInput] = useState<string>("");
+  const [fhDurError, setFhDurError] = useState<string | null>(null);
+  const [shDurError, setShDurError] = useState<string | null>(null);
   
   const [worstCases, setWorstCases] = useState<WorstCase[]>([]);
   const [sprintsInWorstCases, setSprintsInWorstCases] = useState<SprintInWorstCase[]>([]);
@@ -152,7 +151,6 @@ export default function Page() {
       const h = parseInt(m[1]||'0',10); const mi = parseInt(m[2]||'0',10); const s = parseInt(m[3]||'0',10);
       return h*3600 + mi*60 + s;
     };
-    const derived = (entries && entries.length > 0) ? entries.map(e=>e.time).filter(Boolean).sort()[0] : null;
     
     const halftimeStart = (periods?.detected_first_half_end?? periods?.detected_halftime_start) ?? null;
     const halftimeEnd = (periods?.detected_second_half_start ?? periods?.detected_halftime_end) ?? null;
@@ -426,6 +424,13 @@ export default function Page() {
     const se = periods.detected_second_half_end ?? null;
     setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
   }, [periods?.detected_first_half_start, periods?.detected_second_half_start]);
+
+  useEffect(() => {
+    setFhDurInput(formatMmSsFromSeconds(patchedFirstHalfDuration));
+    setShDurInput(formatMmSsFromSeconds(patchedSecondHalfDuration));
+    setFhDurError(null);
+    setShDurError(null);
+  }, [patchedFirstHalfDuration, patchedSecondHalfDuration]);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -849,9 +854,17 @@ export default function Page() {
                             type="text"
                             placeholder="45:00"
                             className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
-                            value={formatMmSsFromSeconds(patchedFirstHalfDuration)}
-                            onChange={(e)=> setPatchedFirstHalfDuration(parseMmSsToSeconds(e.target.value))}
+                            value={fhDurInput}
+                            onChange={(e)=> { setFhDurInput(e.target.value); if (fhDurError) setFhDurError(null); }}
+                            onBlur={() => {
+                              const sec = parseMmSsToSeconds(fhDurInput);
+                              if (sec === null) { setFhDurError('Format should be MM:SS'); return; }
+                              setPatchedFirstHalfDuration(sec);
+                              setFhDurInput(formatMmSsFromSeconds(sec));
+                              setFhDurError(null);
+                            }}
                           />
+                          {fhDurError && (<div className="text-red-400 text-xs mt-1">{fhDurError}</div>)}
                         </div>
                         <div className="space-y-1">
                           <Label className="font-medium text-zinc-300" htmlFor="sh-dur">Second half duration (mm:ss)</Label>
@@ -860,9 +873,17 @@ export default function Page() {
                             type="text"
                             placeholder="45:00"
                             className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
-                            value={formatMmSsFromSeconds(patchedSecondHalfDuration)}
-                            onChange={(e)=> setPatchedSecondHalfDuration(parseMmSsToSeconds(e.target.value))}
+                            value={shDurInput}
+                            onChange={(e)=> { setShDurInput(e.target.value); if (shDurError) setShDurError(null); }}
+                            onBlur={() => {
+                              const sec = parseMmSsToSeconds(shDurInput);
+                              if (sec === null) { setShDurError('Format should be MM:SS'); return; }
+                              setPatchedSecondHalfDuration(sec);
+                              setShDurInput(formatMmSsFromSeconds(sec));
+                              setShDurError(null);
+                            }}
                           />
+                          {shDurError && (<div className="text-red-400 text-xs mt-1">{shDurError}</div>)}
                         </div>
                       </div>
                     )}
@@ -924,19 +945,6 @@ export default function Page() {
               </div>
             </div>
           )}
-
-          {/* {selectedTable && showPlayersSection && (
-            <Card className="col-span-2 bg-zinc-900/50 border-zinc-800">
-              <CardHeader><CardTitle>Player Speeds Over Time</CardTitle></CardHeader>
-              <CardContent>
-                {entries.length === 0 ? (
-                  <Skeleton className="h-[500px]" />
-                ) : (
-                  <PlayersChart entries={entries} baseTime={derivedBaseTime} />
-                )}
-              </CardContent>
-            </Card>
-          )} */}
       </div>
     </main>
   );
