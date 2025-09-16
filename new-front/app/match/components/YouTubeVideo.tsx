@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { Slider } from "@/components/ui/slider";
 
 type YouTubePlayer = any;
 
@@ -156,14 +157,13 @@ export default function YouTubeVideo({
       <div className="flex">
         <div className="sticky h-[38px] w-full h top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">        
           <div className="w-full mt-2 relative h-8 overflow-visible">
-            <input
-              className="w-full relative z-0"
-              id="videoTime"
-              type="range"
-              min="0"
-              max={duration}
-              value={currentTime}
-              onChange={(e)=>seekToFn(parseFloat(e.target.value))}
+            <Slider
+              min={0}
+              max={Math.max(0, duration || 0)}
+              step={1}
+              value={[Math.min(Math.max(0, Math.floor(currentTime || 0)), Math.max(0, Math.floor(duration || 0)))]}
+              onValueChange={(v)=>seekToFn((v?.[0] ?? 0))}
+              className="relative z-0"
             />
             {duration > 0 && (
               <div className="absolute inset-0 z-20 pointer-events-none">

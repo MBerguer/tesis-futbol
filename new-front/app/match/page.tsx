@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import { formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
 import { usePositionsWindow } from "./hooks/usePositionsWindow";
 import { stringToColorPair } from "./utils/colors";
@@ -747,12 +748,23 @@ export default function Page() {
                             <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
                               <div className="flex items-center gap-2 py-2">
                                 <label className="text-xs text-zinc-400">Orientation</label>
-                                <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>{
-                                  const v = parseFloat(e.target.value);
-                                  setMapBearing(v);
-                                  if (orientationSaveTimer.current) clearTimeout(orientationSaveTimer.current);
-                                  orientationSaveTimer.current = setTimeout(()=>{ persistVenueOrientation(v); }, 600);
-                                }} onBlur={() => { persistVenueOrientation(mapBearing); }} className="w-44" />
+                                <Slider
+                                  min={-180}
+                                  max={180}
+                                  step={1}
+                                  value={[mapBearing]}
+                                  onValueChange={(vals)=>{
+                                    const v = Number(vals?.[0] ?? 0);
+                                    setMapBearing(v);
+                                    if (orientationSaveTimer.current) clearTimeout(orientationSaveTimer.current);
+                                    orientationSaveTimer.current = setTimeout(()=>{ persistVenueOrientation(v); }, 600);
+                                  }}
+                                  onValueCommit={(vals)=>{
+                                    const v = Number(vals?.[0] ?? mapBearing);
+                                    persistVenueOrientation(v);
+                                  }}
+                                  className="w-44"
+                                />
                                 <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
                                 <span className="ml-2 text-xs text-zinc-400 min-w-[70px]">{savingOrientation ? 'Saving…' : (orientationSavedAt ? 'Saved' : '')}</span>
                               </div>
