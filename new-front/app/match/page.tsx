@@ -24,6 +24,7 @@ import { Slider } from "@/components/ui/slider";
 import { formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
 import { usePositionsWindow } from "./hooks/usePositionsWindow";
 import { stringToColorPair } from "./utils/colors";
+import type { TimelineMarker } from "@/components/ui/timeline-markers";
 
 interface MatchPlayers {
   players: string[];
@@ -471,6 +472,51 @@ export default function Page() {
     setShDurError(null);
   }, [patchedFirstHalfDuration, patchedSecondHalfDuration]);
 
+  const videoMarkers = React.useMemo(() => {
+    const out: TimelineMarker[] = [];
+    const p = periods;
+    if (!p) return out;
+    const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? undefined;
+    const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+    const fhDurPatched = patchedFirstHalfDuration ?? (p && typeof p.detected_first_half_end === 'number' && typeof fhStartPatched === 'number' ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
+    const toVideoSec = (abs: number): number => {
+      if (typeof fhStartPatched !== 'number') return Math.max(0, abs);
+      if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+        if (abs < shStartPatched) return Math.max(0, abs - fhStartPatched);
+        return fhDurPatched + Math.max(0, abs - shStartPatched);
+      }
+      return Math.max(0, abs - fhStartPatched);
+    };
+    for (const sp of sprintsInWorstCases) {
+      if (typeof sp.sprint_start_sec === 'number') {
+        const at = toVideoSec(sp.sprint_start_sec);
+        out.push({ id: `sprint-${sp.sprint_id}`, at, type: 'triangle', side: 'top', color: '#a855f7', label: `Sprint #${sp.sprint_id}` });
+      }
+    }
+    // Map match events using minute and added_time fields → to video seconds
+    const fhDur = typeof fhDurPatched === 'number' ? fhDurPatched : 2700; // fallback 45:00
+    for (const ev of matchEvents) {
+      let m = Number(ev.minute);
+      if (!Number.isFinite(m)) continue;
+      const added = Number(ev.added_time || 0);
+      if (!Number.isFinite(m)) m = 0;
+      const inSecondHalf = m > 45; // simplistic but matches our list UI
+      const withinHalfMin = inSecondHalf ? (m - 45) : m;
+      const at = Math.max(0, (inSecondHalf ? fhDur : 0) + withinHalfMin * 60 + (added || 0) * 60);
+      const type = String(ev.type || '').toLowerCase();
+      if (type.includes('goal')) {
+        out.push({ id: `goal-${ev.event_id || at}`, at, type: 'emoji', side: 'bottom', content: '⚽', label: `${ev.team_name || ''} Goal` });
+      } else if (type.includes('yellow')) {
+        out.push({ id: `yc-${ev.event_id || at}`, at, type: 'bar', side: 'bottom', color: '#facc15', label: `${ev.team_name || ''} Yellow` });
+      } else if (type.includes('red')) {
+        out.push({ id: `rc-${ev.event_id || at}`, at, type: 'bar', side: 'bottom', color: '#ef4444', label: `${ev.team_name || ''} Red` });
+      } else if (type.includes('sub')) {
+        out.push({ id: `sub-${ev.event_id || at}`, at, type: 'emoji', side: 'bottom', content: '🔁', label: `${ev.team_name || ''} Substitution` });
+      }
+    }
+    return out;
+  }, [periods, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration, sprintsInWorstCases, matchEvents]);
+
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="space-y-4">
@@ -741,6 +787,7 @@ export default function Page() {
                             videoUrl={youtubeLink || searchParams.get('video') || undefined}
                             onSecondChange={handleVideoSecondChange}
                             seekTo={pendingSeek}
+                            markers={videoMarkers}
                           />
                         </div>
                         <div className="p-2">

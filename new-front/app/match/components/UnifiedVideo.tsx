@@ -2,17 +2,20 @@
 import React from "react";
 import YouTubeVideo from "./YouTubeVideo";
 import VideoComponent from "./videoComponent";
+import { TimelineMarker } from "@/components/ui/timeline-markers";
 
 export default function UnifiedVideo({
   videoUrl,
   youtubeId,
   onSecondChange,
   seekTo,
+  markers,
 }: {
   videoUrl?: string | null;
   youtubeId?: string | null;
   onSecondChange?: (sec: number) => void;
   seekTo?: number | null;
+  markers?: TimelineMarker[];
 }) {
   const resolved = React.useMemo(() => {
     if (youtubeId && youtubeId.trim().length > 0) {
@@ -38,7 +41,7 @@ export default function UnifiedVideo({
 
   if (resolved.kind === "yt") {
     if (!resolved.id) return <div className="text-sm text-gray-600">Invalid YouTube URL/ID.</div>;
-    return <YouTubeVideo videoId={resolved.id} onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} />;
+    return <YouTubeVideo videoId={resolved.id} onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} markers={markers} />;
   }
   return <VideoComponent onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} />;
 }

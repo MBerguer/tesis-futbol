@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { Slider } from "@/components/ui/slider";
+import { TimelineMarkers, TimelineMarker } from "@/components/ui/timeline-markers";
 
 type YouTubePlayer = any;
 
@@ -8,10 +9,12 @@ export default function YouTubeVideo({
   videoId,
   onSecondChange,
   seekTo,
+  markers,
 }: {
   videoId: string;
   onSecondChange?: (sec: number) => void;
   seekTo?: number;
+  markers?: TimelineMarker[];
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const playerRef = React.useRef<YouTubePlayer | null>(null);
@@ -166,33 +169,14 @@ export default function YouTubeVideo({
               className="relative z-0"
             />
             {duration > 0 && (
-              <div className="absolute inset-0 z-20 pointer-events-none">
-                <button
-                  type="button"
-                  aria-label="Jump to middle"
-                  onClick={() => seekToFn(duration / 2)}
-                  className="absolute pointer-events-auto"
-                  style={{ left: `50%`, transform: "translateX(-50%)", top: 0, width: 2, height: 20, background: "#10b981" }}
-                />
-                {duration >= 2700 && (
-                  <button
-                    type="button"
-                    aria-label="Jump to 45:00"
-                    onClick={() => seekToFn(2700)}
-                    className="absolute pointer-events-auto"
-                    style={{ left: `${(2700 / duration) * 100}%`, transform: "translateX(-50%)", top: 0, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "8px solid #F0F" }}
-                  />
-                )}
-                {duration >= 2700 && (
-                  <button
-                    type="button"
-                    aria-label="Jump to 45:00 remaining"
-                    onClick={() => seekToFn(duration - 2700)}
-                    className="absolute pointer-events-auto"
-                    style={{ left: `${((duration - 2700) / duration) * 100}%`, transform: "translateX(-50%)", bottom: 10, width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "8px solid #ef4444" }}
-                  />
-                )}
-              </div>
+              <TimelineMarkers
+                min={0}
+                max={duration}
+                markers={markers || []}
+                onMarkerClick={(m)=>{
+                  if (typeof m.at === 'number') seekToFn(m.at)
+                }}
+              />
             )}
           </div>
           <div className="flex items-center gap-2 py-1 w-1/4 justify-end">
