@@ -490,7 +490,7 @@ export default function Page() {
     for (const sp of sprintsInWorstCases) {
       if (typeof sp.sprint_start_sec === 'number') {
         const at = toVideoSec(sp.sprint_start_sec);
-        out.push({ id: `sprint-${sp.sprint_id}`, at, type: 'triangle', side: 'top', color: '#a855f7', label: `Sprint #${sp.sprint_id}` });
+        out.push({ id: `sprint-${sp.sprint_id}`, at, type: 'emoji', side: 'top', content: '🏃', label: `Sprint #${sp.sprint_id}` });
       }
     }
     // Map match events using minute and added_time fields → to video seconds
@@ -505,13 +505,13 @@ export default function Page() {
       const at = Math.max(0, (inSecondHalf ? fhDur : 0) + withinHalfMin * 60 + (added || 0) * 60);
       const type = String(ev.type || '').toLowerCase();
       if (type.includes('goal')) {
-        out.push({ id: `goal-${ev.event_id || at}`, at, type: 'emoji', side: 'bottom', content: '⚽', label: `${ev.team_name || ''} Goal` });
+        out.push({ id: `goal-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '⚽', label: `${ev.team_name || ''} Goal` });
       } else if (type.includes('yellow')) {
-        out.push({ id: `yc-${ev.event_id || at}`, at, type: 'bar', side: 'bottom', color: '#facc15', label: `${ev.team_name || ''} Yellow` });
+        out.push({ id: `yc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🟡', label: `${ev.team_name || ''} Yellow` });
       } else if (type.includes('red')) {
-        out.push({ id: `rc-${ev.event_id || at}`, at, type: 'bar', side: 'bottom', color: '#ef4444', label: `${ev.team_name || ''} Red` });
+        out.push({ id: `rc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🔴', label: `${ev.team_name || ''} Red` });
       } else if (type.includes('sub')) {
-        out.push({ id: `sub-${ev.event_id || at}`, at, type: 'emoji', side: 'bottom', content: '🔁', label: `${ev.team_name || ''} Substitution` });
+        out.push({ id: `sub-${ev.event_id || at}`, at, type: 'emoji', side: 'top', content: '🔁', label: `${ev.team_name || ''} Substitution` });
       }
     }
     return out;
