@@ -219,7 +219,7 @@ export default function YouTubeVideo({
               />
             )}
           </div>
-          <div className="flex items-center gap-2 py-1 w-1/4 justify-end">
+          <div className="flex items-center gap-2 py-1 w-[110px] justify-end">
             <label className="text-xs text-zinc-400">{formatTime(currentTime)} / {formatTime(duration)}</label>                                  
           </div>
         </div>

@@ -598,7 +598,7 @@ export default function Page() {
                               latitude={(md.venue_latitude ?? -34.795334) as number}
                               longitude={(md.venue_longitude ?? -56.147974) as number}
                               zoom={15}
-                              styleUrl={`https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
+                              styleUrl={`https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
                             />
                           </div>
                         </div>
@@ -734,7 +734,7 @@ export default function Page() {
 
                   {!showPatchPanel && (
                     <div className="ml-auto justify-end">
-                      <Button variant={'outline'} onClick={()=>setShowPatchPanel(true)}>
+                      <Button variant={'secondary'} onClick={()=>setShowPatchPanel(true)}>
                         Edit Periods
                       </Button>
                     </div>
@@ -838,6 +838,8 @@ export default function Page() {
                                     onToggle={togglePinned}
                                     heightClass={'h-full'}
                                     heightStyle={mapStacked ? undefined : undefined}
+                                    centerLatitude={(matchDetails?.venue_latitude ?? -34.795334) as number}
+                                    centerLongitude={(matchDetails?.venue_longitude ?? -56.147974) as number}
                                     bearing={mapBearing}
                                   />
                                 </div>
@@ -934,7 +936,7 @@ export default function Page() {
                           />
                         </div>
                         <div className="flex items-center gap-2 justify-end">
-                          <Button size={'sm'} variant={'outline'} onClick={()=>{
+                          <Button size={'sm'} variant={'secondary'} onClick={()=>{
                             setPatchedFirstHalfStart(periods.detected_first_half_start ?? null);
                             setPatchedSecondHalfStart(periods.detected_second_half_start ?? null);
                             const fh = periods.detected_first_half_start ?? null;

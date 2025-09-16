@@ -13,9 +13,11 @@ interface PitchMapProps {
   heightClass?: string; // Tailwind class to control container height
   heightStyle?: React.CSSProperties; // Inline style for precise calc heights
   bearing?: number; // map rotation in degrees
+  centerLatitude?: number; // initial/controlled center latitude
+  centerLongitude?: number; // initial/controlled center longitude
 }
 
-export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing }: PitchMapProps) {
+export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing, centerLatitude, centerLongitude }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
@@ -32,7 +34,10 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
       mapRef.current = new maplibregl.Map({
         container: containerRef.current,
         style: styleObj || styleUrl || `https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`,
-        center: [-56.14786, -34.795334],
+        center: [
+          (typeof centerLongitude === 'number' && isFinite(centerLongitude) ? centerLongitude : -56.14786),
+          (typeof centerLatitude === 'number' && isFinite(centerLatitude) ? centerLatitude : -34.795334)
+        ],
         zoom: 18.5,
         interactive: true,
       });
@@ -72,6 +77,18 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
       try { map.setBearing(bearing); } catch {}
     }
   }, [bearing]);
+
+  // Apply center changes when venue coordinates update
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (
+      typeof centerLatitude === 'number' && isFinite(centerLatitude) &&
+      typeof centerLongitude === 'number' && isFinite(centerLongitude)
+    ) {
+      try { map.setCenter([centerLongitude, centerLatitude]); } catch {}
+    }
+  }, [centerLatitude, centerLongitude]);
 
   useEffect(() => {
     const map = mapRef.current;
