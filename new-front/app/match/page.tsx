@@ -125,6 +125,10 @@ export default function Page() {
   const [shDurInput, setShDurInput] = useState<string>("");
   const [fhDurError, setFhDurError] = useState<string | null>(null);
   const [shDurError, setShDurError] = useState<string | null>(null);
+  const [positionsResetKey, setPositionsResetKey] = useState<number | null>(null);
+  const [hasPendingDurationChanges, setHasPendingDurationChanges] = useState<boolean>(false);
+  const [savingPeriods, setSavingPeriods] = useState<boolean>(false);
+  const [savingPeriodsError, setSavingPeriodsError] = useState<string | null>(null);
   
   const [worstCases, setWorstCases] = useState<WorstCase[]>([]);
   const [sprintsInWorstCases, setSprintsInWorstCases] = useState<SprintInWorstCase[]>([]);
@@ -363,6 +367,7 @@ export default function Page() {
     selectedTable || null,
     gpsCursorSecond,
     15,
+    positionsResetKey
   );
 
   const googleRasterStyle = React.useMemo(() => ({
@@ -803,6 +808,7 @@ export default function Page() {
                             className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
                             value={patchedFirstHalfStart ?? ''}
                             onChange={(e)=>setPatchedFirstHalfStart(e.target.value === '' ? null : Number(e.target.value))}
+                            onBlur={() => setPositionsResetKey((k)=> (k ?? 0) + 1)}
                           />
                         </div>
                         <div className="space-y-1">
@@ -813,6 +819,7 @@ export default function Page() {
                             className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
                             value={patchedSecondHalfStart ?? ''}
                             onChange={(e)=>setPatchedSecondHalfStart(e.target.value === '' ? null : Number(e.target.value))}
+                            onBlur={() => setPositionsResetKey((k)=> (k ?? 0) + 1)}
                           />
                         </div>
                         <div className="flex items-center gap-2 justify-end">
@@ -826,9 +833,12 @@ export default function Page() {
                             const se = periods.detected_second_half_end ?? null;
                             setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
                           }}>Reset to detected</Button>
-                          <Button size={'sm'} variant={'default'} className="bg-primary text-primary-foreground hover:bg-primary/90"
+                          <Button size={'sm'} variant={'default'} className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed min-w-[130px]"
+                            disabled={savingPeriods}
                             onClick={async()=>{
                               if (!selectedTable) return;
+                              setSavingPeriods(true);
+                              setSavingPeriodsError(null);
                               const body = {
                                 match_name: selectedTable,
                                 manual_first_half_start: patchedFirstHalfStart,
@@ -837,15 +847,36 @@ export default function Page() {
                                 second_half_duration_sec: patchedSecondHalfDuration,
                               };
                               try {
-                                await fetch(`${API_BASE}/match/table/${selectedTable}/periods/patch`,{
+                                const start = Date.now();
+                                const res = await fetch(`${API_BASE}/match/table/${selectedTable}/periods/patch`,{
                                   method:'POST',
                                   headers:{'Content-Type':'application/json'},
                                   body: JSON.stringify(body)
                                 });
-                              } catch (e) { /* ignore */ }
+                                if (!res.ok) {
+                                  const txt = await res.text().catch(()=> '');
+                                  throw new Error(`HTTP ${res.status} ${txt}`);
+                                }
+                                const elapsed = Date.now() - start;
+                                if (elapsed < 200) {
+                                  await new Promise(r => setTimeout(r, 300 - elapsed));
+                                }
+                              } catch (e: any) {
+                                setSavingPeriodsError('Failed to save periods.');
+                              } finally {
+                                setSavingPeriods(false);
+                              }
                             }}
-                          >Save patched</Button>
+                          >
+                            <span className="inline-flex items-center gap-1 justify-center w-full">
+                              <span>{savingPeriods ? "Saving..." : "Save changes"}</span>
+                              {savingPeriods && <Spinner size={14} />}
+                            </span>
+                          </Button>
                         </div>
+                        {savingPeriodsError && (
+                          <div className="text-red-400 text-xs mt-1 text-right">{savingPeriodsError}</div>
+                        )}
                         <Separator className="bg-zinc-800" />
                         <div className="space-y-1">
                           <Label className="font-medium text-zinc-300" htmlFor="fh-dur">First half duration (mm:ss)</Label>
@@ -855,13 +886,14 @@ export default function Page() {
                             placeholder="45:00"
                             className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
                             value={fhDurInput}
-                            onChange={(e)=> { setFhDurInput(e.target.value); if (fhDurError) setFhDurError(null); }}
+                            onChange={(e)=> { setFhDurInput(e.target.value); if (fhDurError) setFhDurError(null); setHasPendingDurationChanges(true); }}
                             onBlur={() => {
                               const sec = parseMmSsToSeconds(fhDurInput);
                               if (sec === null) { setFhDurError('Format should be MM:SS'); return; }
                               setPatchedFirstHalfDuration(sec);
                               setFhDurInput(formatMmSsFromSeconds(sec));
                               setFhDurError(null);
+                              setPositionsResetKey((k)=> (k ?? 0) + 1);
                             }}
                           />
                           {fhDurError && (<div className="text-red-400 text-xs mt-1">{fhDurError}</div>)}
@@ -874,17 +906,25 @@ export default function Page() {
                             placeholder="45:00"
                             className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
                             value={shDurInput}
-                            onChange={(e)=> { setShDurInput(e.target.value); if (shDurError) setShDurError(null); }}
+                            onChange={(e)=> { setShDurInput(e.target.value); if (shDurError) setShDurError(null); setHasPendingDurationChanges(true); }}
                             onBlur={() => {
                               const sec = parseMmSsToSeconds(shDurInput);
                               if (sec === null) { setShDurError('Format should be MM:SS'); return; }
                               setPatchedSecondHalfDuration(sec);
                               setShDurInput(formatMmSsFromSeconds(sec));
                               setShDurError(null);
+                              setPositionsResetKey((k)=> (k ?? 0) + 1);
                             }}
                           />
                           {shDurError && (<div className="text-red-400 text-xs mt-1">{shDurError}</div>)}
                         </div>
+                        {hasPendingDurationChanges && (
+                          <div className="pt-2 flex justify-end">
+                            <Button size={'sm'} variant={'default'} className="bg-emerald-600 hover:bg-emerald-500"
+                              onClick={() => { if (typeof window !== 'undefined') { window.location.reload(); } }}
+                            >Refresh global the times</Button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>

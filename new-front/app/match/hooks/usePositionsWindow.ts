@@ -13,7 +13,8 @@ export function usePositionsWindow(
   apiBase: string,
   table: string | null,
   centerSecond: number | null | undefined,
-  radiusSec: number = 15
+  radiusSec: number = 15,
+  resetKey?: unknown
 ) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +100,18 @@ export function usePositionsWindow(
       void fetchWindow((centerSecond || 0) + radiusSec, radiusSec);
     }
   }, [table, apiBase, radiusSec, centerSecond, currentWindow?.from, currentWindow?.to]);
+
+  // Clear cache and refresh when resetKey changes
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    cacheRef.current.clear();
+    rangesRef.current = [];
+    inflightRef.current.clear();
+    setVersion(v => v + 1);
+    if (table && centerSecond != null) {
+      void fetchWindow(centerSecond, radiusSec);
+    }
+  }, [resetKey]);
 
   // Build snapshot from cache: choose nearest point to current second for each player
   const snapshot = useMemo(() => {
