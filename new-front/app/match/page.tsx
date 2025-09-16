@@ -82,6 +82,7 @@ interface SprintInWorstCase {
   venue_city?: string | null;
   venue_latitude?: number | null;
   venue_longitude?: number | null;
+  venue_orientation?: number | null;
   category: string | null;
   home_team_id: string;
   away_team_id: string;
@@ -241,6 +242,9 @@ export default function Page() {
         if (!cancelled) {
           setMatchDetails(data);
           setYoutubeLink(data?.youtube_link || null);
+          if (typeof data?.venue_orientation === 'number') {
+            setMapBearing(data.venue_orientation);
+          }
         }
       } catch (e) { 
         console.error('Error fetching match details', e);
@@ -251,6 +255,30 @@ export default function Page() {
     })();
     return () => { cancelled = true; };
   }, [API_BASE, selectedMatchId]);
+
+  const persistVenueOrientation = React.useCallback(async (bearing: number) => {
+    const vId = matchDetails?.venue_id;
+    if (!vId) return;
+    setSavingOrientation(true);
+    setSaveOrientationError(null);
+    try {
+      const clamped = Math.max(-180, Math.min(180, Math.round(bearing)));
+      const res = await fetch(`${API_BASE}/api/venues/${vId}/orientation`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orientation: clamped })
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${txt}`);
+      }
+      setOrientationSavedAt(Date.now());
+    } catch (e: any) {
+      setSaveOrientationError('Failed to save orientation');
+    } finally {
+      setSavingOrientation(false);
+    }
+  }, [API_BASE, matchDetails?.venue_id]);
 
   useEffect(() => {
     const id = selectedMatchId;
@@ -409,6 +437,10 @@ export default function Page() {
   }, []);
   const [mapStacked, setMapStacked] = useState<boolean>(true);
   const [mapBearing, setMapBearing] = useState<number>(0);
+  const [savingOrientation, setSavingOrientation] = useState<boolean>(false);
+  const [saveOrientationError, setSaveOrientationError] = useState<string | null>(null);
+  const [orientationSavedAt, setOrientationSavedAt] = useState<number | null>(null);
+  const orientationSaveTimer = React.useRef<any>(null);
   const [showInfo, setShowInfo] = useState<boolean>(true);
   const [showAnalysis, setShowAnalysis] = useState<boolean>(true);
   const [showPlayersSection, setShowPlayersSection] = useState<boolean>(false);
@@ -710,8 +742,14 @@ export default function Page() {
                             <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
                               <div className="flex items-center gap-2 py-2">
                                 <label className="text-xs text-zinc-400">Orientation</label>
-                                <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>setMapBearing(parseFloat(e.target.value))} className="w-44" />
+                                <input type="range" min={-180} max={180} value={mapBearing} onChange={(e)=>{
+                                  const v = parseFloat(e.target.value);
+                                  setMapBearing(v);
+                                  if (orientationSaveTimer.current) clearTimeout(orientationSaveTimer.current);
+                                  orientationSaveTimer.current = setTimeout(()=>{ persistVenueOrientation(v); }, 600);
+                                }} onBlur={() => { persistVenueOrientation(mapBearing); }} className="w-44" />
                                 <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
+                                <span className="ml-2 text-xs text-zinc-400 min-w-[70px]">{savingOrientation ? 'Saving…' : (orientationSavedAt ? 'Saved' : '')}</span>
                               </div>
                               <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
                             </div>

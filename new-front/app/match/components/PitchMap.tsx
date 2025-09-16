@@ -32,8 +32,8 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
       mapRef.current = new maplibregl.Map({
         container: containerRef.current,
         style: styleObj || styleUrl || `https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`,
-        center: [-56.147974, -34.795334],
-        zoom: 17,
+        center: [-56.14786, -34.795334],
+        zoom: 18.5,
         interactive: true,
       });
     }

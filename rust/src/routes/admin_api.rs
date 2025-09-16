@@ -20,6 +20,7 @@ pub fn admin_api(pool: PgPool) -> Router {
         // Venues
         .route("/venues", post(handlers::create_venue).get(handlers::list_venues))
         .route("/venues/:id", put(handlers::update_venue))
+        .route("/venues/:id/orientation", put(handlers::update_venue_orientation))
         .route("/venues/:id", delete(handlers::delete_venue))
         // Matches
         .route("/matches", post(handlers::create_match).get(handlers::list_matches))

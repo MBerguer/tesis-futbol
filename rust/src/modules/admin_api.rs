@@ -316,7 +316,8 @@ pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<J
           v.name  AS venue_name,
           v.city  AS venue_city,
           v.latitude AS venue_latitude,
-          v.longitude AS venue_longitude
+          v.longitude AS venue_longitude,
+          v.orientation AS venue_orientation
         FROM matches m
         JOIN teams th ON th.team_id = m.home_team_id
         JOIN teams ta ON ta.team_id = m.away_team_id
@@ -337,6 +338,7 @@ pub async fn get_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<J
         "venue_city": r.venue_city,
         "venue_latitude": r.venue_latitude,
         "venue_longitude": r.venue_longitude,
+        "venue_orientation": r.venue_orientation,
         "category": r.category,
         "home_team_id": r.home_team_id,
         "away_team_id": r.away_team_id,
@@ -429,30 +431,43 @@ pub async fn create_venue(State(pool): State<Db>, Json(mut v): Json<Venue>) -> R
     if v.venue_id.is_nil() { v.venue_id = Uuid::new_v4(); }
     let rec = sqlx::query_as!(
         Venue,
-        r#"INSERT INTO venues (venue_id, name, city, latitude, longitude)
-           VALUES ($1,$2,$3,$4,$5)
-           RETURNING venue_id, name, city, latitude, longitude"#,
-        v.venue_id, v.name, v.city, v.latitude, v.longitude
+        r#"INSERT INTO venues (venue_id, name, city, latitude, longitude, orientation)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           RETURNING venue_id, name, city, latitude, longitude, orientation"#,
+        v.venue_id, v.name, v.city, v.latitude, v.longitude, v.orientation
     ).fetch_one(&pool).await.map_err(internal_err)?;
     Ok(Json(rec))
 }
 pub async fn list_venues(State(pool): State<Db>) -> Result<Json<Vec<Venue>>, (axum::http::StatusCode, String)> {
-    let recs = sqlx::query_as!(Venue, r#"SELECT venue_id, name, city, latitude, longitude FROM venues ORDER BY name"#)
+    let recs = sqlx::query_as!(Venue, r#"SELECT venue_id, name, city, latitude, longitude, orientation FROM venues ORDER BY name"#)
         .fetch_all(&pool).await.map_err(internal_err)?;
     Ok(Json(recs))
 }
 pub async fn update_venue(State(pool): State<Db>, Path(id): Path<Uuid>, Json(v): Json<Venue>) -> Result<Json<Venue>, (axum::http::StatusCode, String)> {
     let rec = sqlx::query_as!(
         Venue,
-        r#"UPDATE venues SET name = $2, city = $3, latitude = $4, longitude = $5 WHERE venue_id = $1
-           RETURNING venue_id, name, city, latitude, longitude"#,
-        id, v.name, v.city, v.latitude, v.longitude
+        r#"UPDATE venues SET name = $2, city = $3, latitude = $4, longitude = $5, orientation = $6 WHERE venue_id = $1
+           RETURNING venue_id, name, city, latitude, longitude, orientation"#,
+        id, v.name, v.city, v.latitude, v.longitude, v.orientation
     ).fetch_one(&pool).await.map_err(internal_err)?;
     Ok(Json(rec))
 }
 pub async fn delete_venue(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     sqlx::query!("DELETE FROM venues WHERE venue_id = $1", id).execute(&pool).await.map_err(internal_err)?;
     Ok(Json(json!({"status":"ok"})))
+}
+
+// Update only the venue orientation
+#[derive(serde::Deserialize)]
+pub struct VenueOrientationPayload { pub orientation: i32 }
+pub async fn update_venue_orientation(State(pool): State<Db>, Path(id): Path<Uuid>, Json(p): Json<VenueOrientationPayload>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let clamped = p.orientation.max(-180).min(180);
+    let row = sqlx::query!(
+        r#"UPDATE venues SET orientation = $2 WHERE venue_id = $1 RETURNING orientation"#,
+        id,
+        clamped
+    ).fetch_one(&pool).await.map_err(internal_err)?;
+    Ok(Json(json!({ "status": "ok", "orientation": row.orientation })))
 }
 
 // Lineup bulk upsert

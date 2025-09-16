@@ -39,6 +39,8 @@ pub struct Venue {
     pub city: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
+    #[serde(default)]
+    pub orientation: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
