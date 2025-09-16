@@ -507,9 +507,9 @@ export default function Page() {
       if (type.includes('goal')) {
         out.push({ id: `goal-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '⚽', label: `${ev.team_name || ''} Goal`, data: { type: 'goal', minute: m, team: ev.team_name } });
       } else if (type.includes('yellow')) {
-        out.push({ id: `yc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🟡', label: `${ev.team_name || ''} Yellow`, data: { type: 'yellow', player: ev.jugador, team: ev.team_name, minute: m } });
+        out.push({ id: `yc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🟨', label: `${ev.team_name || ''} Yellow`, data: { type: 'yellow', player: ev.jugador, team: ev.team_name, minute: m } });
       } else if (type.includes('red')) {
-        out.push({ id: `rc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🔴', label: `${ev.team_name || ''} Red`, data: { type: 'red', player: ev.jugador, team: ev.team_name, minute: m } });
+        out.push({ id: `rc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🟥', label: `${ev.team_name || ''} Red`, data: { type: 'red', player: ev.jugador, team: ev.team_name, minute: m } });
       } else if (type.includes('sub')) {
         out.push({ id: `sub-${ev.event_id || at}`, at, type: 'emoji', side: 'top', content: '🔁', label: `${ev.team_name || ''} Substitution`, data: { type: 'sub', playerOut: ev.related_jugador, playerIn: ev.jugador, team: ev.team_name, minute: m } });
       }

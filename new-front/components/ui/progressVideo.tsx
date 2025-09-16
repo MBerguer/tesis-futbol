@@ -18,15 +18,15 @@ const ProgressVideo = React.forwardRef<
   <SliderPrimitive.Root
     ref={ref}
     className={cn(
-      "top-[30px] relative flex w-full touch-none select-none items-center",
+      "top-[32px] relative flex w-full touch-none select-none items-center",
       className
     )}
     {...props}
   >
-    <SliderPrimitive.Track className={cn("relative h-1.5 w-full grow overflow-hidden rounded-full bg-secondary", trackClassName)}>
+    <SliderPrimitive.Track className={cn("relative h-4 w-full grow overflow-hidden rounded-full bg-zinc-700/50 ring-1 ring-zinc-800/60", trackClassName)}>
       <SliderPrimitive.Range className="absolute h-full bg-primary" />
     </SliderPrimitive.Track>
-    <SliderPrimitive.Thumb className={cn("block h-4 w-4 rounded-full border border-primary/40 bg-background shadow transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50", thumbClassName)} />
+    <SliderPrimitive.Thumb className={cn("hidden", thumbClassName)} />
   </SliderPrimitive.Root>
 ))
 ProgressVideo.displayName = SliderPrimitive.Root.displayName
