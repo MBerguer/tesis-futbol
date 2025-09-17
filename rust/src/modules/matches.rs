@@ -1688,11 +1688,11 @@ WITH base AS (
     COALESCE((seconds_since_midnight)::double precision, EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) AS elapsed_time,
     lat,
     lon,
-    ((speed::numeric) / 3.6) AS speed_ms
+    (speed::numeric) AS speed_kmh
   FROM public.{view}
 ),
 filtered_speed AS (
-  SELECT * FROM base WHERE speed_ms >= 5.5
+  SELECT * FROM base WHERE speed_kmh >= 19.8
 ),
 filtered_periods AS (
   SELECT * FROM filtered_speed WHERE (elapsed_time BETWEEN $1 AND $2) OR (elapsed_time BETWEEN $3 AND $4)
@@ -1805,9 +1805,10 @@ SELECT
   actual_dist_in,
   actual_dist_out
 FROM turn_analysis
-WHERE (angle_degrees <= 135 OR angle_degrees >= 225)
-  AND actual_dist_in BETWEEN 4.5 AND 5.5
-  AND actual_dist_out BETWEEN 3.5 AND 4.5
+WHERE ((angle_degrees <= 145 and angle_degrees >= 35) or (angle_degrees <= 325 and angle_degrees >= 215))
+  AND actual_dist_in >= 5.0
+  AND actual_dist_out >= 4.0
+  AND (finish_time - start_time) < 1.8
   AND start_time IS NOT NULL AND finish_time IS NOT NULL
 ORDER BY player_display_name, elapsed_time
         "#,
@@ -1844,5 +1845,65 @@ ORDER BY player_display_name, elapsed_time
         .collect();
 
     Json(json!({"sharp_angles": data}))
+}
+
+/// GET /match/table/:table_name/trace?player=Name&start=sec&end=sec&pad=0.3
+/// Returns all points for a player within [start-pad, end+pad] seconds_since_midnight
+pub async fn get_player_trace_window(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<Value> {
+    let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
+    let player = match params.get("player").cloned() {
+        Some(p) if !p.trim().is_empty() => p,
+        _ => return Json(json!({"trace": [], "error": "missing player"})),
+    };
+    let start_sec: f64 = params.get("start").and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+    let end_sec: f64 = params.get("end").and_then(|s| s.parse::<f64>().ok()).unwrap_or(start_sec);
+    let pad: f64 = params.get("pad").and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.3);
+
+    let lo = start_sec - pad;
+    let hi = end_sec + pad;
+
+    // Use seconds_since_midnight when available; fallback to deriving from time-of-day
+    let sql = format!(
+        r#"
+        SELECT 
+          COALESCE((seconds_since_midnight)::double precision, EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) AS sec,
+          lat, lon, (speed::numeric) AS speed_kmh, time
+        FROM public.{view}
+        WHERE player_display_name = $1
+          AND COALESCE((seconds_since_midnight)::double precision, EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) BETWEEN $2 AND $3
+        ORDER BY sec
+        "#,
+        view = view_name
+    );
+
+    let rows = match sqlx::query(&sql)
+        .bind(&player)
+        .bind(lo)
+        .bind(hi)
+        .fetch_all(&pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return Json(json!({"trace": [], "error": format!("db error: {}", e)})),
+    };
+
+    let trace: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "seconds_since_midnight": r.try_get::<f64,_>("sec").unwrap_or(0.0),
+                "lat": r.try_get::<f64,_>("lat").unwrap_or(0.0),
+                "lon": r.try_get::<f64,_>("lon").unwrap_or(0.0),
+                "speed_kmh": r.try_get::<f64,_>("speed_kmh").unwrap_or(0.0),
+                "time": r.try_get::<String,_>("time").unwrap_or_default()
+            })
+        })
+        .collect();
+
+    Json(json!({"trace": trace, "player": player, "start": start_sec, "end": end_sec, "pad": pad}))
 }
 

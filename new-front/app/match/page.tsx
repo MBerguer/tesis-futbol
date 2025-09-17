@@ -119,6 +119,7 @@ interface SharpAngleRow {
   angle_degrees: number;
   actual_dist_in: number;
   actual_dist_out: number;
+  trace?: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }>;
 }
 
   interface MatchDetails {
@@ -211,6 +212,7 @@ export default function Page() {
   const [sharpSort, setSharpSort] = useState<{ key: keyof SharpAngleRow; dir: 'asc' | 'desc' } | null>(null);
   const [sharpPage, setSharpPage] = useState<number>(1);
   const SHARP_PAGE_SIZE = 10;
+  const [sharpTrace, setSharpTrace] = useState<{ player: string; points: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }> } | null>(null);
   const accelColumns = React.useMemo(() => (
     [
       'Total Accels',
@@ -1140,6 +1142,8 @@ export default function Page() {
                                     centerLatitude={(matchDetails?.venue_latitude ?? -34.795334) as number}
                                     centerLongitude={(matchDetails?.venue_longitude ?? -56.147974) as number}
                                     bearing={mapBearing}
+                                    traceLine={(sharpTrace && Array.isArray(sharpTrace.points)) ? sharpTrace.points.map(p=>({ lat: p.lat, lon: p.lon })) : undefined}
+                                    traceColor={'#fb7185'}
                                   />
                                 </div>
                                 <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
@@ -1953,6 +1957,21 @@ export default function Page() {
                                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
                               }} className="underline-offset-2 hover:underline">{ev.actual_dist_out.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2">
+                              <div className="flex gap-2">
+                                <Button size={'sm'} variant={'outline'} onClick={async()=>{
+                                  try {
+                                    const qs = new URLSearchParams({ player: ev.player_display_name, start: String(ev.start_time), end: String(ev.finish_time) });
+                                    const res = await fetch(`${API_BASE}/match/table/${selectedTable}/trace?`+qs.toString());
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      setSharpTrace({ player: ev.player_display_name, points: data?.trace || [] });
+                                    }
+                                  } catch {}
+                                }}>Show trace</Button>
+                                <Button size={'sm'} variant={'secondary'} onClick={()=> setSharpTrace(null)}>Clear trace</Button>
+                              </div>
                             </td>
                           </tr>
                         ))}

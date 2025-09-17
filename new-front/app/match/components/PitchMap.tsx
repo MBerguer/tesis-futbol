@@ -15,9 +15,11 @@ interface PitchMapProps {
   bearing?: number; // map rotation in degrees
   centerLatitude?: number; // initial/controlled center latitude
   centerLongitude?: number; // initial/controlled center longitude
+  traceLine?: Array<{ lat: number; lon: number }>;
+  traceColor?: string;
 }
 
-export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing, centerLatitude, centerLongitude }: PitchMapProps) {
+export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing, centerLatitude, centerLongitude, traceLine, traceColor }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
@@ -163,6 +165,41 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
       }
     });
   }, [pinned]);
+
+  // Draw or clear polyline trace
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const srcId = 'trace-line-src';
+    const layerId = 'trace-line-lyr';
+    try {
+      // Ensure prior layer/source removed if no data
+      if (!traceLine || traceLine.length === 0) {
+        if (map.getLayer(layerId)) { try { map.removeLayer(layerId); } catch {} }
+        if (map.getSource(srcId)) { try { (map.getSource(srcId) as any).setData({ type: 'FeatureCollection', features: [] }); map.removeSource(srcId); } catch {} }
+        return;
+      }
+      const coords = traceLine.map(p => [p.lon, p.lat]);
+      const data = { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} } as any;
+      if (!map.getSource(srcId)) {
+        map.addSource(srcId, { type: 'geojson', data });
+      } else {
+        (map.getSource(srcId) as any).setData(data);
+      }
+      if (!map.getLayer(layerId)) {
+        map.addLayer({
+          id: layerId,
+          type: 'line',
+          source: srcId,
+          paint: {
+            'line-color': traceColor || '#22c55e',
+            'line-width': 3,
+            'line-opacity': 0.9
+          }
+        });
+      }
+    } catch {}
+  }, [traceLine, traceColor]);
 
   return (
     <div
