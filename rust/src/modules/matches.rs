@@ -4,7 +4,6 @@ use axum::extract::State;
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sqlx::Column;
 use sqlx::PgPool;
 use sqlx::Row;
 use std::collections::{HashMap, HashSet};
@@ -1081,5 +1080,329 @@ pub async fn patch_match_periods(
         }
         Err(e) => Json(json!({"error": format!("failed to patch periods: {}", e)})),
     }
+}
+
+
+/// GET /match/table/:table_name/accelerations?mode=summary|full
+/// Computes per-player acceleration/deceleration events from the processed GPS view
+pub async fn get_accelerations_hardcoded(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+) -> Json<Value> {
+    let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
+    let mode = params
+        .get("mode")
+        .map(|s| s.to_lowercase())
+        .unwrap_or_else(|| "summary".to_string());
+
+    // Fetch manual period boundaries (seconds since midnight)
+    let periods_row = sqlx::query(
+        r#"
+        SELECT 
+            manual_first_half_start AS s1,
+            manual_first_half_end   AS e1,
+            manual_second_half_start AS s2,
+            manual_second_half_end   AS e2
+        FROM match_periods
+        WHERE match_name = $1
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_one(&pool)
+    .await;
+
+    let (s1, e1, s2, e2) = match periods_row {
+        Ok(r) => {
+            let s1: Option<i32> = r.try_get("s1").ok();
+            let e1: Option<i32> = r.try_get("e1").ok();
+            let s2: Option<i32> = r.try_get("s2").ok();
+            let e2: Option<i32> = r.try_get("e2").ok();
+            if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
+                (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
+            } else {
+                return Json(json!({
+                    "accelerations": [],
+                    "events": [],
+                    "error": "manual periods not available for this match"
+                }));
+            }
+        }
+        Err(_) => {
+            return Json(json!({
+                "accelerations": [],
+                "events": [],
+                "error": "manual periods not found for this match"
+            }));
+        }
+    };
+
+    // Base CTE used by both summary and full queries (built with player_display_name key)
+    let base_cte = format!(
+        r#"
+WITH base AS (
+  SELECT
+    player_display_name,
+    time,
+    (speed::numeric) / 3.6 AS speed_ms,
+    EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time) AS epoch_time,
+    LAG(EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) OVER (
+      PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
+    ) AS prev_epoch,
+    LAG((speed::numeric) / 3.6) OVER (
+      PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
+    ) AS prev_speed_ms
+  FROM public.{view}
+),
+
+filtered_base AS (
+  SELECT * FROM base
+  WHERE (epoch_time BETWEEN $1 AND $2) OR (epoch_time BETWEEN $3 AND $4)
+),
+
+delta AS (
+  SELECT
+    player_display_name,
+    time,
+    speed_ms,
+    prev_speed_ms,
+    COALESCE(
+      CASE
+        WHEN prev_epoch IS NULL THEN 0
+        WHEN epoch_time >= prev_epoch THEN epoch_time - prev_epoch
+        ELSE epoch_time + 86400 - prev_epoch
+      END,
+    0) AS delta_time
+  FROM filtered_base
+),
+
+acc_calc AS (
+  SELECT
+    player_display_name,
+    time,
+    speed_ms,
+    delta_time,
+    CASE
+      WHEN delta_time > 0 AND prev_speed_ms IS NOT NULL THEN (speed_ms - prev_speed_ms) / delta_time
+      ELSE 0
+    END AS calc_acceleration
+  FROM delta
+),
+
+filtered AS (
+  SELECT
+    player_display_name,
+    time,
+    speed_ms,
+    delta_time,
+    GREATEST(LEAST(calc_acceleration, 22), -22) AS acceleration_limited
+  FROM acc_calc
+  WHERE delta_time > 0 AND delta_time < 0.5
+),
+
+time_cum AS (
+  SELECT
+    *,
+    SUM(delta_time) OVER (PARTITION BY player_display_name ORDER BY time) AS time_s
+  FROM filtered
+),
+
+labeled AS (
+  SELECT
+    *,
+    CASE
+      WHEN acceleration_limited >= 1 THEN 'accel_potential'
+      WHEN acceleration_limited <= -1 THEN 'decel_potential'
+      ELSE 'none'
+    END AS event_type
+  FROM time_cum
+),
+
+grp_prep AS (
+  SELECT
+    *,
+    LAG(event_type) OVER (PARTITION BY player_display_name ORDER BY time_s) AS prev_event_type
+  FROM labeled
+),
+
+grp AS (
+  SELECT
+    *,
+    SUM(CASE WHEN prev_event_type = event_type THEN 0 ELSE 1 END)
+      OVER (PARTITION BY player_display_name ORDER BY time_s) AS grp
+  FROM grp_prep
+),
+
+grouped AS (
+  SELECT
+    player_display_name,
+    event_type,
+    grp,
+    MIN(time) AS start_time_text,
+    MAX(time) AS end_time_text,
+    MIN(time_s) AS start_time_s,
+    MAX(time_s) AS end_time_s,
+    SUM(delta_time) AS duration_s,
+    MAX(speed_ms) AS max_speed,
+    MAX(acceleration_limited) AS max_acc,
+    MIN(acceleration_limited) AS min_acc,
+    SUM(speed_ms * delta_time) AS distance_m
+  FROM grp
+  GROUP BY player_display_name, event_type, grp
+),
+
+events AS (
+  SELECT
+    player_display_name,
+    event_type,
+    start_time_text,
+    end_time_text,
+    start_time_s,
+    end_time_s,
+    duration_s,
+    max_speed,
+    CASE WHEN event_type = 'accel_potential' THEN max_acc ELSE min_acc END AS peak_acc,
+    distance_m
+  FROM grouped
+  WHERE event_type <> 'none'
+),
+
+filtered_events AS (
+  SELECT *
+  FROM events
+  WHERE (event_type = 'accel_potential' AND peak_acc >= 2.5 AND duration_s >= 0.5)
+     OR (event_type = 'decel_potential' AND peak_acc <= -2.5 AND duration_s >= 0.5)
+),
+
+classified AS (
+  SELECT
+    *,
+    CASE
+      WHEN event_type = 'accel_potential' AND peak_acc >= 4    THEN 'high'
+      WHEN event_type = 'accel_potential' AND peak_acc >= 3    THEN 'medium'
+      WHEN event_type = 'accel_potential' AND peak_acc >= 2.5  THEN 'low'
+      WHEN event_type = 'decel_potential' AND peak_acc <= -4   THEN 'high'
+      WHEN event_type = 'decel_potential' AND peak_acc <= -3   THEN 'medium'
+      WHEN event_type = 'decel_potential' AND peak_acc <= -2.5 THEN 'low'
+      ELSE 'unknown'
+    END AS intensity_category
+  FROM filtered_events
+)
+        "#,
+        view = view_name
+    );
+
+    if mode == "full" {
+        let sql_full = format!(
+            r#"{base}
+SELECT
+  ROW_NUMBER() OVER (ORDER BY player_display_name, start_time_s) AS id,
+  player_display_name,
+  CASE WHEN event_type = 'accel_potential' THEN 'accel' ELSE 'decel' END AS accel_or_decel,
+  start_time_text AS start_time,
+  end_time_text AS end_time,
+  ROUND(duration_s::numeric, 3)::double precision AS duration_s,
+  ROUND(peak_acc::numeric, 3)::double precision AS peak_acc,
+  ROUND(max_speed::numeric, 3)::double precision AS max_speed_m_s,
+  ROUND(distance_m::numeric, 3)::double precision AS distance_m,
+  EXTRACT(EPOCH FROM to_timestamp(start_time_text, 'HH24:MI:SS.MS')::time)::double precision AS seconds_since_midnight,
+  intensity_category
+FROM classified
+ORDER BY player_display_name, start_time_s"#,
+            base = base_cte
+        );
+
+        let rows = match sqlx::query(&sql_full)
+            .bind(s1)
+            .bind(e1)
+            .bind(s2)
+            .bind(e2)
+            .fetch_all(&pool)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => return Json(json!({"events": [], "error": format!("db error: {}", e)})),
+        };
+
+        let events: Vec<Value> = rows
+            .into_iter()
+            .map(|r| {
+                json!({
+                    "id": r.try_get::<i64,_>("id").unwrap_or(0),
+                    "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                    "accel_or_decel": r.try_get::<String,_>("accel_or_decel").unwrap_or_default(),
+                    "start_time": r.try_get::<String,_>("start_time").unwrap_or_default(),
+                    "end_time": r.try_get::<String,_>("end_time").unwrap_or_default(),
+                    "duration_s": r.try_get::<f64,_>("duration_s").unwrap_or(0.0),
+                    "peak_acc": r.try_get::<f64,_>("peak_acc").unwrap_or(0.0),
+                    "max_speed_m_s": r.try_get::<f64,_>("max_speed_m_s").unwrap_or(0.0),
+                    "distance_m": r.try_get::<f64,_>("distance_m").unwrap_or(0.0),
+                    "seconds_since_midnight": r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0),
+                    "intensity_category": r.try_get::<String,_>("intensity_category").unwrap_or_default()
+                })
+            })
+            .collect();
+
+        return Json(json!({"events": events}));
+    }
+
+    // Summary (default)
+    let sql_summary = format!(
+        r#"{base}
+SELECT
+  ROW_NUMBER() OVER (ORDER BY player_display_name) AS id,
+  player_display_name,
+  SUM(CASE WHEN event_type = 'accel_potential' THEN 1 ELSE 0 END)::bigint AS total_accel_events,
+  SUM(CASE WHEN event_type = 'accel_potential' AND intensity_category = 'low' THEN 1 ELSE 0 END)::bigint AS accel_low,
+  SUM(CASE WHEN event_type = 'accel_potential' AND intensity_category = 'medium' THEN 1 ELSE 0 END)::bigint AS accel_medium,
+  SUM(CASE WHEN event_type = 'accel_potential' AND intensity_category = 'high' THEN 1 ELSE 0 END)::bigint AS accel_high,
+  SUM(CASE WHEN event_type = 'decel_potential' THEN 1 ELSE 0 END)::bigint AS total_decel_events,
+  SUM(CASE WHEN event_type = 'decel_potential' AND intensity_category = 'low' THEN 1 ELSE 0 END)::bigint AS decel_low,
+  SUM(CASE WHEN event_type = 'decel_potential' AND intensity_category = 'medium' THEN 1 ELSE 0 END)::bigint AS decel_medium,
+  SUM(CASE WHEN event_type = 'decel_potential' AND intensity_category = 'high' THEN 1 ELSE 0 END)::bigint AS decel_high,
+  ROUND(SUM(distance_m)::numeric, 3)::double precision AS total_distance_m,
+  ROUND(SUM(duration_s)::numeric, 3)::double precision AS total_time_s
+FROM classified
+GROUP BY player_display_name
+ORDER BY player_display_name"#,
+        base = base_cte
+    );
+
+    let rows = match sqlx::query(&sql_summary)
+        .bind(s1)
+        .bind(e1)
+        .bind(s2)
+        .bind(e2)
+        .fetch_all(&pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return Json(json!({"accelerations": [], "error": format!("db error: {}", e)})),
+    };
+
+    let out: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            let id = r.try_get::<i64, _>("id").unwrap_or(0);
+            let name = r.try_get::<String, _>("player_display_name").unwrap_or_default();
+            let v1 = r.try_get::<i64, _>("total_accel_events").unwrap_or(0) as f64;
+            let v2 = r.try_get::<i64, _>("accel_low").unwrap_or(0) as f64;
+            let v3 = r.try_get::<i64, _>("accel_medium").unwrap_or(0) as f64;
+            let v4 = r.try_get::<i64, _>("accel_high").unwrap_or(0) as f64;
+            let v5 = r.try_get::<i64, _>("total_decel_events").unwrap_or(0) as f64;
+            let v6 = r.try_get::<i64, _>("decel_low").unwrap_or(0) as f64;
+            let v7 = r.try_get::<i64, _>("decel_medium").unwrap_or(0) as f64;
+            let v8 = r.try_get::<i64, _>("decel_high").unwrap_or(0) as f64;
+            let v9 = r.try_get::<f64, _>("total_distance_m").unwrap_or(0.0);
+            let v10 = r.try_get::<f64, _>("total_time_s").unwrap_or(0.0);
+            json!({
+                "id": id,
+                "player_display_name": name,
+                "values": [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10]
+            })
+        })
+        .collect();
+
+    Json(json!({"accelerations": out}))
 }
 

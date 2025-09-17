@@ -75,6 +75,26 @@ interface SprintInWorstCase {
   sprint_end_sec?: number;
 }
 
+interface AccelerationRow {
+  id: number;
+  player_display_name: string;
+  values: number[];
+}
+
+interface AccelEventRow {
+  id: number;
+  player_display_name: string;
+  accel_or_decel: string;
+  start_time: string;
+  end_time: string;
+  seconds_since_midnight: number;
+  duration_s: number;
+  peak_acc: number;
+  max_speed_m_s: number;
+  distance_m: number;
+  intensity_category: string;
+}
+
   interface MatchDetails {
   match_id: string;
   competition_id: string | null;
@@ -146,6 +166,29 @@ export default function Page() {
   const [lineupMinutes, setLineupMinutes] = useState<any[]>([]);
   const [loadingLineup, setLoadingLineup] = useState<boolean>(false);
   const [eventsTab, setEventsTab] = useState<'events'|'lineup'>('events');
+  const [accelerations, setAccelerations] = useState<AccelerationRow[]>([]);
+  const [loadingAccelerations, setLoadingAccelerations] = useState<boolean>(false);
+  const [accelEvents, setAccelEvents] = useState<AccelEventRow[]>([]);
+  const [loadingAccelEvents, setLoadingAccelEvents] = useState<boolean>(false);
+  const [accelSort, setAccelSort] = useState<{ key: keyof AccelEventRow; dir: 'asc' | 'desc' } | null>(null);
+  const accelColumns = React.useMemo(() => (
+    [
+      'Total Accels',
+      'Accel Low',
+      'Accel Med',
+      'Accel High',
+      'Total Decels',
+      'Decel Low',
+      'Decel Med',
+      'Decel High',
+      'Distance (m)',
+      'Time (s)'
+    ]
+  ), []);
+  const formatAccelValue = React.useCallback((v: number, idx: number) => {
+    if (typeof v !== 'number') return String(v);
+    return idx < 8 ? Math.round(v) : v.toFixed(3);
+  }, []);
   let playerHighlights = React.useMemo(()=>{
     const norm = (s: string) => (s||'').trim()
       .normalize('NFD')
@@ -367,6 +410,74 @@ export default function Page() {
     })();
     return () => controller.abort();
   }, [API_BASE, selectedTable]);
+
+  useEffect(() => {
+    if (!selectedTable) { setAccelerations([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingAccelerations(true);
+        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/accelerations`);
+        if (res.ok) {
+          const data = await res.json();
+          const rows = Array.isArray(data?.accelerations) ? data.accelerations as AccelerationRow[] : [];
+          if (!cancelled) setAccelerations(rows);
+        } else {
+          if (!cancelled) setAccelerations([]);
+        }
+      } catch {
+        if (!cancelled) setAccelerations([]);
+      } finally {
+        if (!cancelled) setLoadingAccelerations(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, selectedTable]);
+
+  useEffect(() => {
+    if (!selectedTable) { setAccelEvents([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingAccelEvents(true);
+        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/accelerations?mode=full`);
+        if (res.ok) {
+          const data = await res.json();
+          const rows = Array.isArray(data?.events) ? data.events as AccelEventRow[] : [];
+          if (!cancelled) setAccelEvents(rows);
+        } else {
+          if (!cancelled) setAccelEvents([]);
+        }
+      } catch {
+        if (!cancelled) setAccelEvents([]);
+      } finally {
+        if (!cancelled) setLoadingAccelEvents(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, selectedTable]);
+
+  const sortedAccelEvents = React.useMemo(() => {
+    const arr = [...accelEvents];
+    if (!accelSort) return arr;
+    arr.sort((a, b) => {
+      const k = accelSort.key;
+      const av = a[k] as any;
+      const bv = b[k] as any;
+      if (typeof av === 'number' && typeof bv === 'number') return accelSort.dir === 'asc' ? av - bv : bv - av;
+      const as = String(av || '');
+      const bs = String(bv || '');
+      return accelSort.dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+    });
+    return arr;
+  }, [accelEvents, accelSort]);
+
+  const toggleSort = (key: keyof AccelEventRow) => {
+    setAccelSort(prev => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
+      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
+    });
+  };
 
   const derivedBaseTime = React.useMemo(() => {
     if (!entries || entries.length === 0) return null as string | null;
@@ -1099,6 +1210,119 @@ export default function Page() {
               </div>
             </div>
           )}
+          {/* Accelerations section at the end */}
+          <div className="mt-6">
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Accelerations
+                  {loadingAccelerations && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!selectedTable ? (
+                  <div className="text-sm text-gray-600">Select a match to view accelerations.</div>
+                ) : loadingAccelerations ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : accelerations.length === 0 ? (
+                  <div className="text-sm text-gray-600">No data.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-zinc-300">
+                        <tr className="border-b border-zinc-800">
+                          <th className="text-left py-2 pr-3">ID</th>
+                          <th className="text-left py-2 pr-3">Player</th>
+                        {Array.from({ length: Math.max(0, Math.min(10, accelerations[0]?.values?.length || 0)) }).map((_, idx) => (
+                          <th key={idx} className="text-right py-2 px-2">{accelColumns[idx] ?? `V${idx+1}`}</th>
+                        ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {accelerations.slice(0, 10).map((row) => (
+                          <tr key={row.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                            <td className="py-2 pr-3 align-top text-zinc-400">{row.id}</td>
+                            <td className="py-2 pr-3 align-top text-zinc-200">{row.player_display_name}</td>
+                          {row.values.slice(0, 10).map((v, i) => (
+                            <td key={i} className="py-2 px-2 text-right tabular-nums text-zinc-300">{formatAccelValue(v, i)}</td>
+                          ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Acceleration events (full) section */}
+          <div className="mt-6">
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Acceleration Events (Full)
+                  {loadingAccelEvents && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!selectedTable ? (
+                  <div className="text-sm text-gray-600">Select a match to view events.</div>
+                ) : loadingAccelEvents ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : accelEvents.length === 0 ? (
+                  <div className="text-sm text-gray-600">No events.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-zinc-300">
+                        <tr className="border-b border-zinc-800">
+                          <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSort('player_display_name')}>Player</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSort('accel_or_decel')}>Type</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSort('start_time')}>Start</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSort('end_time')}>End</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('seconds_since_midnight')}>Seconds since midnight</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('duration_s')}>Duration (s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('peak_acc')}>Peak acc (m/s²)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('max_speed_m_s')}>Max speed (m/s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('distance_m')}>Distance (m)</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSort('intensity_category')}>Intensity</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedAccelEvents.map((ev) => (
+                          <tr key={ev.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                            <td className="py-2 pr-3 text-zinc-200">{ev.player_display_name}</td>
+                            <td className="py-2 px-2 text-zinc-300">{ev.accel_or_decel}</td>
+                            <td className="py-2 px-2 text-zinc-300">{ev.start_time}</td>
+                            <td className="py-2 px-2 text-zinc-300">{ev.end_time}</td>
+                          <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.seconds_since_midnight.toFixed(3)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.duration_s.toFixed(3)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.peak_acc.toFixed(3)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.max_speed_m_s.toFixed(3)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.distance_m.toFixed(3)}</td>
+                            <td className="py-2 px-2 text-zinc-300">{ev.intensity_category}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
       </div>
     </main>
   );
