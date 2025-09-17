@@ -1794,23 +1794,64 @@ turn_analysis AS (
     ) AS angle_degrees
   FROM player_data_with_coordinates
 )
+-- Filter candidate windows per your criteria
+, filtered_turns AS (
+  SELECT *
+  FROM turn_analysis
+  WHERE ((angle_degrees <= 145 AND angle_degrees >= 35) OR (angle_degrees <= 325 AND angle_degrees >= 215))
+    AND actual_dist_in >= 5.0
+    AND actual_dist_out >= 4.0
+    AND (finish_time - start_time) < 1.8
+    AND start_time IS NOT NULL AND finish_time IS NOT NULL
+)
+-- Group contiguous/overlapping windows into one event per player
+, ordered AS (
+  SELECT 
+    *,
+    LAG(finish_time) OVER (PARTITION BY player_display_name ORDER BY start_time) AS prev_finish
+  FROM filtered_turns
+)
+, grouped_flags AS (
+  SELECT 
+    *,
+    CASE 
+      WHEN prev_finish IS NULL THEN 1
+      WHEN start_time <= prev_finish + 0.3 THEN 0 -- overlaps or within 0.3s gap
+      ELSE 1
+    END AS new_group
+  FROM ordered
+)
+, with_group AS (
+  SELECT 
+    *,
+    SUM(new_group) OVER (PARTITION BY player_display_name ORDER BY start_time ROWS UNBOUNDED PRECEDING) AS grp_id
+  FROM grouped_flags
+)
+, grouped AS (
+  SELECT 
+    player_display_name,
+    MIN(elapsed_time) AS seconds_since_midnight,
+    MIN(start_time)   AS start_time,
+    MAX(finish_time)  AS finish_time,
+    (MAX(finish_time) - MIN(start_time)) AS duration_seconds,
+    MAX(angle_degrees) AS angle_degrees,
+    MAX(actual_dist_in)  AS actual_dist_in,
+    MAX(actual_dist_out) AS actual_dist_out
+  FROM with_group
+  GROUP BY player_display_name, grp_id
+)
 SELECT
-  ROW_NUMBER() OVER (ORDER BY player_display_name, elapsed_time) AS id,
+  ROW_NUMBER() OVER (ORDER BY player_display_name, start_time) AS id,
   player_display_name,
-  elapsed_time AS seconds_since_midnight,
+  seconds_since_midnight,
   start_time,
   finish_time,
-  (finish_time - start_time) AS duration_seconds,
+  duration_seconds,
   angle_degrees,
   actual_dist_in,
   actual_dist_out
-FROM turn_analysis
-WHERE ((angle_degrees <= 145 and angle_degrees >= 35) or (angle_degrees <= 325 and angle_degrees >= 215))
-  AND actual_dist_in >= 5.0
-  AND actual_dist_out >= 4.0
-  AND (finish_time - start_time) < 1.8
-  AND start_time IS NOT NULL AND finish_time IS NOT NULL
-ORDER BY player_display_name, elapsed_time
+FROM grouped
+ORDER BY player_display_name, start_time
         "#,
         view = view_name
     );
