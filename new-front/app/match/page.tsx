@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2 } from "lucide-react";
+import { Loader2, Clock } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
 import { usePositionsWindow } from "./hooks/usePositionsWindow";
@@ -1080,6 +1080,23 @@ export default function Page() {
                               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
                             }}
                           />
+                          <div className="mt-2 w-[110px] text-xs text-zinc-300 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span>{(function(){
+                              const p = periods;
+                              const kickoff = kickoffSpike ?? 0;
+                              const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
+                              const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+                              const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - (fhStartPatched as number)) : undefined);
+                              if (!p) return Math.max(0, (fhStartPatched as number) + videoTimeSec).toFixed(3);
+                              if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+                                const firstHalfDuration = Math.max(0, fhDurPatched);
+                                if (videoTimeSec <= firstHalfDuration) return ((fhStartPatched as number) + videoTimeSec).toFixed(3);
+                                return ((shStartPatched as number) + (videoTimeSec - firstHalfDuration)).toFixed(3);
+                              }
+                              return ((fhStartPatched as number) + videoTimeSec).toFixed(3);
+                            })()}</span>
+                          </div>
                         </div>
                         <div className="p-2">
                           <div className="h-[660px] md:h-[760px]">
