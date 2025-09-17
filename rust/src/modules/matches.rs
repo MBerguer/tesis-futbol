@@ -1688,11 +1688,11 @@ WITH base AS (
     COALESCE((seconds_since_midnight)::double precision, EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) AS elapsed_time,
     lat,
     lon,
-    (speed::numeric) AS speed_kmh
+    ((speed::numeric) / 3.6) AS speed_ms
   FROM public.{view}
 ),
 filtered_speed AS (
-  SELECT * FROM base WHERE speed_kmh >= 5.5
+  SELECT * FROM base WHERE speed_ms >= 5.5
 ),
 filtered_periods AS (
   SELECT * FROM filtered_speed WHERE (elapsed_time BETWEEN $1 AND $2) OR (elapsed_time BETWEEN $3 AND $4)
@@ -1717,6 +1717,7 @@ turn_analysis AS (
     elapsed_time,
     start_time,
     finish_time,
+    -- Haversine distances in meters
     6371000 * 2 * ASIN(
         SQRT(
             POWER(SIN(RADIANS(lat - in_start_lat) / 2), 2) +
@@ -1731,15 +1732,21 @@ turn_analysis AS (
             POWER(SIN(RADIANS(out_end_lon - lon) / 2), 2)
         )
     ) AS actual_dist_out,
-    degrees(
-        ATAN2(
+    -- Bearings
+    (
+      ( (
+          (DEGREES(ATAN2(
             SIN(RADIANS(out_end_lon - lon)) * COS(RADIANS(out_end_lat)),
             COS(RADIANS(lat)) * SIN(RADIANS(out_end_lat)) - SIN(RADIANS(lat)) * COS(RADIANS(out_end_lat)) * COS(RADIANS(out_end_lon - lon))
-        ) -
-        ATAN2(
+          )) + 360) % 360
+        )
+        - (
+          ((DEGREES(ATAN2(
             SIN(RADIANS(lon - in_start_lon)) * COS(RADIANS(lat)),
             COS(RADIANS(in_start_lat)) * SIN(RADIANS(lat)) - SIN(RADIANS(in_start_lat)) * COS(RADIANS(lat)) * COS(RADIANS(lon - in_start_lon))
-        )
+          )) + 360) % 360) + 180
+        ) % 360 + 360
+      ) % 360
     ) AS angle_degrees
   FROM player_data_with_coordinates
 )
@@ -1754,7 +1761,7 @@ SELECT
   actual_dist_in,
   actual_dist_out
 FROM turn_analysis
-WHERE ABS(angle_degrees) >= 40
+WHERE (angle_degrees <= 135 OR angle_degrees >= 225)
   AND actual_dist_in BETWEEN 4.5 AND 5.5
   AND actual_dist_out BETWEEN 3.5 AND 4.5
   AND start_time IS NOT NULL AND finish_time IS NOT NULL
