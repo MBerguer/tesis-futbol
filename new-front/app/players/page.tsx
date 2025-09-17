@@ -282,6 +282,41 @@ export default function Page() {
     return "/match";
   }, [maxMetrics?.max_speed_detail]);
 
+  const [maxSpeedMatchLabel, setMaxSpeedMatchLabel] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const d = maxMetrics?.max_speed_detail;
+    setMaxSpeedMatchLabel(null);
+    if (!d) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (d.match_id) {
+          const res = await fetch(`${API_BASE}/api/matches/${d.match_id}`);
+          if (res.ok) {
+            const md = await res.json();
+            const home = md?.home_team_name || md?.home_team_id?.slice(0, 8);
+            const away = md?.away_team_name || md?.away_team_id?.slice(0, 8);
+            const label = home && away ? `${home} vs ${away}` : undefined;
+            if (!cancelled && label) setMaxSpeedMatchLabel(label);
+          }
+        } else if (d.gps_table_name) {
+          const res = await fetch(`${API_BASE}/api/matches`);
+          if (res.ok) {
+            const arr = await res.json();
+            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            if (found) {
+              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const label = home && away ? `${home} vs ${away}` : undefined;
+              if (!cancelled && label) setMaxSpeedMatchLabel(label);
+            }
+          }
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, maxMetrics?.max_speed_detail]);
+
   const maxDistanceHref = React.useMemo(() => {
     const d = maxMetrics?.max_distance_detail;
     const id = d?.match_id;
@@ -648,10 +683,9 @@ export default function Page() {
                           {hsrMatchLabel || 'ver match'}
                         </a>
                       ) : null}
-                      {kpi.title === "Velocidad Max." && (maxMetrics?.max_speed_detail?.minute || maxMetrics?.max_speed_detail?.time) ? (
+                      {kpi.title === "Velocidad Max." && maxMetrics?.max_speed_detail ? (
                         <a href={matchHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline" title={`tiempo real: ${maxMetrics.max_speed_detail.time ?? '—'} | inicio PT manual: ${maxMetrics.max_speed_detail.manual_first_half_start ?? '—'}s`}>
-                          {`minuto ${soccerMinute ?? '—'}`}
-                          {maxMetrics.max_speed_detail.gps_table_name ? ` · ${maxMetrics.max_speed_detail.gps_table_name}` : ""}
+                          {maxSpeedMatchLabel || `ver match`}
                         </a>
                       ) : null}
                     </CardContent>

@@ -166,6 +166,28 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
         }
     };
 
+    // Try cache first
+    if let Ok(Some(cached)) = sqlx::query!(
+        r#"SELECT * FROM player_metrics_cache WHERE player_id = $1"#, user_id
+    ).fetch_optional(&pool).await {
+        return Json(json!({
+            "max_distance_m": (cached.max_distance_m.unwrap_or(0.0).round() as i64),
+            "hsr_max_m": (cached.hsr_max_m.unwrap_or(0.0).round() as i64),
+            "max_speed_kmh": cached.max_speed_kmh.unwrap_or(0.0),
+            "high_metabolic_distance_m": (cached.hmld_25_5_m.unwrap_or(0.0).round() as i64),
+            "z6": { "seconds": (cached.z6_seconds.unwrap_or(0.0).round() as i64), "distance_m": (cached.z6_distance_m.unwrap_or(0.0).round() as i64) },
+            "max_speed_detail": { "match_id": cached.max_speed_match_id, "gps_table_name": cached.max_speed_table },
+            "max_distance_detail": { "match_id": cached.max_distance_match_id, "gps_table_name": cached.max_distance_table },
+            "hsr_max_detail": { "match_id": cached.hsr_max_match_id, "gps_table_name": cached.hsr_max_table },
+            "hmld": { "m25_5": cached.hmld_25_5_m.unwrap_or(0.0), "m18": cached.hmld_18_m.unwrap_or(0.0) },
+            "hmld_detail": {
+                "m25_5": { "match_id": cached.hmld_25_5_match_id, "gps_table_name": cached.hmld_25_5_table },
+                "m18": { "match_id": cached.hmld_18_match_id, "gps_table_name": cached.hmld_18_table }
+            },
+            "z6_detail": { "match_id": cached.z6_match_id, "gps_table_name": cached.z6_table }
+        }));
+    }
+
     // Resolve display name for fuzzy matching in GPS tables
     let player_name: Option<String> = match sqlx::query!(
         r#"SELECT COALESCE("Jugador", nombre) AS display FROM administrativo WHERE "Documento_de_Identidad" = $1"#,
@@ -386,7 +408,7 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
         }
     }
 
-    Json(json!({
+    let response = json!({
         "max_distance_m": (max_distance_m_val.round() as i64),
         "hsr_max_m": (hsr_max_m_val.round() as i64),
         "max_speed_kmh": max_speed_kmh,
@@ -413,5 +435,53 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
             "m18": { "match_id": hmld_18_match_id, "gps_table_name": hmld_18_table }
         },
         "z6_detail": { "match_id": z6_match_id, "gps_table_name": z6_table }
-    }))
+    });
+
+    // Upsert cache asynchronously (ignore errors)
+    let _ = sqlx::query!(
+        r#"
+        INSERT INTO player_metrics_cache (
+            player_id,
+            max_speed_kmh, max_speed_match_id, max_speed_table,
+            max_distance_m, max_distance_match_id, max_distance_table,
+            hsr_max_m, hsr_max_match_id, hsr_max_table,
+            hmld_25_5_m, hmld_25_5_match_id, hmld_25_5_table,
+            hmld_18_m, hmld_18_match_id, hmld_18_table,
+            z6_seconds, z6_distance_m, z6_match_id, z6_table,
+            updated_at
+        ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW()
+        )
+        ON CONFLICT (player_id) DO UPDATE SET
+            max_speed_kmh = EXCLUDED.max_speed_kmh,
+            max_speed_match_id = EXCLUDED.max_speed_match_id,
+            max_speed_table = EXCLUDED.max_speed_table,
+            max_distance_m = EXCLUDED.max_distance_m,
+            max_distance_match_id = EXCLUDED.max_distance_match_id,
+            max_distance_table = EXCLUDED.max_distance_table,
+            hsr_max_m = EXCLUDED.hsr_max_m,
+            hsr_max_match_id = EXCLUDED.hsr_max_match_id,
+            hsr_max_table = EXCLUDED.hsr_max_table,
+            hmld_25_5_m = EXCLUDED.hmld_25_5_m,
+            hmld_25_5_match_id = EXCLUDED.hmld_25_5_match_id,
+            hmld_25_5_table = EXCLUDED.hmld_25_5_table,
+            hmld_18_m = EXCLUDED.hmld_18_m,
+            hmld_18_match_id = EXCLUDED.hmld_18_match_id,
+            hmld_18_table = EXCLUDED.hmld_18_table,
+            z6_seconds = EXCLUDED.z6_seconds,
+            z6_distance_m = EXCLUDED.z6_distance_m,
+            z6_match_id = EXCLUDED.z6_match_id,
+            z6_table = EXCLUDED.z6_table,
+            updated_at = NOW()
+        "#,
+        user_id,
+        max_speed_kmh, max_speed_match_id, max_speed_table,
+        max_distance_m_val, max_distance_match_id, max_distance_table,
+        hsr_max_m_val, hsr_max_match_id, hsr_max_table,
+        hmld_25_5_val, hmld_25_5_match_id, hmld_25_5_table,
+        hmld_18_val, hmld_18_match_id, hmld_18_table,
+        z6_seconds_val, z6_distance_val, z6_match_id, z6_table
+    ).execute(&pool).await;
+
+    Json(response)
 }
