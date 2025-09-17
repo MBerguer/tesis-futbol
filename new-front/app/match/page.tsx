@@ -171,6 +171,8 @@ export default function Page() {
   const [accelEvents, setAccelEvents] = useState<AccelEventRow[]>([]);
   const [loadingAccelEvents, setLoadingAccelEvents] = useState<boolean>(false);
   const [accelSort, setAccelSort] = useState<{ key: keyof AccelEventRow; dir: 'asc' | 'desc' } | null>(null);
+  const [accelPage, setAccelPage] = useState<number>(1);
+  const ACCEL_PAGE_SIZE = 10;
   const accelColumns = React.useMemo(() => (
     [
       'Total Accels',
@@ -440,6 +442,7 @@ export default function Page() {
     (async () => {
       try {
         setLoadingAccelEvents(true);
+        setAccelPage(1);
         const res = await fetch(`${API_BASE}/match/table/${selectedTable}/accelerations?mode=full`);
         if (res.ok) {
           const data = await res.json();
@@ -472,11 +475,18 @@ export default function Page() {
     return arr;
   }, [accelEvents, accelSort]);
 
+  // Clamp current page when data size changes
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE));
+    if (accelPage > totalPages) setAccelPage(totalPages);
+  }, [sortedAccelEvents.length]);
+
   const toggleSort = (key: keyof AccelEventRow) => {
     setAccelSort(prev => {
       if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
       return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
     });
+    setAccelPage(1);
   };
 
   const absToVideoSec = React.useCallback((abs: number): number => {
@@ -1318,7 +1328,9 @@ export default function Page() {
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedAccelEvents.map((ev) => (
+                        {sortedAccelEvents
+                          .slice((accelPage-1)*ACCEL_PAGE_SIZE, (accelPage)*ACCEL_PAGE_SIZE)
+                          .map((ev) => (
                           <tr key={ev.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
                             <td className="py-2 pr-3 text-zinc-200">
                               <button onClick={()=>{
@@ -1444,6 +1456,15 @@ export default function Page() {
                         ))}
                       </tbody>
                     </table>
+                    <div className="flex items-center justify-between mt-3 text-sm text-zinc-300">
+                      <div>
+                        Page {accelPage} of {Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant={'outline'} size={'sm'} disabled={accelPage<=1} onClick={()=>setAccelPage(p=>Math.max(1, p-1))}>Prev</Button>
+                        <Button variant={'outline'} size={'sm'} disabled={accelPage>=Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE))} onClick={()=>setAccelPage(p=>Math.min(Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE)), p+1))}>Next</Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>
