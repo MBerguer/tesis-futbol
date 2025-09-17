@@ -95,6 +95,20 @@ interface AccelEventRow {
   intensity_category: string;
 }
 
+interface SprintEventRow {
+  id: number;
+  player_display_name: string;
+  sprint_type: string;
+  start_time: string;
+  end_time: string;
+  seconds_since_midnight: number;
+  duration_s: number;
+  max_speed_m_s: number;
+  peak_acc_m_s2: number;
+  distance_m: number;
+  intensity_category: string;
+}
+
   interface MatchDetails {
   match_id: string;
   competition_id: string | null;
@@ -173,6 +187,12 @@ export default function Page() {
   const [accelSort, setAccelSort] = useState<{ key: keyof AccelEventRow; dir: 'asc' | 'desc' } | null>(null);
   const [accelPage, setAccelPage] = useState<number>(1);
   const ACCEL_PAGE_SIZE = 10;
+
+  const [sprintEvents, setSprintEvents] = useState<SprintEventRow[]>([]);
+  const [loadingSprintEvents, setLoadingSprintEvents] = useState<boolean>(false);
+  const [sprintSort, setSprintSort] = useState<{ key: keyof SprintEventRow; dir: 'asc' | 'desc' } | null>(null);
+  const [sprintPage, setSprintPage] = useState<number>(1);
+  const SPRINT_PAGE_SIZE = 10;
   const accelColumns = React.useMemo(() => (
     [
       'Total Accels',
@@ -460,6 +480,30 @@ export default function Page() {
     return () => { cancelled = true; };
   }, [API_BASE, selectedTable]);
 
+  useEffect(() => {
+    if (!selectedTable) { setSprintEvents([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingSprintEvents(true);
+        setSprintPage(1);
+        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/sprints`);
+        if (res.ok) {
+          const data = await res.json();
+          const rows = Array.isArray(data?.sprints) ? data.sprints as SprintEventRow[] : [];
+          if (!cancelled) setSprintEvents(rows);
+        } else {
+          if (!cancelled) setSprintEvents([]);
+        }
+      } catch {
+        if (!cancelled) setSprintEvents([]);
+      } finally {
+        if (!cancelled) setLoadingSprintEvents(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, selectedTable]);
+
   const sortedAccelEvents = React.useMemo(() => {
     const arr = [...accelEvents];
     if (!accelSort) return arr;
@@ -475,11 +519,31 @@ export default function Page() {
     return arr;
   }, [accelEvents, accelSort]);
 
+  const sortedSprintEvents = React.useMemo(() => {
+    const arr = [...sprintEvents];
+    if (!sprintSort) return arr;
+    arr.sort((a, b) => {
+      const k = sprintSort.key;
+      const av = a[k] as any;
+      const bv = b[k] as any;
+      if (typeof av === 'number' && typeof bv === 'number') return sprintSort.dir === 'asc' ? av - bv : bv - av;
+      const as = String(av || '');
+      const bs = String(bv || '');
+      return sprintSort.dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+    });
+    return arr;
+  }, [sprintEvents, sprintSort]);
+
   // Clamp current page when data size changes
   useEffect(() => {
     const totalPages = Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE));
     if (accelPage > totalPages) setAccelPage(totalPages);
   }, [sortedAccelEvents.length]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE));
+    if (sprintPage > totalPages) setSprintPage(totalPages);
+  }, [sortedSprintEvents.length]);
 
   const toggleSort = (key: keyof AccelEventRow) => {
     setAccelSort(prev => {
@@ -487,6 +551,14 @@ export default function Page() {
       return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
     });
     setAccelPage(1);
+  };
+
+  const toggleSprintSort = (key: keyof SprintEventRow) => {
+    setSprintSort(prev => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
+      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
+    });
+    setSprintPage(1);
   };
 
   const absToVideoSec = React.useCallback((abs: number): number => {
@@ -1463,6 +1535,189 @@ export default function Page() {
                       <div className="flex gap-2">
                         <Button variant={'outline'} size={'sm'} disabled={accelPage<=1} onClick={()=>setAccelPage(p=>Math.max(1, p-1))}>Prev</Button>
                         <Button variant={'outline'} size={'sm'} disabled={accelPage>=Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE))} onClick={()=>setAccelPage(p=>Math.min(Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE)), p+1))}>Next</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sprints (full) section */}
+          <div className="mt-6">
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Sprints (Full)
+                  {loadingSprintEvents && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!selectedTable ? (
+                  <div className="text-sm text-gray-600">Select a match to view sprints.</div>
+                ) : loadingSprintEvents ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : sprintEvents.length === 0 ? (
+                  <div className="text-sm text-gray-600">No sprints.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-zinc-300">
+                        <tr className="border-b border-zinc-800">
+                          <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSprintSort('player_display_name')}>Player</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('sprint_type')}>Type</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('start_time')}>Start</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('end_time')}>End</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('seconds_since_midnight')}>Seconds since midnight</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('duration_s')}>Duration (s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('max_speed_m_s')}>Max speed (m/s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('peak_acc_m_s2')}>Peak acc (m/s²)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('distance_m')}>Distance (m)</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('intensity_category')}>Intensity</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedSprintEvents
+                          .slice((sprintPage-1)*SPRINT_PAGE_SIZE, sprintPage*SPRINT_PAGE_SIZE)
+                          .map((ev) => (
+                          <tr key={ev.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                            <td className="py-2 pr-3 text-zinc-200">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
+                            </td>
+                            <td className="py-2 px-2 text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline capitalize">{ev.sprint_type}</button>
+                            </td>
+                            <td className="py-2 px-2 text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.start_time}</button>
+                            </td>
+                            <td className="py-2 px-2 text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.end_time}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.seconds_since_midnight.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.duration_s.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.max_speed_m_s.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.peak_acc_m_s2.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.distance_m.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline capitalize">{ev.intensity_category}</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="flex items-center justify-between mt-3 text-sm text-zinc-300">
+                      <div>
+                        Page {sprintPage} of {Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant={'outline'} size={'sm'} disabled={sprintPage<=1} onClick={()=>setSprintPage(p=>Math.max(1, p-1))}>Prev</Button>
+                        <Button variant={'outline'} size={'sm'} disabled={sprintPage>=Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE))} onClick={()=>setSprintPage(p=>Math.min(Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE)), p+1))}>Next</Button>
                       </div>
                     </div>
                   </div>

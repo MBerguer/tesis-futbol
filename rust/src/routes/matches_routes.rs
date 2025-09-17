@@ -45,5 +45,9 @@ pub fn matches_routes(pool: PgPool) -> Router {
             "/table/:table_name/accelerations",
             get(matches::get_accelerations_hardcoded),
         )
+        .route(
+            "/table/:table_name/sprints",
+            get(matches::get_sprint_events_full),
+        )
         .with_state(pool)
 }

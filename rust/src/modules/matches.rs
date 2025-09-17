@@ -1406,3 +1406,235 @@ ORDER BY player_display_name"#,
     Json(json!({"accelerations": out}))
 }
 
+/// GET /match/table/:table_name/sprints
+/// Computes per-player sprint events filtered by manual match periods
+pub async fn get_sprint_events_full(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+) -> Json<Value> {
+    let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
+
+    // Fetch manual period boundaries
+    let periods_row = sqlx::query(
+        r#"
+        SELECT 
+            manual_first_half_start AS s1,
+            manual_first_half_end   AS e1,
+            manual_second_half_start AS s2,
+            manual_second_half_end   AS e2
+        FROM match_periods
+        WHERE match_name = $1
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_one(&pool)
+    .await;
+
+    let (s1, e1, s2, e2) = match periods_row {
+        Ok(r) => {
+            let s1: Option<i32> = r.try_get("s1").ok();
+            let e1: Option<i32> = r.try_get("e1").ok();
+            let s2: Option<i32> = r.try_get("s2").ok();
+            let e2: Option<i32> = r.try_get("e2").ok();
+            if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
+                (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
+            } else {
+                return Json(json!({"sprints": [], "error": "manual periods not available for this match"}));
+            }
+        }
+        Err(_) => {
+            return Json(json!({"sprints": [], "error": "manual periods not found for this match"}));
+        }
+    };
+
+    // Build sprint CTE pipeline (player_display_name partition)
+    let base_cte = format!(
+        r#"
+WITH base AS (
+  SELECT
+    player_display_name,
+    time,
+    (speed::numeric) / 3.6 AS speed_ms,
+    EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time) AS epoch_time,
+    LAG(EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) OVER (
+      PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
+    ) AS prev_epoch,
+    LAG((speed::numeric) / 3.6) OVER (
+      PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
+    ) AS prev_speed_ms
+  FROM public.{view}
+),
+filtered_base AS (
+  SELECT * FROM base
+  WHERE (epoch_time BETWEEN $1 AND $2) OR (epoch_time BETWEEN $3 AND $4)
+),
+delta AS (
+  SELECT
+    player_display_name,
+    time,
+    speed_ms,
+    prev_speed_ms,
+    COALESCE(
+      CASE
+        WHEN prev_epoch IS NULL THEN 0
+        WHEN epoch_time >= prev_epoch THEN epoch_time - prev_epoch
+        ELSE epoch_time + 86400 - prev_epoch
+      END,
+    0) AS delta_time
+  FROM filtered_base
+),
+acc_calc AS (
+  SELECT
+    player_display_name,
+    time,
+    speed_ms,
+    delta_time,
+    CASE
+      WHEN delta_time > 0 AND prev_speed_ms IS NOT NULL THEN (speed_ms - prev_speed_ms) / delta_time
+      ELSE 0
+    END AS calc_acceleration
+  FROM delta
+),
+filtered AS (
+  SELECT
+    player_display_name,
+    time,
+    speed_ms,
+    delta_time,
+    GREATEST(LEAST(calc_acceleration, 22), -22) AS acceleration_limited
+  FROM acc_calc
+  WHERE delta_time > 0 AND delta_time < 0.5
+),
+time_cum AS (
+  SELECT
+    *,
+    SUM(delta_time) OVER (PARTITION BY player_display_name ORDER BY time) AS time_s
+  FROM filtered
+),
+labeled AS (
+  SELECT
+    *,
+    CASE
+      WHEN speed_ms >= 5.556 THEN 'sprint_potential'
+      ELSE 'none'
+    END AS event_type
+  FROM time_cum
+),
+grp_prep AS (
+  SELECT
+    *,
+    LAG(event_type) OVER (PARTITION BY player_display_name ORDER BY time_s) AS prev_event_type
+  FROM labeled
+),
+grp AS (
+  SELECT
+    *,
+    SUM(CASE WHEN prev_event_type = event_type THEN 0 ELSE 1 END)
+      OVER (PARTITION BY player_display_name ORDER BY time_s) AS grp
+  FROM grp_prep
+),
+grouped AS (
+  SELECT
+    player_display_name,
+    event_type,
+    grp,
+    MIN(time) AS start_time_text,
+    MAX(time) AS end_time_text,
+    MIN(time_s) AS start_time_s,
+    MAX(time_s) AS end_time_s,
+    SUM(delta_time) AS duration_s,
+    MAX(speed_ms) AS max_speed,
+    MAX(acceleration_limited) AS max_acc,
+    MIN(acceleration_limited) AS min_acc,
+    SUM(speed_ms * delta_time) AS distance_m
+  FROM grp
+  GROUP BY player_display_name, event_type, grp
+),
+events AS (
+  SELECT
+    player_display_name,
+    event_type,
+    start_time_text,
+    end_time_text,
+    start_time_s,
+    end_time_s,
+    duration_s,
+    max_speed,
+    max_acc,
+    distance_m
+  FROM grouped
+  WHERE event_type = 'sprint_potential'
+),
+filtered_events AS (
+  SELECT *
+  FROM events
+  WHERE max_speed >= 8.333 AND duration_s >= 2
+),
+classified AS (
+  SELECT
+    *,
+    CASE
+      WHEN max_speed >= 9.722 AND duration_s >= 3 THEN 'elite'
+      WHEN max_speed >= 8.333 AND duration_s >= 2 THEN 'high'
+      WHEN max_speed >= 6.944 THEN 'moderate'
+      ELSE 'low'
+    END AS intensity_category
+  FROM filtered_events
+)
+        "#,
+        view = view_name
+    );
+
+    let sql_full = format!(
+        r#"{base}
+SELECT
+  ROW_NUMBER() OVER (ORDER BY player_display_name, start_time_s) AS id,
+  player_display_name,
+  'sprint' AS sprint_type,
+  start_time_text AS start_time,
+  end_time_text AS end_time,
+  ROUND(duration_s::numeric, 3)::double precision AS duration_s,
+  ROUND(max_speed::numeric, 3)::double precision AS max_speed_m_s,
+  ROUND(max_acc::numeric, 3)::double precision AS peak_acc_m_s2,
+  ROUND(distance_m::numeric, 3)::double precision AS distance_m,
+  EXTRACT(EPOCH FROM to_timestamp(start_time_text, 'HH24:MI:SS.MS')::time)::double precision AS seconds_since_midnight,
+  intensity_category
+FROM classified
+ORDER BY player_display_name, start_time_s"#,
+        base = base_cte
+    );
+
+    let rows = match sqlx::query(&sql_full)
+        .bind(s1)
+        .bind(e1)
+        .bind(s2)
+        .bind(e2)
+        .fetch_all(&pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return Json(json!({"sprints": [], "error": format!("db error: {}", e)})),
+    };
+
+    let sprints: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.try_get::<i64,_>("id").unwrap_or(0),
+                "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                "sprint_type": r.try_get::<String,_>("sprint_type").unwrap_or_else(|_| "sprint".to_string()),
+                "start_time": r.try_get::<String,_>("start_time").unwrap_or_default(),
+                "end_time": r.try_get::<String,_>("end_time").unwrap_or_default(),
+                "duration_s": r.try_get::<f64,_>("duration_s").unwrap_or(0.0),
+                "max_speed_m_s": r.try_get::<f64,_>("max_speed_m_s").unwrap_or(0.0),
+                "peak_acc_m_s2": r.try_get::<f64,_>("peak_acc_m_s2").unwrap_or(0.0),
+                "distance_m": r.try_get::<f64,_>("distance_m").unwrap_or(0.0),
+                "seconds_since_midnight": r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0),
+                "intensity_category": r.try_get::<String,_>("intensity_category").unwrap_or_default()
+            })
+        })
+        .collect();
+
+    Json(json!({"sprints": sprints}))
+}
+
