@@ -650,6 +650,19 @@ export default function Page() {
     return Math.max(0, abs - fhStartPatched);
   }, [periods, kickoffSpike, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration]);
 
+  // For minute-binning: use a fixed 45' split between halves when SH start exists
+  const minuteIndexFromAbs = React.useCallback((abs: number): number => {
+    const p = periods;
+    const kickoff = kickoffSpike ?? 0;
+    const fhStart = (patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff) as number;
+    const shStart = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+    if (typeof shStart === 'number') {
+      if (abs < shStart) return Math.max(0, Math.floor((abs - fhStart) / 60));
+      return Math.max(0, Math.floor(45 + (abs - shStart) / 60));
+    }
+    return Math.max(0, Math.floor((abs - fhStart) / 60));
+  }, [periods, kickoffSpike, patchedFirstHalfStart, patchedSecondHalfStart]);
+
   
 
   const derivedBaseTime = React.useMemo(() => {
@@ -789,6 +802,110 @@ export default function Page() {
     Object.values(map).forEach(arr => arr.sort((a, b) => a - b));
     return map;
   }, [sprintEvents]);
+
+  // Build per-minute acceleration histogram per player and WCS highlight minutes
+  const accelMinuteByPlayer = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    const result: Record<string, { name: string; counts: number[]; highlights: number[] }> = {};
+    const perPlayerList = Object.keys(playersGrouped);
+    for (const name of perPlayerList) {
+      const key = normalize(name);
+      const accObj = accelTimesByPlayer[key];
+      const accTimes = accObj ? accObj.acc : [];
+      // Map to match-relative seconds using absToVideoSec
+      const minutes: number[] = [];
+      let maxMinute = 0;
+      for (const t of accTimes) {
+        const m = minuteIndexFromAbs(t);
+        minutes.push(m);
+        if (m > maxMinute) maxMinute = m;
+      }
+      const size = Math.max(95, maxMinute + 1); // cover typical 90'+ a bit
+      const counts = Array.from({ length: size }, () => 0);
+      for (const m of minutes) {
+        if (m >= 0 && m < counts.length) counts[m]++;
+      }
+      const w = wcsWindowByPlayer[key];
+      const highlights: number[] = [];
+      if (w) {
+        const h1 = minuteIndexFromAbs(w.start);
+        const h2 = minuteIndexFromAbs(w.end);
+        if (Number.isFinite(h1) && h1 >= 0) highlights.push(h1);
+        if (Number.isFinite(h2) && h2 >= 0 && h2 !== h1) highlights.push(h2);
+      }
+      result[key] = { name, counts, highlights };
+    }
+    return result;
+  }, [playersGrouped, accelTimesByPlayer, minuteIndexFromAbs, wcsWindowByPlayer]);
+
+  // Build per-minute sprint histogram per player and WCS highlight minutes
+  const sprintMinuteByPlayer = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    const result: Record<string, { name: string; counts: number[]; highlights: number[] }> = {};
+    const perPlayerList = Object.keys(playersGrouped);
+    for (const name of perPlayerList) {
+      const key = normalize(name);
+      const sTimes = sprintTimesByPlayer[key] || [];
+      const minutes: number[] = [];
+      let maxMinute = 0;
+      for (const t of sTimes) {
+        const m = minuteIndexFromAbs(t);
+        minutes.push(m);
+        if (m > maxMinute) maxMinute = m;
+      }
+      const size = Math.max(95, maxMinute + 1);
+      const counts = Array.from({ length: size }, () => 0);
+      for (const m of minutes) {
+        if (m >= 0 && m < counts.length) counts[m]++;
+      }
+      const w = wcsWindowByPlayer[key];
+      const highlights: number[] = [];
+      if (w) {
+        const h1 = minuteIndexFromAbs(w.start);
+        const h2 = minuteIndexFromAbs(w.end);
+        if (Number.isFinite(h1) && h1 >= 0) highlights.push(h1);
+        if (Number.isFinite(h2) && h2 >= 0 && h2 !== h1) highlights.push(h2);
+      }
+      result[key] = { name, counts, highlights };
+    }
+    return result;
+  }, [playersGrouped, sprintTimesByPlayer, minuteIndexFromAbs, wcsWindowByPlayer]);
+
+  // Tiny bar chart components
+  const PlayerMiniChart: React.FC<{ counts: number[]; highlights?: number[]; barColor?: string; highlightColor?: string; zeroColor?: string; heightClass?: string }> = ({ counts, highlights, barColor = 'bg-blue-500', highlightColor = 'bg-red-400', zeroColor = 'bg-zinc-800', heightClass = 'h-16 md:h-20' }) => {
+    const max = React.useMemo(() => counts.reduce((m, v) => Math.max(m, v), 0), [counts]);
+    return (
+      <div className="w-full">
+        <div className={`${heightClass} w-full flex items-end gap-[1px]`}>
+          {counts.map((v, idx) => {
+            const hPct = max > 0 ? Math.round((v / max) * 100) : 0;
+            const isHi = (highlights || []).includes(idx);
+            return (
+              <div
+                key={idx}
+                title={`${idx}' : ${v}`}
+                className={`flex-1 ${v > 0 ? (isHi ? highlightColor : barColor) : zeroColor}`}
+                style={{ height: `${Math.max(1, hPct)}%` }}
+              />
+            );
+          })}
+        </div>
+        <div className="flex justify-between text-[10px] text-zinc-400 mt-1">
+          <span>0'</span>
+          <span>45'</span>
+          <span>90+'</span>
+        </div>
+      </div>
+    );
+  };
 
   // Per-player summary around WCS for accelerations
   const accelWcsSummary = React.useMemo(() => {
@@ -1558,30 +1675,52 @@ export default function Page() {
                 {orderedPlayers.slice(0, playersRenderLimit).map(p => {
                   const norm = (s: string) => (s||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').toLowerCase();
                   return (
-                    <PlayerDetailCard
-                      key={p}
-                      name={p}
-                      entries={playersGrouped[p]}
-                      windows={playerHighlights[norm(p)]}
-                      sprints={sprintsGrouped[p]}
-                      onOpenAnalysisAt={(abs, sec, playerName)=>{
-                        console.log('onOpenAnalysisAt', abs, sec);
-                        if (typeof abs === 'number') {
-                          setVideoTimeSec(abs);
-                          setPendingSeek(abs);
-                          try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: abs })); } catch {}
-                          const el = document.getElementById('unified-video');
-                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                        if (playerName) {
-                          setPinnedPlayers(prev => ({ ...prev, [playerName]: true }));
-                        }
-                      }}
-                      firstHalfStart={periods?.detected_first_half_start ?? null}
-                      secondHalfStart={periods?.detected_second_half_start ?? null}
-                      firstHalfEnd={periods?.detected_first_half_end ?? null}
-                      secondHalfEnd={periods?.detected_second_half_end ?? null}
-                    />
+                    <div key={p} className="space-y-2">
+                      <PlayerDetailCard
+                        name={p}
+                        entries={playersGrouped[p]}
+                        windows={playerHighlights[norm(p)]}
+                        sprints={sprintsGrouped[p]}
+                        onOpenAnalysisAt={(abs, sec, playerName)=>{
+                          console.log('onOpenAnalysisAt', abs, sec);
+                          if (typeof abs === 'number') {
+                            setVideoTimeSec(abs);
+                            setPendingSeek(abs);
+                            try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: abs })); } catch {}
+                            const el = document.getElementById('unified-video');
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                          if (playerName) {
+                            setPinnedPlayers(prev => ({ ...prev, [playerName]: true }));
+                          }
+                        }}
+                        firstHalfStart={periods?.detected_first_half_start ?? null}
+                        secondHalfStart={periods?.detected_second_half_start ?? null}
+                        firstHalfEnd={periods?.detected_first_half_end ?? null}
+                        secondHalfEnd={periods?.detected_second_half_end ?? null}
+                      />
+                      {/** Per-minute mini charts (50/50 split) */}
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div className="border border-zinc-800 rounded-md p-2 bg-zinc-900/40">
+                          <div className="text-xs text-zinc-300 mb-1">Accelerations per minute</div>
+                          {(() => {
+                            const a = accelMinuteByPlayer[norm(p)];
+                            if (!a) return <div className="text-xs text-zinc-500">No data.</div>;
+                            // Accel bars use blue; WCS highlight uses amber
+                            return <PlayerMiniChart counts={a.counts} highlights={a.highlights} barColor={'bg-sky-500'} highlightColor={'bg-red-400'} />;
+                          })()}
+                        </div>
+                        <div className="border border-zinc-800 rounded-md p-2 bg-zinc-900/40">
+                          <div className="text-xs text-zinc-300 mb-1">Sprints per minute</div>
+                          {(() => {
+                            const s = sprintMinuteByPlayer[norm(p)];
+                            if (!s) return <div className="text-xs text-zinc-500">No data.</div>;
+                            // Sprint bars use green; WCS highlight uses amber
+                            return <PlayerMiniChart counts={s.counts} highlights={s.highlights} barColor={'bg-emerald-500'} highlightColor={'bg-red-400'} />;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
                 {orderedPlayers.length > playersRenderLimit && (
