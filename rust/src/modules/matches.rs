@@ -1732,21 +1732,65 @@ turn_analysis AS (
             POWER(SIN(RADIANS(out_end_lon - lon) / 2), 2)
         )
     ) AS actual_dist_out,
-    -- Bearings
+    -- Bearing difference in degrees normalized to [0,360)
     (
-      ( (
-          (DEGREES(ATAN2(
+      CASE 
+        WHEN (
+          DEGREES(ATAN2(
             SIN(RADIANS(out_end_lon - lon)) * COS(RADIANS(out_end_lat)),
             COS(RADIANS(lat)) * SIN(RADIANS(out_end_lat)) - SIN(RADIANS(lat)) * COS(RADIANS(out_end_lat)) * COS(RADIANS(out_end_lon - lon))
-          )) + 360) % 360
-        )
-        - (
-          ((DEGREES(ATAN2(
+          ))
+          -
+          DEGREES(ATAN2(
             SIN(RADIANS(lon - in_start_lon)) * COS(RADIANS(lat)),
             COS(RADIANS(in_start_lat)) * SIN(RADIANS(lat)) - SIN(RADIANS(in_start_lat)) * COS(RADIANS(lat)) * COS(RADIANS(lon - in_start_lon))
-          )) + 360) % 360) + 180
-        ) % 360 + 360
-      ) % 360
+          ))
+        ) < 0 
+        THEN (
+          DEGREES(ATAN2(
+            SIN(RADIANS(out_end_lon - lon)) * COS(RADIANS(out_end_lat)),
+            COS(RADIANS(lat)) * SIN(RADIANS(out_end_lat)) - SIN(RADIANS(lat)) * COS(RADIANS(out_end_lat)) * COS(RADIANS(out_end_lon - lon))
+          ))
+          -
+          DEGREES(ATAN2(
+            SIN(RADIANS(lon - in_start_lon)) * COS(RADIANS(lat)),
+            COS(RADIANS(in_start_lat)) * SIN(RADIANS(lat)) - SIN(RADIANS(in_start_lat)) * COS(RADIANS(lat)) * COS(RADIANS(lon - in_start_lon))
+          )) + 360
+        )
+        WHEN (
+          DEGREES(ATAN2(
+            SIN(RADIANS(out_end_lon - lon)) * COS(RADIANS(out_end_lat)),
+            COS(RADIANS(lat)) * SIN(RADIANS(out_end_lat)) - SIN(RADIANS(lat)) * COS(RADIANS(out_end_lat)) * COS(RADIANS(out_end_lon - lon))
+          ))
+          -
+          DEGREES(ATAN2(
+            SIN(RADIANS(lon - in_start_lon)) * COS(RADIANS(lat)),
+            COS(RADIANS(in_start_lat)) * SIN(RADIANS(lat)) - SIN(RADIANS(in_start_lat)) * COS(RADIANS(lat)) * COS(RADIANS(lon - in_start_lon))
+          ))
+        ) >= 360 
+        THEN (
+          DEGREES(ATAN2(
+            SIN(RADIANS(out_end_lon - lon)) * COS(RADIANS(out_end_lat)),
+            COS(RADIANS(lat)) * SIN(RADIANS(out_end_lat)) - SIN(RADIANS(lat)) * COS(RADIANS(out_end_lat)) * COS(RADIANS(out_end_lon - lon))
+          ))
+          -
+          DEGREES(ATAN2(
+            SIN(RADIANS(lon - in_start_lon)) * COS(RADIANS(lat)),
+            COS(RADIANS(in_start_lat)) * SIN(RADIANS(lat)) - SIN(RADIANS(in_start_lat)) * COS(RADIANS(lat)) * COS(RADIANS(lon - in_start_lon))
+          )) - 360
+        )
+        ELSE (
+          DEGREES(ATAN2(
+            SIN(RADIANS(out_end_lon - lon)) * COS(RADIANS(out_end_lat)),
+            COS(RADIANS(lat)) * SIN(RADIANS(out_end_lat)) - SIN(RADIANS(lat)) * COS(RADIANS(out_end_lat)) * COS(RADIANS(out_end_lon - lon))
+          ))
+          -
+          DEGREES(ATAN2(
+            SIN(RADIANS(lon - in_start_lon)) * COS(RADIANS(lat)),
+            COS(RADIANS(in_start_lat)) * SIN(RADIANS(lat)) - SIN(RADIANS(in_start_lat)) * COS(RADIANS(lat)) * COS(RADIANS(lon - in_start_lon))
+          ))
+        )
+      END
     ) AS angle_degrees
   FROM player_data_with_coordinates
 )
