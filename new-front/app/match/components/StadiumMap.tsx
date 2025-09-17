@@ -21,11 +21,15 @@ export default function StadiumMap({ latitude, longitude, zoom = 15, styleUrl }:
     const defaultStyle = styleUrl || (key
       ? `https://api.maptiler.com/maps/streets/style.json?key=${key}`
       : "https://demotiles.maplibre.org/style.json");
+    const minZoom = Math.max(0, (zoom || 15) - 0.5);
+    const maxZoom = (zoom || 15) + 0.5;
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: defaultStyle,
       center: [longitude, latitude],
       zoom,
+      minZoom,
+      maxZoom,
       attributionControl: true,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }));

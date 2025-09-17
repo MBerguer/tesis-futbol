@@ -33,6 +33,7 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
   useEffect(() => {
     if (!containerRef.current) return;
     if (!mapRef.current) {
+      const initialZoom = 18.5;
       mapRef.current = new maplibregl.Map({
         container: containerRef.current,
         style: styleObj || styleUrl || `https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`,
@@ -40,7 +41,9 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
           (typeof centerLongitude === 'number' && isFinite(centerLongitude) ? centerLongitude : -56.14786),
           (typeof centerLatitude === 'number' && isFinite(centerLatitude) ? centerLatitude : -34.795334)
         ],
-        zoom: 18.5,
+        zoom: initialZoom,
+        minZoom: Math.max(0, initialZoom - 0.5),
+        maxZoom: initialZoom + 0.5,
         interactive: true,
       });
     }
