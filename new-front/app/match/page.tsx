@@ -165,7 +165,7 @@ export default function Page() {
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [videoTimeSec, setVideoTimeSec] = useState<number>(0);
   const [youtubeLink, setYoutubeLink] = useState<string | null>(null);
-  const handleVideoSecondChange = React.useCallback((s: number)=> setVideoTimeSec(s), []);
+  const handleVideoSecondChange = React.useCallback((s: number)=> setVideoTimeSec(s-2), []);
   const [pendingSeek, setPendingSeek] = useState<number | undefined>(undefined);
   const [showPatchPanel, setShowPatchPanel] = useState<boolean>(false);
   const [patchedFirstHalfStart, setPatchedFirstHalfStart] = useState<number | null>(null);
@@ -212,7 +212,7 @@ export default function Page() {
   const [sharpSort, setSharpSort] = useState<{ key: keyof SharpAngleRow; dir: 'asc' | 'desc' } | null>(null);
   const [sharpPage, setSharpPage] = useState<number>(1);
   const SHARP_PAGE_SIZE = 10;
-  const [sharpTrace, setSharpTrace] = useState<{ player: string; points: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }> } | null>(null);
+  const [sharpTraces, setSharpTraces] = useState<Array<{ player: string; points: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }> }>>([]);
   const accelColumns = React.useMemo(() => (
     [
       'Total Accels',
@@ -1125,7 +1125,13 @@ export default function Page() {
                                 <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
                                 <span className="ml-2 text-xs text-zinc-400 min-w-[70px]">{savingOrientation ? 'Saving…' : (orientationSavedAt ? 'Saved' : '')}</span>
                               </div>
-                              <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
+                              <div className="flex items-center gap-2">
+                                <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
+                                <div className="flex items-center gap-2">
+                                  <Button variant={'destructive'} size={'sm'} onClick={()=> setSharpTraces([])}>Clear traces</Button>
+                                  {loadingSharpAngles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                                </div>
+                              </div>
                             </div>
                             {(!selectedTable || !periods) ? (
                               <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
@@ -1142,8 +1148,8 @@ export default function Page() {
                                     centerLatitude={(matchDetails?.venue_latitude ?? -34.795334) as number}
                                     centerLongitude={(matchDetails?.venue_longitude ?? -56.147974) as number}
                                     bearing={mapBearing}
-                                    traceLine={(sharpTrace && Array.isArray(sharpTrace.points)) ? sharpTrace.points.map(p=>({ lat: p.lat, lon: p.lon })) : undefined}
-                                    traceColor={'#fb7185'}
+                                    traceLines={(sharpTraces && sharpTraces.length>0) ? sharpTraces.map(t => t.points.map(p=>({ lat: p.lat, lon: p.lon }))) : undefined}
+                                    traceColor={'#ef4444'}
                                   />
                                 </div>
                                 <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
@@ -1824,12 +1830,36 @@ export default function Page() {
           <div className="mt-6">
             <Card className="bg-zinc-900/50 border-zinc-800">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Sharp Angles
-                  {loadingSharpAngles && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  )}
-                </CardTitle>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2">
+                    Sharp Angles
+                    {loadingSharpAngles && (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Button size={'sm'} variant={'secondary'} onClick={async()=>{
+                      setLoadingSharpAngles(true);
+                      try {
+                        const pageRows = sortedSharpAngles.slice((sharpPage-1)*SHARP_PAGE_SIZE, sharpPage*SHARP_PAGE_SIZE);
+                        const traces: Array<{ player: string; points: any[] }> = [];
+                        for (const ev of pageRows) {
+                          const qs = new URLSearchParams({ player: ev.player_display_name, start: String(ev.start_time), end: String(ev.finish_time) });
+                          const res = await fetch(`${API_BASE}/match/table/${selectedTable}/trace?`+qs.toString());
+                          if (res.ok) {
+                            const data = await res.json();
+                            traces.push({ player: ev.player_display_name, points: data?.trace || [] });
+                          }
+                        }
+                        setSharpTraces(traces);
+                        const el = document.getElementById('unified-video');
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      } catch {}
+                      finally { setLoadingSharpAngles(false); }
+                    }}>Show all traces</Button>
+                    <Button size={'sm'} variant={'destructive'} onClick={()=> setSharpTraces([])}>Clear traces</Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {!selectedTable ? (
@@ -1848,7 +1878,8 @@ export default function Page() {
                       <thead className="text-zinc-300">
                         <tr className="border-b border-zinc-800">
                           <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSharpSort('player_display_name')}>Player</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('seconds_since_midnight')}>Seconds since midnight</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('seconds_since_midnight')}>Sharp angle time</th>
+                          <th className="text-right py-2 px-2">#</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('start_time')}>Start (s)</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('finish_time')}>Finish (s)</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('duration_seconds')}>Duration (s)</th>
@@ -1874,6 +1905,7 @@ export default function Page() {
                                 if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
                               }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
                             </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-400">{ev.id}</td>
                             <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
                               <button onClick={()=>{
                                 const abs = Number(ev.seconds_since_midnight || 0);
@@ -1960,17 +1992,24 @@ export default function Page() {
                             </td>
                             <td className="py-2 px-2">
                               <div className="flex gap-2">
-                                <Button size={'sm'} variant={'outline'} onClick={async()=>{
+                                <Button size={'sm'} variant={'secondary'} onClick={async()=>{
                                   try {
                                     const qs = new URLSearchParams({ player: ev.player_display_name, start: String(ev.start_time), end: String(ev.finish_time) });
                                     const res = await fetch(`${API_BASE}/match/table/${selectedTable}/trace?`+qs.toString());
                                     if (res.ok) {
                                       const data = await res.json();
-                                      setSharpTrace({ player: ev.player_display_name, points: data?.trace || [] });
+                                      const points = data?.trace || [];
+                                      setSharpTraces(prev => [...prev.filter(t => t.player !== ev.player_display_name), { player: ev.player_display_name, points }]);
+                                      const abs = Number(ev.start_time || 0);
+                                      const vs = absToVideoSec(abs);
+                                      setVideoTimeSec(vs);
+                                      setPendingSeek(vs);
+                                      try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                      const el = document.getElementById('unified-video');
+                                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                     }
                                   } catch {}
                                 }}>Show trace</Button>
-                                <Button size={'sm'} variant={'secondary'} onClick={()=> setSharpTrace(null)}>Clear trace</Button>
                               </div>
                             </td>
                           </tr>

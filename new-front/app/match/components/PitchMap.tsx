@@ -15,11 +15,11 @@ interface PitchMapProps {
   bearing?: number; // map rotation in degrees
   centerLatitude?: number; // initial/controlled center latitude
   centerLongitude?: number; // initial/controlled center longitude
-  traceLine?: Array<{ lat: number; lon: number }>;
+  traceLines?: Array<Array<{ lat: number; lon: number }>>;
   traceColor?: string;
 }
 
-export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing, centerLatitude, centerLongitude, traceLine, traceColor }: PitchMapProps) {
+export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing, centerLatitude, centerLongitude, traceLines, traceColor }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
@@ -166,7 +166,7 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
     });
   }, [pinned]);
 
-  // Draw or clear polyline trace
+  // Draw or clear polyline trace(s)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -174,17 +174,21 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
     const layerId = 'trace-line-lyr';
     try {
       // Ensure prior layer/source removed if no data
-      if (!traceLine || traceLine.length === 0) {
+      if (!traceLines || traceLines.length === 0) {
         if (map.getLayer(layerId)) { try { map.removeLayer(layerId); } catch {} }
         if (map.getSource(srcId)) { try { (map.getSource(srcId) as any).setData({ type: 'FeatureCollection', features: [] }); map.removeSource(srcId); } catch {} }
         return;
       }
-      const coords = traceLine.map(p => [p.lon, p.lat]);
-      const data = { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} } as any;
+      const features = traceLines.map(line => ({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: line.map(p => [p.lon, p.lat]) },
+        properties: {}
+      }));
+      const collection = { type: 'FeatureCollection', features } as any;
       if (!map.getSource(srcId)) {
-        map.addSource(srcId, { type: 'geojson', data });
+        map.addSource(srcId, { type: 'geojson', data: collection });
       } else {
-        (map.getSource(srcId) as any).setData(data);
+        (map.getSource(srcId) as any).setData(collection);
       }
       if (!map.getLayer(layerId)) {
         map.addLayer({
@@ -199,7 +203,7 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
         });
       }
     } catch {}
-  }, [traceLine, traceColor]);
+  }, [traceLines, traceColor]);
 
   return (
     <div
