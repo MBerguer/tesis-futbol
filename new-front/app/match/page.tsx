@@ -715,6 +715,190 @@ export default function Page() {
     return sprintByPlayer;
   }, [sprintsInWorstCases]);
 
+  // WCS window per player (pick the one with max distance_covered)
+  const wcsWindowByPlayer = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    const map: Record<string, { start: number; end: number; distance: number; name: string }> = {};
+    for (const wc of worstCases) {
+      const key = normalize(wc.player_display_name || '');
+      const distance = Number(wc.distance_covered || 0);
+      const start = Number(wc.start_second || 0);
+      const end = Number(wc.end_second || 0);
+      if (!map[key] || distance > map[key].distance) {
+        map[key] = { start, end, distance, name: wc.player_display_name };
+      }
+    }
+    return map;
+  }, [worstCases]);
+
+  // Time bounds (first/last seconds) per player based on entries
+  const timeBoundsByPlayer = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    const map: Record<string, { first: number; last: number; name: string }> = {};
+    for (const [name, arr] of Object.entries(playersGrouped)) {
+      if (!arr || arr.length === 0) continue;
+      const first = Number(arr[0].seconds_since_midnight || 0);
+      const last = Number(arr[arr.length - 1].seconds_since_midnight || 0);
+      map[normalize(name)] = { first, last, name };
+    }
+    return map;
+  }, [playersGrouped]);
+
+  // Events grouped by player
+  const accelTimesByPlayer = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    const map: Record<string, { acc: number[]; dec: number[] }> = {};
+    for (const ev of accelEvents) {
+      const key = normalize(ev.player_display_name || '');
+      const when = Number(ev.seconds_since_midnight || 0);
+      const kind = String(ev.accel_or_decel || '').trim().toLowerCase();
+      const bucket = (map[key] ||= { acc: [], dec: [] });
+      if (kind.includes('decel')) bucket.dec.push(when);
+      else bucket.acc.push(when);
+    }
+    Object.values(map).forEach(obj => {
+      obj.acc.sort((a, b) => a - b);
+      obj.dec.sort((a, b) => a - b);
+    });
+    return map;
+  }, [accelEvents]);
+
+  const sprintTimesByPlayer = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    const map: Record<string, number[]> = {};
+    for (const ev of sprintEvents) {
+      const key = normalize(ev.player_display_name || '');
+      (map[key] ||= []).push(Number(ev.seconds_since_midnight || 0));
+    }
+    Object.values(map).forEach(arr => arr.sort((a, b) => a - b));
+    return map;
+  }, [sprintEvents]);
+
+  // Per-player summary around WCS for accelerations
+  const accelWcsSummary = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    const rows: Array<{
+      player: string;
+      wcsStart: number;
+      wcsEnd: number;
+      timeBefore: number;
+      timeAfter: number;
+      accBefore: number;
+      accAfter: number;
+      accRateBeforePer90: number | null;
+      accRateAfterPer90: number | null;
+      decBefore: number;
+      decAfter: number;
+      decRateBeforePer90: number | null;
+      decRateAfterPer90: number | null;
+    }> = [];
+    const playerList = Object.keys(playersGrouped);
+    for (const name of playerList) {
+      const key = normalize(name);
+      const w = wcsWindowByPlayer[key];
+      const b = timeBoundsByPlayer[key];
+      if (!w || !b) continue;
+      const beforeSec = Math.max(0, w.start - b.first);
+      const afterSec = Math.max(0, b.last - w.end);
+      const times = accelTimesByPlayer[key] || { acc: [], dec: [] };
+      let accBefore = 0, accAfter = 0, decBefore = 0, decAfter = 0;
+      for (const t of times.acc) { if (t < w.start) accBefore++; else if (t > w.end) accAfter++; }
+      for (const t of times.dec) { if (t < w.start) decBefore++; else if (t > w.end) decAfter++; }
+      const per90 = 90 * 60;
+      const accRateBefore = beforeSec > 0 ? (accBefore * per90) / beforeSec : null;
+      const accRateAfter = afterSec > 0 ? (accAfter * per90) / afterSec : null;
+      const decRateBefore = beforeSec > 0 ? (decBefore * per90) / beforeSec : null;
+      const decRateAfter = afterSec > 0 ? (decAfter * per90) / afterSec : null;
+      rows.push({
+        player: name,
+        wcsStart: w.start,
+        wcsEnd: w.end,
+        timeBefore: beforeSec,
+        timeAfter: afterSec,
+        accBefore,
+        accAfter,
+        accRateBeforePer90: accRateBefore,
+        accRateAfterPer90: accRateAfter,
+        decBefore,
+        decAfter,
+        decRateBeforePer90: decRateBefore,
+        decRateAfterPer90: decRateAfter,
+      });
+    }
+    return rows;
+  }, [playersGrouped, wcsWindowByPlayer, timeBoundsByPlayer, accelTimesByPlayer]);
+
+  // Per-player summary around WCS for sprints
+  const sprintWcsSummary = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    const rows: Array<{
+      player: string;
+      wcsStart: number;
+      wcsEnd: number;
+      timeBefore: number;
+      timeAfter: number;
+      countBefore: number;
+      countAfter: number;
+      rateBeforePer90: number | null;
+      rateAfterPer90: number | null;
+    }> = [];
+    const playerList = Object.keys(playersGrouped);
+    for (const name of playerList) {
+      const key = normalize(name);
+      const w = wcsWindowByPlayer[key];
+      const b = timeBoundsByPlayer[key];
+      if (!w || !b) continue;
+      const beforeSec = Math.max(0, w.start - b.first);
+      const afterSec = Math.max(0, b.last - w.end);
+      const times = sprintTimesByPlayer[key] || [];
+      let beforeCount = 0;
+      let afterCount = 0;
+      for (const t of times) {
+        if (t < w.start) beforeCount++;
+        else if (t > w.end) afterCount++;
+      }
+      const per90 = 90 * 60;
+      const rateBefore = beforeSec > 0 ? (beforeCount * per90) / beforeSec : null;
+      const rateAfter = afterSec > 0 ? (afterCount * per90) / afterSec : null;
+      rows.push({
+        player: name,
+        wcsStart: w.start,
+        wcsEnd: w.end,
+        timeBefore: beforeSec,
+        timeAfter: afterSec,
+        countBefore: beforeCount,
+        countAfter: afterCount,
+        rateBeforePer90: rateBefore,
+        rateAfterPer90: rateAfter,
+      });
+    }
+    return rows;
+  }, [playersGrouped, wcsWindowByPlayer, timeBoundsByPlayer, sprintTimesByPlayer]);
+
   const orderedPlayers = React.useMemo(() => Object.keys(playersGrouped), [playersGrouped]);
   const [playersRenderLimit, setPlayersRenderLimit] = React.useState<number>(10);
 
@@ -1462,6 +1646,105 @@ export default function Page() {
 
           {/* Acceleration events (full) section */}
           <div className="mt-6">
+            {/* Accelerations Around WCS */}
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Accelerations Around WCS
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!selectedTable ? (
+                  <div className="text-sm text-gray-600">Select a match to view.</div>
+                ) : accelWcsSummary.length === 0 ? (
+                  <div className="text-sm text-gray-600">No data.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-zinc-300">
+                        <tr className="border-b border-zinc-800">
+                          <th className="text-left py-2 pr-3">Player</th>
+                          <th className="text-right py-2 px-2">Time before (min)</th>
+                          <th className="text-right py-2 px-2">Time after (min)</th>
+                          <th className="text-right py-2 px-2">Accels before</th>
+                          <th className="text-right py-2 px-2">Accels after</th>
+                          <th className="text-right py-2 px-2">Acc rate before (/90)</th>
+                          <th className="text-right py-2 px-2">Acc rate after (/90)</th>
+                          <th className="text-right py-2 px-2">Decels before</th>
+                          <th className="text-right py-2 px-2">Decels after</th>
+                          <th className="text-right py-2 px-2">Dec rate before (/90)</th>
+                          <th className="text-right py-2 px-2">Dec rate after (/90)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {accelWcsSummary.map((r) => (
+                          <tr key={r.player} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                            <td className="py-2 pr-3 text-zinc-200">{r.player}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeBefore/60).toFixed(1)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeAfter/60).toFixed(1)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.accBefore}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.accAfter}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.accRateBeforePer90 == null ? '—' : r.accRateBeforePer90.toFixed(2)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.accRateAfterPer90 == null ? '—' : r.accRateAfterPer90.toFixed(2)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.decBefore}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.decAfter}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.decRateBeforePer90 == null ? '—' : r.decRateBeforePer90.toFixed(2)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.decRateAfterPer90 == null ? '—' : r.decRateAfterPer90.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Sprints Around WCS */}
+            <div className="mt-6" />
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Sprints Around WCS
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!selectedTable ? (
+                  <div className="text-sm text-gray-600">Select a match to view.</div>
+                ) : sprintWcsSummary.length === 0 ? (
+                  <div className="text-sm text-gray-600">No data.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-zinc-300">
+                        <tr className="border-b border-zinc-800">
+                          <th className="text-left py-2 pr-3">Player</th>
+                          <th className="text-right py-2 px-2">Time before (min)</th>
+                          <th className="text-right py-2 px-2">Time after (min)</th>
+                          <th className="text-right py-2 px-2">Sprints before</th>
+                          <th className="text-right py-2 px-2">Sprints after</th>
+                          <th className="text-right py-2 px-2">Rate before (/90)</th>
+                          <th className="text-right py-2 px-2">Rate after (/90)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sprintWcsSummary.map((r) => (
+                          <tr key={r.player} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                            <td className="py-2 pr-3 text-zinc-200">{r.player}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeBefore/60).toFixed(1)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeAfter/60).toFixed(1)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.countBefore}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.countAfter}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.rateBeforePer90 == null ? '—' : r.rateBeforePer90.toFixed(2)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.rateAfterPer90 == null ? '—' : r.rateAfterPer90.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
             <Card className="bg-zinc-900/50 border-zinc-800">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -2030,7 +2313,6 @@ export default function Page() {
               </CardContent>
             </Card>
           </div>
-      </div>
     </main>
   );
 }
