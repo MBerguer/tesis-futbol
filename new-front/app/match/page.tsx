@@ -479,6 +479,22 @@ export default function Page() {
     });
   };
 
+  const absToVideoSec = React.useCallback((abs: number): number => {
+    const p = periods;
+    const kickoff = kickoffSpike ?? 0;
+    const fhStartPatched = (patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff) as number;
+    const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+    const fhDurPatched = patchedFirstHalfDuration ?? (p && typeof p.detected_first_half_end === 'number' ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
+    if (!p) return Math.max(0, abs - fhStartPatched);
+    if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+      if (abs < shStartPatched) return Math.max(0, abs - fhStartPatched);
+      return fhDurPatched + Math.max(0, abs - shStartPatched);
+    }
+    return Math.max(0, abs - fhStartPatched);
+  }, [periods, kickoffSpike, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration]);
+
+  
+
   const derivedBaseTime = React.useMemo(() => {
     if (!entries || entries.length === 0) return null as string | null;
     const t = entries
@@ -1304,16 +1320,126 @@ export default function Page() {
                       <tbody>
                         {sortedAccelEvents.map((ev) => (
                           <tr key={ev.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
-                            <td className="py-2 pr-3 text-zinc-200">{ev.player_display_name}</td>
-                            <td className="py-2 px-2 text-zinc-300">{ev.accel_or_decel}</td>
-                            <td className="py-2 px-2 text-zinc-300">{ev.start_time}</td>
-                            <td className="py-2 px-2 text-zinc-300">{ev.end_time}</td>
-                          <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.seconds_since_midnight.toFixed(3)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.duration_s.toFixed(3)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.peak_acc.toFixed(3)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.max_speed_m_s.toFixed(3)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{ev.distance_m.toFixed(3)}</td>
-                            <td className="py-2 px-2 text-zinc-300">{ev.intensity_category}</td>
+                            <td className="py-2 pr-3 text-zinc-200">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
+                            </td>
+                            <td className="py-2 px-2 text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline capitalize">{ev.accel_or_decel}</button>
+                            </td>
+                            <td className="py-2 px-2 text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.start_time}</button>
+                            </td>
+                            <td className="py-2 px-2 text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.end_time}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.seconds_since_midnight.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.duration_s.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.peak_acc.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.max_speed_m_s.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.distance_m.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline capitalize">{ev.intensity_category}</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
