@@ -109,6 +109,18 @@ interface SprintEventRow {
   intensity_category: string;
 }
 
+interface SharpAngleRow {
+  id: number;
+  player_display_name: string;
+  seconds_since_midnight: number;
+  start_time: number;
+  finish_time: number;
+  duration_seconds: number;
+  angle_degrees: number;
+  actual_dist_in: number;
+  actual_dist_out: number;
+}
+
   interface MatchDetails {
   match_id: string;
   competition_id: string | null;
@@ -193,6 +205,12 @@ export default function Page() {
   const [sprintSort, setSprintSort] = useState<{ key: keyof SprintEventRow; dir: 'asc' | 'desc' } | null>(null);
   const [sprintPage, setSprintPage] = useState<number>(1);
   const SPRINT_PAGE_SIZE = 10;
+
+  const [sharpAngles, setSharpAngles] = useState<SharpAngleRow[]>([]);
+  const [loadingSharpAngles, setLoadingSharpAngles] = useState<boolean>(false);
+  const [sharpSort, setSharpSort] = useState<{ key: keyof SharpAngleRow; dir: 'asc' | 'desc' } | null>(null);
+  const [sharpPage, setSharpPage] = useState<number>(1);
+  const SHARP_PAGE_SIZE = 10;
   const accelColumns = React.useMemo(() => (
     [
       'Total Accels',
@@ -504,6 +522,30 @@ export default function Page() {
     return () => { cancelled = true; };
   }, [API_BASE, selectedTable]);
 
+  useEffect(() => {
+    if (!selectedTable) { setSharpAngles([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingSharpAngles(true);
+        setSharpPage(1);
+        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/sharp-angles`);
+        if (res.ok) {
+          const data = await res.json();
+          const rows = Array.isArray(data?.sharp_angles) ? data.sharp_angles as SharpAngleRow[] : [];
+          if (!cancelled) setSharpAngles(rows);
+        } else {
+          if (!cancelled) setSharpAngles([]);
+        }
+      } catch {
+        if (!cancelled) setSharpAngles([]);
+      } finally {
+        if (!cancelled) setLoadingSharpAngles(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, selectedTable]);
+
   const sortedAccelEvents = React.useMemo(() => {
     const arr = [...accelEvents];
     if (!accelSort) return arr;
@@ -545,6 +587,27 @@ export default function Page() {
     if (sprintPage > totalPages) setSprintPage(totalPages);
   }, [sortedSprintEvents.length]);
 
+  // Define sortedSharpAngles before clamping page; then clamp
+  const sortedSharpAngles = React.useMemo(() => {
+    const arr = [...sharpAngles];
+    if (!sharpSort) return arr;
+    arr.sort((a, b) => {
+      const k = sharpSort.key;
+      const av = a[k] as any;
+      const bv = b[k] as any;
+      if (typeof av === 'number' && typeof bv === 'number') return sharpSort.dir === 'asc' ? av - bv : bv - av;
+      const as = String(av || '');
+      const bs = String(bv || '');
+      return sharpSort.dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+    });
+    return arr;
+  }, [sharpAngles, sharpSort]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(sortedSharpAngles.length / SHARP_PAGE_SIZE));
+    if (sharpPage > totalPages) setSharpPage(totalPages);
+  }, [sortedSharpAngles.length]);
+
   const toggleSort = (key: keyof AccelEventRow) => {
     setAccelSort(prev => {
       if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
@@ -560,6 +623,16 @@ export default function Page() {
     });
     setSprintPage(1);
   };
+
+  const toggleSharpSort = (key: keyof SharpAngleRow) => {
+    setSharpSort(prev => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
+      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
+    });
+    setSharpPage(1);
+  };
+
+  
 
   const absToVideoSec = React.useCallback((abs: number): number => {
     const p = periods;
@@ -1718,6 +1791,163 @@ export default function Page() {
                       <div className="flex gap-2">
                         <Button variant={'outline'} size={'sm'} disabled={sprintPage<=1} onClick={()=>setSprintPage(p=>Math.max(1, p-1))}>Prev</Button>
                         <Button variant={'outline'} size={'sm'} disabled={sprintPage>=Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE))} onClick={()=>setSprintPage(p=>Math.min(Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE)), p+1))}>Next</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sharp Angles section */}
+          <div className="mt-6">
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Sharp Angles
+                  {loadingSharpAngles && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!selectedTable ? (
+                  <div className="text-sm text-gray-600">Select a match to view sharp angles.</div>
+                ) : loadingSharpAngles ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : sharpAngles.length === 0 ? (
+                  <div className="text-sm text-gray-600">No sharp angles.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-zinc-300">
+                        <tr className="border-b border-zinc-800">
+                          <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSharpSort('player_display_name')}>Player</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('seconds_since_midnight')}>Seconds since midnight</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('start_time')}>Start (s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('finish_time')}>Finish (s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('duration_seconds')}>Duration (s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('angle_degrees')}>Angle (°)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('actual_dist_in')}>In dist (m)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('actual_dist_out')}>Out dist (m)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedSharpAngles
+                          .slice((sharpPage-1)*SHARP_PAGE_SIZE, sharpPage*SHARP_PAGE_SIZE)
+                          .map((ev) => (
+                          <tr key={ev.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                            <td className="py-2 pr-3 text-zinc-200">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.seconds_since_midnight.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.start_time.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.finish_time.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.duration_seconds.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.angle_degrees.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.actual_dist_in.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.seconds_since_midnight || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.actual_dist_out.toFixed(3)}</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="flex items-center justify-between mt-3 text-sm text-zinc-300">
+                      <div>
+                        Page {sharpPage} of {Math.max(1, Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant={'outline'} size={'sm'} disabled={sharpPage<=1} onClick={()=>setSharpPage(p=>Math.max(1, p-1))}>Prev</Button>
+                        <Button variant={'outline'} size={'sm'} disabled={sharpPage>=Math.max(1, Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE))} onClick={()=>setSharpPage(p=>Math.min(Math.max(1, Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE)), p+1))}>Next</Button>
                       </div>
                     </div>
                   </div>

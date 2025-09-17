@@ -1638,3 +1638,160 @@ ORDER BY player_display_name, start_time_s"#,
     Json(json!({"sprints": sprints}))
 }
 
+/// GET /match/table/:table_name/sharp-angles
+/// Detect sharp turns (angle >= 40 deg, in-distance ~5m, out-distance ~4m) filtered by manual periods
+pub async fn get_sharp_angles(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+) -> Json<Value> {
+    let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
+
+    // Fetch manual period boundaries
+    let periods_row = sqlx::query(
+        r#"
+        SELECT 
+            manual_first_half_start AS s1,
+            manual_first_half_end   AS e1,
+            manual_second_half_start AS s2,
+            manual_second_half_end   AS e2
+        FROM match_periods
+        WHERE match_name = $1
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_one(&pool)
+    .await;
+
+    let (s1, e1, s2, e2) = match periods_row {
+        Ok(r) => {
+            let s1: Option<i32> = r.try_get("s1").ok();
+            let e1: Option<i32> = r.try_get("e1").ok();
+            let s2: Option<i32> = r.try_get("s2").ok();
+            let e2: Option<i32> = r.try_get("e2").ok();
+            if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
+                (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
+            } else {
+                return Json(json!({"sharp_angles": [], "error": "manual periods not available for this match"}));
+            }
+        }
+        Err(_) => {
+            return Json(json!({"sharp_angles": [], "error": "manual periods not found for this match"}));
+        }
+    };
+
+    let base_cte = format!(
+        r#"
+WITH base AS (
+  SELECT
+    player_display_name,
+    to_timestamp(time, 'HH24:MI:SS.MS')::time AS t,
+    COALESCE((seconds_since_midnight)::double precision, EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) AS elapsed_time,
+    lat,
+    lon,
+    (speed::numeric) AS speed_kmh
+  FROM public.{view}
+),
+filtered_speed AS (
+  SELECT * FROM base WHERE speed_kmh >= 5.5
+),
+filtered_periods AS (
+  SELECT * FROM filtered_speed WHERE (elapsed_time BETWEEN $1 AND $2) OR (elapsed_time BETWEEN $3 AND $4)
+),
+player_data_with_coordinates AS (
+  SELECT
+    player_display_name,
+    elapsed_time,
+    lat,
+    lon,
+    LAG(lat, 9)  OVER (PARTITION BY player_display_name ORDER BY elapsed_time) AS in_start_lat,
+    LAG(lon, 9)  OVER (PARTITION BY player_display_name ORDER BY elapsed_time) AS in_start_lon,
+    LEAD(lat, 7) OVER (PARTITION BY player_display_name ORDER BY elapsed_time) AS out_end_lat,
+    LEAD(lon, 7) OVER (PARTITION BY player_display_name ORDER BY elapsed_time) AS out_end_lon,
+    LAG(elapsed_time, 9)  OVER (PARTITION BY player_display_name ORDER BY elapsed_time) AS start_time,
+    LEAD(elapsed_time, 7) OVER (PARTITION BY player_display_name ORDER BY elapsed_time) AS finish_time
+  FROM filtered_periods
+),
+turn_analysis AS (
+  SELECT
+    player_display_name,
+    elapsed_time,
+    start_time,
+    finish_time,
+    6371000 * 2 * ASIN(
+        SQRT(
+            POWER(SIN(RADIANS(lat - in_start_lat) / 2), 2) +
+            COS(RADIANS(in_start_lat)) * COS(RADIANS(lat)) *
+            POWER(SIN(RADIANS(lon - in_start_lon) / 2), 2)
+        )
+    ) AS actual_dist_in,
+    6371000 * 2 * ASIN(
+        SQRT(
+            POWER(SIN(RADIANS(out_end_lat - lat) / 2), 2) +
+            COS(RADIANS(lat)) * COS(RADIANS(out_end_lat)) *
+            POWER(SIN(RADIANS(out_end_lon - lon) / 2), 2)
+        )
+    ) AS actual_dist_out,
+    degrees(
+        ATAN2(
+            SIN(RADIANS(out_end_lon - lon)) * COS(RADIANS(out_end_lat)),
+            COS(RADIANS(lat)) * SIN(RADIANS(out_end_lat)) - SIN(RADIANS(lat)) * COS(RADIANS(out_end_lat)) * COS(RADIANS(out_end_lon - lon))
+        ) -
+        ATAN2(
+            SIN(RADIANS(lon - in_start_lon)) * COS(RADIANS(lat)),
+            COS(RADIANS(in_start_lat)) * SIN(RADIANS(lat)) - SIN(RADIANS(in_start_lat)) * COS(RADIANS(lat)) * COS(RADIANS(lon - in_start_lon))
+        )
+    ) AS angle_degrees
+  FROM player_data_with_coordinates
+)
+SELECT
+  ROW_NUMBER() OVER (ORDER BY player_display_name, elapsed_time) AS id,
+  player_display_name,
+  elapsed_time AS seconds_since_midnight,
+  start_time,
+  finish_time,
+  (finish_time - start_time) AS duration_seconds,
+  angle_degrees,
+  actual_dist_in,
+  actual_dist_out
+FROM turn_analysis
+WHERE ABS(angle_degrees) >= 40
+  AND actual_dist_in BETWEEN 4.5 AND 5.5
+  AND actual_dist_out BETWEEN 3.5 AND 4.5
+  AND start_time IS NOT NULL AND finish_time IS NOT NULL
+ORDER BY player_display_name, elapsed_time
+        "#,
+        view = view_name
+    );
+
+    let rows = match sqlx::query(&base_cte)
+        .bind(s1)
+        .bind(e1)
+        .bind(s2)
+        .bind(e2)
+        .fetch_all(&pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return Json(json!({"sharp_angles": [], "error": format!("db error: {}", e)})),
+    };
+
+    let data: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.try_get::<i64,_>("id").unwrap_or(0),
+                "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                "seconds_since_midnight": r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0),
+                "start_time": r.try_get::<f64,_>("start_time").unwrap_or(0.0),
+                "finish_time": r.try_get::<f64,_>("finish_time").unwrap_or(0.0),
+                "duration_seconds": r.try_get::<f64,_>("duration_seconds").unwrap_or(0.0),
+                "angle_degrees": r.try_get::<f64,_>("angle_degrees").unwrap_or(0.0),
+                "actual_dist_in": r.try_get::<f64,_>("actual_dist_in").unwrap_or(0.0),
+                "actual_dist_out": r.try_get::<f64,_>("actual_dist_out").unwrap_or(0.0)
+            })
+        })
+        .collect();
+
+    Json(json!({"sharp_angles": data}))
+}
+
