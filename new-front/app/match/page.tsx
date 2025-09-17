@@ -2300,8 +2300,8 @@ export default function Page() {
                       <thead className="text-zinc-300">
                         <tr className="border-b border-zinc-800">
                           <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSharpSort('player_display_name')}>Player</th>
+                          <th className="text-left py-2 px-2">vs WCS</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('seconds_since_midnight')}>Sharp angle time</th>
-                          <th className="text-right py-2 px-2">#</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('start_time')}>Start (s)</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('finish_time')}>Finish (s)</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('duration_seconds')}>Duration (s)</th>
@@ -2327,7 +2327,18 @@ export default function Page() {
                                 if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
                               }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
                             </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-400">{ev.id}</td>
+                            <td className="py-2 px-2 text-zinc-300">
+                              {(() => {
+                                const norm = (s: string) => (s||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').toLowerCase();
+                                const key = norm(ev.player_display_name || '');
+                                const w = wcsWindowByPlayer[key];
+                                if (!w) return '—';
+                                const t = Number(ev.seconds_since_midnight || 0);
+                                if (t < w.start) return 'Before';
+                                if (t > w.end) return 'After';
+                                return 'During';
+                              })()}
+                            </td>
                             <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
                               <button onClick={()=>{
                                 const abs = Number(ev.seconds_since_midnight || 0);
