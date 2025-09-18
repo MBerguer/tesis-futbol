@@ -25,6 +25,8 @@ import { formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
 import { usePositionsWindow } from "./hooks/usePositionsWindow";
 import { stringToColorPair } from "./utils/colors";
 import type { TimelineMarker } from "@/components/ui/timeline-markers";
+import PlayerAccelComparisonChart from "./components/PlayerAccelComparisonChart";
+import PlayerIntensityScatter from "./components/PlayerIntensityScatter";
 
 interface MatchPlayers {
   players: string[];
@@ -1169,7 +1171,7 @@ export default function Page() {
                 <CardHeader>
                   <CardTitle>Details</CardTitle>
                 </CardHeader>
-                <CardContent className="h-[660px] md:h-[760px]">
+                <CardContent>
                   {!selectedMatchId ? (
                     <div className="text-sm text-gray-600">Select a match to view details.</div>
                   ) : matchDetailsLoading ? (
@@ -1238,56 +1240,7 @@ export default function Page() {
                 </Card>
               </div>
 
-              <div className="md:col-span-12 lg:col-span-6 h-full">
-                <Card className="bg-zinc-900/50 border-zinc-800">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      Accelerations Summary
-                      {loadingAccelerations && (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {!selectedTable ? (
-                      <div className="text-sm text-gray-600">Select a match to view accelerations.</div>
-                    ) : loadingAccelerations ? (
-                      <div className="space-y-2">
-                        <Skeleton className="h-6" />
-                        <Skeleton className="h-6" />
-                        <Skeleton className="h-6" />
-                      </div>
-                    ) : accelerations.length === 0 ? (
-                      <div className="text-sm text-gray-600">No data.</div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="text-zinc-300">
-                            <tr className="border-b border-zinc-800">
-                              <th className="text-left py-2 pr-3">ID</th>
-                              <th className="text-left py-2 pr-3">Player</th>
-                            {Array.from({ length: Math.max(0, Math.min(10, accelerations[0]?.values?.length || 0)) }).map((_, idx) => (
-                              <th key={idx} className="text-right py-2 px-2">{accelColumns[idx] ?? `V${idx+1}`}</th>
-                            ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {accelerations.slice(0, 10).map((row) => (
-                              <tr key={row.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
-                                <td className="py-2 pr-3 align-top text-zinc-400">{row.id}</td>
-                                <td className="py-2 pr-3 align-top text-zinc-200">{row.player_display_name}</td>
-                              {row.values.slice(0, 10).map((v, i) => (
-                                <td key={i} className="py-2 px-2 text-right tabular-nums text-zinc-300">{formatAccelValue(v, i)}</td>
-                              ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>                
-              </div>
+              
 
               <div className="md:col-span-6 lg:col-span-3 h-full">
                 <Card className="h-full bg-zinc-900/50 border-zinc-800">
@@ -1314,10 +1267,18 @@ export default function Page() {
                       ) : (
                         <div className="space-y-1 text-sm">
                           {matchEvents.map((ev: any) => (
+                            <>
+                            {ev.type.toLowerCase() !== 'suboff' && (
+                              
                             <div key={ev.event_id} className="flex items-start gap-2 py-1 px-2 rounded border border-zinc-800">
                               <div className="w-16 text-zinc-400">{ev.minute}{typeof ev.added_time === 'number' ? `+${ev.added_time}` : ''}'</div>
                               <div className="flex-1">
-                                <div><span className="text-zinc-300">{ev.team_name}</span> · <span className="uppercase text-xs px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700">{ev.type}</span></div>
+                                  <div>
+                                    <span className="text-zinc-300">{ev.team_name}</span> · 
+                                    <span className={`uppercase text-xs font-semibold  px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 ${ev.type.toLowerCase() === 'goal' ? 'bg-green-600' : ev.type.toLowerCase() === 'yellow' ? 'bg-yellow-500' : ev.type.toLowerCase() === 'red' ? 'bg-red-900' : ev.type.toLowerCase() === 'subon' ? 'bg-blue-900' : ''}`}>
+                                      { ev.type.toLowerCase() === 'subon' ? 'substitution' : ev.type}
+                                    </span>
+                                  </div>
                                 <div className="text-zinc-400">
                                   {ev.jugador || ''}
                                   {ev.related_jugador ? ` ↔ ${ev.related_jugador}` : ''}
@@ -1326,6 +1287,8 @@ export default function Page() {
                                 </div>
                               </div>
                             </div>
+                            )}
+                            </>
                           ))}
                         </div>
                       )
@@ -1354,6 +1317,70 @@ export default function Page() {
                   </CardContent>
                 </Card>
               </div>
+
+
+              <div className="md:col-span-12 lg:col-span-6 h-full">
+                <Card className="bg-zinc-900/50 border-zinc-800">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      Accelerations Summary
+                      {loadingAccelerations && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {!selectedTable ? (
+                      <div className="text-sm text-gray-600">Select a match to view accelerations.</div>
+                    ) : loadingAccelerations ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-6" />
+                        <Skeleton className="h-6" />
+                        <Skeleton className="h-6" />
+                      </div>
+                    ) : accelerations.length === 0 ? (
+                      <div className="text-sm text-gray-600">No data.</div>
+                    ) : (
+                      <>
+                      <div className="overflow-x-auto  mb-8">
+                        <table className="w-full text-sm">
+                          <thead className="text-zinc-300">
+                            <tr className="border-b border-zinc-800">
+                              <th className="text-left py-2 pr-3">Player</th>
+                            {Array.from({ length: Math.max(0, Math.min(10, accelerations[0]?.values?.length || 0)) }).map((_, idx) => (
+                              <th key={idx} className="text-right py-2 px-2">{accelColumns[idx] ?? `V${idx+1}`}</th>
+                            ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {accelerations.slice(0, 10).map((row) => (
+                              <tr key={row.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                                <td className="py-2 pr-3 align-top text-zinc-200">{row.player_display_name}</td>
+                              {row.values.slice(0, 10).map((v, i) => (
+                                <td key={i} className="py-2 px-2 text-right tabular-nums text-zinc-300">{formatAccelValue(v, i)}</td>
+                              ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Player comparison and intensity charts (side by side) */}
+                      <div className="md:col-span-12 w-full md:grid-cols-2 gap-4">
+                          {!selectedTable ? (
+                            <div className="text-sm text-gray-600">Select a match to view.</div>
+                          ) : accelerations.length === 0 ? (
+                            <div className="text-sm text-gray-600">No data.</div>
+                          ) : (
+                            <PlayerAccelComparisonChart rows={accelerations as any} />
+                          )}                      
+                    </div>
+                    </>
+                    )}
+                  </CardContent>
+                </Card>                
+              </div>
+
             </div>
             )}
             </div>
@@ -1556,6 +1583,7 @@ export default function Page() {
                 </CardContent>
               </Card>
               {showPatchPanel && (
+                <>
                 <Card className="md:col-span-1 bg-zinc-900/50 border-zinc-800">
                   <CardHeader>
                     <div className="ml-auto">
@@ -1710,8 +1738,45 @@ export default function Page() {
                         )}
                       </div>
                     )}
+
+                    {/* Periods section */}
+                    <div className="mt-6">
+                      <Card className="h-full bg-zinc-900/50 border-zinc-800">
+                        <CardHeader>
+                          <CardTitle>Periods
+                          {loadingPeriods && (
+                            <Loader2 className="h-4 w-4 animate-spin ml-2 text-muted-foreground" />
+                          )}
+                          </CardTitle>
+                          {!loadingPeriods && periods && (
+                            <div className="text-xs text-gray-500">{autoData.periods?.using_manual ? 'Using patched periods' : 'Using detected periods'}</div>
+                          )}
+                        </CardHeader>
+                        <CardContent>
+                          {!selectedTable ? (
+                            <div className="text-sm text-gray-600">Select a match to view periods.</div>
+                          ) : !periods ? (
+                            <div className="space-y-2">
+                              <Skeleton className="h-6" />
+                              <Skeleton className="h-6" />
+                              <Skeleton className="h-6" />
+                            </div>
+                          ) : (
+                            <PeriodsSummary
+                              detected_first_half_start={periods.detected_first_half_start}
+                              detected_first_half_end={periods.detected_first_half_end}
+                              detected_second_half_start={periods.detected_second_half_start}
+                              detected_second_half_end={periods.detected_second_half_end}
+                              detected_halftime_start={periods.detected_halftime_start}
+                              detected_halftime_end={periods.detected_halftime_end}
+                            />
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
                   </CardContent>
-                </Card>
+                </Card>                
+              </>
               )}
             </div>
             )}
@@ -1773,42 +1838,6 @@ export default function Page() {
               </div>
             </div>
           )}
-          {/* Periods section */}
-          <div className="mt-6">
-            <Card className="h-full bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <CardTitle>Periods
-                {loadingPeriods && (
-                  <Loader2 className="h-4 w-4 animate-spin ml-2 text-muted-foreground" />
-                )}
-                </CardTitle>
-                {!loadingPeriods && periods && (
-                  <div className="text-xs text-gray-500">{autoData.periods?.using_manual ? 'Using patched periods' : 'Using detected periods'}</div>
-                )}
-              </CardHeader>
-              <CardContent>
-                {!selectedTable ? (
-                  <div className="text-sm text-gray-600">Select a match to view periods.</div>
-                ) : !periods ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                  </div>
-                ) : (
-                  <PeriodsSummary
-                    detected_first_half_start={periods.detected_first_half_start}
-                    detected_first_half_end={periods.detected_first_half_end}
-                    detected_second_half_start={periods.detected_second_half_start}
-                    detected_second_half_end={periods.detected_second_half_end}
-                    detected_halftime_start={periods.detected_halftime_start}
-                    detected_halftime_end={periods.detected_halftime_end}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Acceleration events (full) section */}
           <div className="mt-6">
             {/* Accelerations Around WCS */}
