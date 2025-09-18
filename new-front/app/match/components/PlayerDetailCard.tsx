@@ -28,6 +28,9 @@ function PlayerDetailCardBase({
   firstHalfEnd,
   secondHalfStart,
   secondHalfEnd,
+  accelMinute,
+  sprintMinute,
+  decelMinute,
 }: {
   name: string;
   entries: MiniEntry[];
@@ -38,10 +41,13 @@ function PlayerDetailCardBase({
   firstHalfEnd?: number | null;
   secondHalfStart?: number | null;
   secondHalfEnd?: number | null;
+  accelMinute?: { counts: number[]; highlights?: number[]; lines?: number[] };
+  sprintMinute?: { counts: number[]; highlights?: number[]; lines?: number[] };
+  decelMinute?: { counts: number[]; highlights?: number[]; lines?: number[] };
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = React.useState<boolean>(false);
-  const [expanded, setExpanded] = React.useState<boolean>(true);
+  const [expanded, setExpanded] = React.useState<boolean>(false);
   React.useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -137,14 +143,13 @@ function PlayerDetailCardBase({
   };
 
   const wcsList = React.useMemo(() => {
-    if (!expanded || !isVisible) return null;
+    if (!isVisible) return null;
     return (
-      <div className="text-xs text-zinc-300 mb-3">
+      <div className="w-1/2 text-xs text-zinc-300 mb-3">
         <div className="text-zinc-200 text-base mb-1">Worst Cases (≥19.8)</div>
         <div className="flex flex-wrap gap-1.5">
           {normWindows.map((w, i)=> (
-            <React.Fragment key={i}>
-              
+            <React.Fragment key={i}>              
               <span className="inline-flex items-center rounded-md font-bold text-base bg-blue-900/50 px-1.5 py-0.5">
                 Minute: {toSoccerClock(w.start)}
               </span>
@@ -159,13 +164,13 @@ function PlayerDetailCardBase({
         </div>
       </div>
     );
-  }, [expanded, isVisible, normWindows]);
+  }, [isVisible, normWindows]);
 
   const sprintsList = React.useMemo(() => {
-    if (!expanded || !isVisible) return null;
+    if (!isVisible) return null;
     const has = Array.isArray(sprints) && sprints.length > 0;
     return (
-      <div className="text-xs text-zinc-300">
+      <div className="w-1/2 text-xs text-zinc-300">
         <div className="text-zinc-200 text-base mt-3 mb-1">Sprints in Worst Cases (≥25.2 km/h)</div>
         {!has ? (
           <div className="text-zinc-500">No sprints</div>
@@ -202,7 +207,28 @@ function PlayerDetailCardBase({
         )}
       </div>
     );
-  }, [expanded, isVisible, sprints]);
+  }, [isVisible, sprints]);
+
+
+  const statsGraph = React.useMemo(() => {
+    if (!isVisible) return null;
+    return (
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="border border-zinc-800 rounded-md p-2 bg-zinc-900/40">
+              <div className="text-xs text-zinc-300 mb-1">Accelerations per minute</div>
+              <Bars counts={accelMinute?.counts} highlights={accelMinute?.highlights} lines={accelMinute?.lines} barColorClass="bg-sky-500" />
+            </div>
+            <div className="border border-zinc-800 rounded-md p-2 bg-zinc-900/40">
+              <div className="text-xs text-zinc-300 mb-1">Sprints per minute</div>
+              <Bars counts={sprintMinute?.counts} highlights={sprintMinute?.highlights} lines={sprintMinute?.lines} barColorClass="bg-emerald-500" />
+            </div>
+            <div className="border border-zinc-800 rounded-md p-2 bg-zinc-900/40">
+              <div className="text-xs text-zinc-300 mb-1">Decelerations per minute</div>
+              <Bars counts={decelMinute?.counts} highlights={decelMinute?.highlights} lines={decelMinute?.lines} barColorClass="bg-violet-500" />
+            </div>
+          </div>
+    );
+  }, [isVisible, normWindows]);
 
   // Normalize: build per-second series between match start/end, filling missing seconds with speed 0
   const normalizedEntries = React.useMemo(() => {
@@ -230,59 +256,90 @@ function PlayerDetailCardBase({
   return (
     <div
       ref={containerRef}
-      className="rounded-md border border-zinc-800 bg-zinc-900/40 p-3"
+      className="rounded-md border border-zinc-600 bg-zinc-900 p-3 mb-10"
       style={{ contentVisibility: 'auto' as any, containIntrinsicSize: '220px' as any }}
     >
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-start">
+      <div className="grid gap-3 items-start">
         {/* Left column: name + Chart (2/5) */}
-        <div className="md:col-span-3">
+        <div className="w-full">
           <div className="flex items-center gap-3 mb-2">
             <div className="h-8 w-8 rounded-full bg-zinc-800 text-zinc-300 grid place-items-center text-xs font-medium">{initials}</div>
-            <div className="text-sm font-medium text-zinc-200 truncate" title={name}>{name}</div>
+            <div className="text-xl font-medium text-zinc-200 truncate" title={name}>{name}</div>
             <button className="ml-auto text-xs text-zinc-400 hover:text-zinc-200" onClick={()=>setExpanded(v=>!v)}>{expanded ? 'Hide' : 'Show'} details</button>
           </div>
-          {isVisible ? (
-            <div className="h-28 rounded-md border border-zinc-800 bg-zinc-900/60 p-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={normalizedEntries} margin={{ top: 2, right: 0, left: -20, bottom: 0 }}>
-                  <XAxis type="number" dataKey="seconds_since_midnight" domain={[axisStart, axisEnd]} hide tickFormatter={formatHms} />
-                  <YAxis hide domain={[0, 36]} />
-                  {normWindows.map((w, idx)=> (
-                    <ReferenceArea key={idx} x1={w.start} x2={w.end} stroke="#ff6aa7" fill="#9f184f" strokeDasharray="4 2" />
-                  ))}
-                  <Line type="monotone" dot={false} dataKey="speed" stroke="#3b82f6" strokeWidth={1.5} isAnimationActive={true} animationDuration={0.5} />
-                  <Tooltip 
-                    cursor={{ stroke: '#94a3b8', strokeDasharray: '3 3' }}
-                    formatter={(value: any, name: any) => {
-                      if (name === 'speed') return [`${Number(value).toFixed(2)} km/h`, 'Speed'];
-                      return [String(value), name];
-                    }}
-                    labelFormatter={(label: any) => `${formatHms(Number(label))} (${Math.round(Number(label))}s)`}
-                    contentStyle={{
-                      backgroundColor: 'rgba(24,24,27,0.95)',
-                      border: '1px solid #27272a',
-                      borderRadius: 8,
-                      color: '#e5e7eb',
-                      boxShadow: '0 6px 24px rgba(0,0,0,0.6)'
-                    }}
-                    labelStyle={{ color: '#a1a1aa' }}
-                    itemStyle={{ color: '#e5e7eb' }}
-                    wrapperStyle={{ outline: 'none' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
+          <div className="flex items-center gap-3">
+          {isVisible ? wcsList : null}
+          {isVisible ? sprintsList : null}
+          </div>
+          {isVisible ? statsGraph : null}
+          {!isVisible && (
             <div className="h-28 rounded-md border border-zinc-800 bg-zinc-900/60" />
           )}
         </div>
         {/* Right column: WCS + Sprints (3/5) */}
-        <div className="md:col-span-2 mt-3">
-          {wcsList}
-          {sprintsList}
-        </div>
+        {expanded && (
+        <div className="w-full mt-3">
+          <div className="h-28 rounded-md border border-zinc-800 bg-zinc-900/60 p-2">
+            
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={normalizedEntries} margin={{ top: 2, right: 0, left: -20, bottom: 0 }}>
+                <XAxis type="number" dataKey="seconds_since_midnight" domain={[axisStart, axisEnd]} hide tickFormatter={formatHms} />
+                <YAxis hide domain={[0, 36]} />
+                {normWindows.map((w, idx)=> (
+                  <ReferenceArea key={idx} x1={w.start} x2={w.end} stroke="#ff6aa7" fill="#9f184f" strokeDasharray="4 2" />
+                ))}
+                <Line type="monotone" dot={false} dataKey="speed" stroke="#3b82f6" strokeWidth={1.5} isAnimationActive={true} animationDuration={0.5} />
+                <Tooltip 
+                  cursor={{ stroke: '#94a3b8', strokeDasharray: '3 3' }}
+                  formatter={(value: any, name: any) => {
+                    if (name === 'speed') return [`${Number(value).toFixed(2)} km/h`, 'Speed'];
+                    return [String(value), name];
+                  }}
+                  labelFormatter={(label: any) => `${formatHms(Number(label))} (${Math.round(Number(label))}s)`}
+                  contentStyle={{
+                    backgroundColor: 'rgba(24,24,27,0.95)',
+                    border: '1px solid #27272a',
+                    borderRadius: 8,
+                    color: '#e5e7eb',
+                    boxShadow: '0 6px 24px rgba(0,0,0,0.6)'
+                  }}
+                  labelStyle={{ color: '#a1a1aa' }}
+                  itemStyle={{ color: '#e5e7eb' }}
+                  wrapperStyle={{ outline: 'none' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+            </div>
+            
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function Bars({ counts, highlights, lines, barColorClass }: { counts?: number[]; highlights?: number[]; lines?: number[]; barColorClass: string }) {
+  const c = counts || [];
+  const hi = highlights || [];
+  const ln = lines || [];
+  const max = React.useMemo(() => c.reduce((m, v) => Math.max(m, v), 0), [c]);
+  if (c.length === 0) return <div className="text-xs text-zinc-500">No data.</div>;
+  return (
+    <>
+      <div className="h-16 md:h-20 w-full flex items-end gap-[1px] relative">
+        {c.map((v, idx) => (
+          <div key={idx} className={`flex-1 ${v > 0 ? (hi.includes(idx) ? 'bg-amber-400' : barColorClass) : 'bg-zinc-800'}`} style={{ height: `${Math.max(1, max > 0 ? Math.round((v / max) * 100) : 0)}%` }} />
+        ))}
+        {ln.map((mi, i) => (
+          <div key={`ref-${i}`} className="absolute top-0 bottom-0" style={{ left: `${((mi + 0.5) / Math.max(1, c.length)) * 100}%`, width: 2, background: '#4b172b', opacity: 0.9 }} />
+        ))}
+      </div>
+      <div className="flex justify-between text-[10px] text-zinc-400 mt-1">
+        <span>0'</span>
+        <span>45'</span>
+        <span>90+'</span>
+      </div>
+    </>
   );
 }
 

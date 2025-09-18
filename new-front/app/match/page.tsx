@@ -810,7 +810,7 @@ export default function Page() {
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, ' ')
       .toLowerCase();
-    const result: Record<string, { name: string; counts: number[]; highlights: number[] }> = {};
+    const result: Record<string, { name: string; counts: number[]; highlights: number[]; lines: number[] }> = {};
     const perPlayerList = Object.keys(playersGrouped);
     for (const name of perPlayerList) {
       const key = normalize(name);
@@ -837,7 +837,7 @@ export default function Page() {
         if (Number.isFinite(h1) && h1 >= 0) highlights.push(h1);
         if (Number.isFinite(h2) && h2 >= 0 && h2 !== h1) highlights.push(h2);
       }
-      result[key] = { name, counts, highlights };
+      result[key] = { name, counts, highlights, lines: [...highlights] };
     }
     return result;
   }, [playersGrouped, accelTimesByPlayer, minuteIndexFromAbs, wcsWindowByPlayer]);
@@ -849,7 +849,7 @@ export default function Page() {
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, ' ')
       .toLowerCase();
-    const result: Record<string, { name: string; counts: number[]; highlights: number[] }> = {};
+    const result: Record<string, { name: string; counts: number[]; highlights: number[]; lines: number[] }> = {};
     const perPlayerList = Object.keys(playersGrouped);
     for (const name of perPlayerList) {
       const key = normalize(name);
@@ -874,17 +874,55 @@ export default function Page() {
         if (Number.isFinite(h1) && h1 >= 0) highlights.push(h1);
         if (Number.isFinite(h2) && h2 >= 0 && h2 !== h1) highlights.push(h2);
       }
-      result[key] = { name, counts, highlights };
+      result[key] = { name, counts, highlights, lines: [...highlights] };
     }
     return result;
   }, [playersGrouped, sprintTimesByPlayer, minuteIndexFromAbs, wcsWindowByPlayer]);
 
+  // Build per-minute deceleration histogram per player and WCS highlight minutes
+  const decelMinuteByPlayer = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    const result: Record<string, { name: string; counts: number[]; highlights: number[]; lines: number[] }> = {};
+    const perPlayerList = Object.keys(playersGrouped);
+    for (const name of perPlayerList) {
+      const key = normalize(name);
+      const obj = accelTimesByPlayer[key];
+      const decTimes = obj ? obj.dec : [];
+      const minutes: number[] = [];
+      let maxMinute = 0;
+      for (const t of decTimes) {
+        const m = minuteIndexFromAbs(t);
+        minutes.push(m);
+        if (m > maxMinute) maxMinute = m;
+      }
+      const size = Math.max(95, maxMinute + 1);
+      const counts = Array.from({ length: size }, () => 0);
+      for (const m of minutes) {
+        if (m >= 0 && m < counts.length) counts[m]++;
+      }
+      const w = wcsWindowByPlayer[key];
+      const highlights: number[] = [];
+      if (w) {
+        const h1 = minuteIndexFromAbs(w.start);
+        const h2 = minuteIndexFromAbs(w.end);
+        if (Number.isFinite(h1) && h1 >= 0) highlights.push(h1);
+        if (Number.isFinite(h2) && h2 >= 0 && h2 !== h1) highlights.push(h2);
+      }
+      result[key] = { name, counts, highlights, lines: [...highlights] };
+    }
+    return result;
+  }, [playersGrouped, accelTimesByPlayer, minuteIndexFromAbs, wcsWindowByPlayer]);
+
   // Tiny bar chart components
-  const PlayerMiniChart: React.FC<{ counts: number[]; highlights?: number[]; barColor?: string; highlightColor?: string; zeroColor?: string; heightClass?: string }> = ({ counts, highlights, barColor = 'bg-blue-500', highlightColor = 'bg-red-400', zeroColor = 'bg-zinc-800', heightClass = 'h-16 md:h-20' }) => {
+  const PlayerMiniChart: React.FC<{ counts: number[]; highlights?: number[]; refLines?: number[]; barColor?: string; highlightColor?: string; zeroColor?: string; heightClass?: string; refColor?: string }> = ({ counts, highlights, refLines, barColor = 'bg-blue-500', highlightColor = 'bg-red-400', zeroColor = 'bg-zinc-800', heightClass = 'h-16 md:h-20', refColor = '#4b172b' }) => {
     const max = React.useMemo(() => counts.reduce((m, v) => Math.max(m, v), 0), [counts]);
     return (
       <div className="w-full">
-        <div className={`${heightClass} w-full flex items-end gap-[1px]`}>
+        <div className={`${heightClass} w-full flex items-end gap-[1px] relative`}>
           {counts.map((v, idx) => {
             const hPct = max > 0 ? Math.round((v / max) * 100) : 0;
             const isHi = (highlights || []).includes(idx);
@@ -895,6 +933,12 @@ export default function Page() {
                 className={`flex-1 ${v > 0 ? (isHi ? highlightColor : barColor) : zeroColor}`}
                 style={{ height: `${Math.max(1, hPct)}%` }}
               />
+            );
+          })}
+          {(refLines || []).map((idx, i) => {
+            const leftPct = ((idx + 0.5) / Math.max(1, counts.length)) * 100;
+            return (
+              <div key={`ref-${i}`} className="absolute top-0 bottom-0" style={{ left: `${leftPct}%`, width: 2, background: refColor, opacity: 0.9 }} />
             );
           })}
         </div>
@@ -1666,7 +1710,7 @@ export default function Page() {
             className="w-full mt-6 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
             aria-expanded={showPlayersSection}
           >
-            <span className="text-base font-semibold">Players</span>
+            <span className="text-base font-semibold">WCS</span>
             <svg className={`w-4 h-4 ml-3 transition-transform ${showPlayersSection ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
           </button>
           {selectedTable && showPlayersSection && (
@@ -1698,28 +1742,10 @@ export default function Page() {
                         secondHalfStart={periods?.detected_second_half_start ?? null}
                         firstHalfEnd={periods?.detected_first_half_end ?? null}
                         secondHalfEnd={periods?.detected_second_half_end ?? null}
+                        accelMinute={accelMinuteByPlayer[norm(p)]}
+                        sprintMinute={sprintMinuteByPlayer[norm(p)]}
+                        decelMinute={decelMinuteByPlayer[norm(p)]}
                       />
-                      {/** Per-minute mini charts (50/50 split) */}
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div className="border border-zinc-800 rounded-md p-2 bg-zinc-900/40">
-                          <div className="text-xs text-zinc-300 mb-1">Accelerations per minute</div>
-                          {(() => {
-                            const a = accelMinuteByPlayer[norm(p)];
-                            if (!a) return <div className="text-xs text-zinc-500">No data.</div>;
-                            // Accel bars use blue; WCS highlight uses amber
-                            return <PlayerMiniChart counts={a.counts} highlights={a.highlights} barColor={'bg-sky-500'} highlightColor={'bg-red-400'} />;
-                          })()}
-                        </div>
-                        <div className="border border-zinc-800 rounded-md p-2 bg-zinc-900/40">
-                          <div className="text-xs text-zinc-300 mb-1">Sprints per minute</div>
-                          {(() => {
-                            const s = sprintMinuteByPlayer[norm(p)];
-                            if (!s) return <div className="text-xs text-zinc-500">No data.</div>;
-                            // Sprint bars use green; WCS highlight uses amber
-                            return <PlayerMiniChart counts={s.counts} highlights={s.highlights} barColor={'bg-emerald-500'} highlightColor={'bg-red-400'} />;
-                          })()}
-                        </div>
-                      </div>
                     </div>
                   );
                 })}
