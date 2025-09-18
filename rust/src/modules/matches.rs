@@ -755,6 +755,38 @@ pub async fn get_player_worst_cases_from_view(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
 ) -> Json<Value> {
+    // Fast path: try cache first
+    let cached = sqlx::query(
+        r#"
+        SELECT player_display_name,
+               start_second,
+               end_second,
+               distance_covered
+        FROM player_worst_cases_cache
+        WHERE match_name = $1
+        ORDER BY player_display_name
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    if !cached.is_empty() {
+        let worst_cases_json: Vec<Value> = cached
+            .into_iter()
+            .map(|row| {
+                json!({
+                    "player_display_name": row.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                    "start_second": row.try_get::<f64,_>("start_second").unwrap_or(0.0),
+                    "end_second": row.try_get::<f64,_>("end_second").unwrap_or(0.0),
+                    "distance_covered": row.try_get::<f64,_>("distance_covered").unwrap_or(0.0)
+                })
+            })
+            .collect();
+        return Json(json!({ "worst_cases": worst_cases_json }));
+    }
+
     // Query usando la vista procesada (como en tu query original)
     let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
     
@@ -813,6 +845,33 @@ pub async fn get_player_worst_cases_from_view(
         .await
         .unwrap_or_default();
 
+    // Write-through: store cache rows (upsert)
+    for row in &results {
+        let player: String = row.try_get::<String,_>("player_display_name").unwrap_or_default();
+        let start_sec = parse_interval_to_seconds(&row.try_get::<String,_>("start_second").unwrap_or_default());
+        let end_sec = parse_interval_to_seconds(&row.try_get::<String,_>("end_second").unwrap_or_default());
+        let dist = row.try_get::<f64,_>("distance_covered").unwrap_or(0.0);
+        let _ = sqlx::query(
+            r#"
+            INSERT INTO player_worst_cases_cache (
+              match_name, player_display_name, start_second, end_second, distance_covered
+            ) VALUES ($1,$2,$3,$4,$5)
+            ON CONFLICT (match_name, player_display_name) DO UPDATE SET
+              start_second = EXCLUDED.start_second,
+              end_second   = EXCLUDED.end_second,
+              distance_covered = EXCLUDED.distance_covered,
+              updated_at = NOW()
+            "#,
+        )
+        .bind(&table_name)
+        .bind(&player)
+        .bind(start_sec)
+        .bind(end_sec)
+        .bind(dist)
+        .execute(&pool)
+        .await;
+    }
+
     let worst_cases_json: Vec<Value> = results
         .into_iter()
         .map(|row| {
@@ -834,6 +893,61 @@ pub async fn get_sprints_in_worst_cases(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
 ) -> Json<Value> {
+    // Fast path: try cache first
+    let cached_rows = sqlx::query(
+        r#"
+        SELECT 
+          player_display_name,
+          sprint_start_time,
+          sprint_end_time,
+          sprint_start_sec,
+          sprint_end_sec,
+          total_sprint_distance,
+          min_speed_reached_within_sprint,
+          max_speed_reached_within_sprint,
+          worst_case_start_second,
+          worst_case_end_second,
+          worst_case_distance_covered
+        FROM sprints_in_worst_cases_cache
+        WHERE match_name = $1
+        ORDER BY player_display_name, sprint_start_sec
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    if !cached_rows.is_empty() {
+        // Build sprint_id per player deterministically
+        let mut out: Vec<Value> = Vec::with_capacity(cached_rows.len());
+        let mut current_player: Option<String> = None;
+        let mut sprint_counter: i64 = 0;
+        for row in cached_rows {
+            let player = row.try_get::<String,_>("player_display_name").unwrap_or_default();
+            if current_player.as_deref() != Some(player.as_str()) {
+                current_player = Some(player.clone());
+                sprint_counter = 0;
+            }
+            sprint_counter += 1;
+            out.push(json!({
+                "player_display_name": player,
+                "sprint_id": sprint_counter,
+                "start_second": row.try_get::<f64,_>("worst_case_start_second").unwrap_or(0.0),
+                "end_second": row.try_get::<f64,_>("worst_case_end_second").unwrap_or(0.0),
+                "sprint_start_time": row.try_get::<String,_>("sprint_start_time").unwrap_or_default(),
+                "sprint_end_time": row.try_get::<String,_>("sprint_end_time").unwrap_or_default(),
+                "sprint_start_sec": row.try_get::<f64,_>("sprint_start_sec").unwrap_or(0.0),
+                "sprint_end_sec": row.try_get::<f64,_>("sprint_end_sec").unwrap_or(0.0),
+                "total_sprint_distance": row.try_get::<f64,_>("total_sprint_distance").unwrap_or(0.0),
+                "min_speed_reached_within_sprint": row.try_get::<f64,_>("min_speed_reached_within_sprint").unwrap_or(0.0),
+                "max_speed_reached_within_sprint": row.try_get::<f64,_>("max_speed_reached_within_sprint").unwrap_or(0.0),
+                "worst_case_distance_covered": row.try_get::<f64,_>("worst_case_distance_covered").unwrap_or(0.0)
+            }));
+        }
+        return Json(json!({ "sprints_in_worst_cases": out }));
+    }
+
     // Query para encontrar sprints dentro de los worst cases
     let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
     
@@ -942,6 +1056,64 @@ pub async fn get_sprints_in_worst_cases(
         .fetch_all(&pool)
         .await
         .unwrap_or_default();
+
+    // Write-through: store cache rows (upsert)
+    for row in &results {
+        let player = row.try_get::<String,_>("player_display_name").unwrap_or_default();
+        let wc_start = parse_interval_to_seconds(&row.try_get::<String,_>("start_second").unwrap_or_default());
+        let wc_end = parse_interval_to_seconds(&row.try_get::<String,_>("end_second").unwrap_or_default());
+        let wc_dist = row.try_get::<f64,_>("distance_covered").unwrap_or(0.0);
+        let s_start_time = row.try_get::<String,_>("sprint_start_time").unwrap_or_default();
+        let s_end_time = row.try_get::<String,_>("sprint_end_time").unwrap_or_default();
+        let s_start_sec = row.try_get::<f64,_>("sprint_start_sec").unwrap_or(0.0);
+        let s_end_sec = row.try_get::<f64,_>("sprint_end_sec").unwrap_or(0.0);
+        let s_dist = row.try_get::<f64,_>("total_sprint_distance").unwrap_or(0.0);
+        let s_min = row.try_get::<f64,_>("min_speed_reached_within_sprint").unwrap_or(0.0);
+        let s_max = row.try_get::<f64,_>("max_speed_reached_within_sprint").unwrap_or(0.0);
+
+        let _ = sqlx::query(
+            r#"
+            INSERT INTO sprints_in_worst_cases_cache (
+              match_name,
+              player_display_name,
+              sprint_start_time,
+              sprint_end_time,
+              sprint_start_sec,
+              sprint_end_sec,
+              total_sprint_distance,
+              min_speed_reached_within_sprint,
+              max_speed_reached_within_sprint,
+              worst_case_start_second,
+              worst_case_end_second,
+              worst_case_distance_covered
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            ON CONFLICT (match_name, player_display_name, sprint_start_sec, sprint_end_sec) DO UPDATE SET
+              sprint_start_time = EXCLUDED.sprint_start_time,
+              sprint_end_time   = EXCLUDED.sprint_end_time,
+              total_sprint_distance = EXCLUDED.total_sprint_distance,
+              min_speed_reached_within_sprint = EXCLUDED.min_speed_reached_within_sprint,
+              max_speed_reached_within_sprint = EXCLUDED.max_speed_reached_within_sprint,
+              worst_case_start_second = EXCLUDED.worst_case_start_second,
+              worst_case_end_second   = EXCLUDED.worst_case_end_second,
+              worst_case_distance_covered = EXCLUDED.worst_case_distance_covered,
+              updated_at = NOW()
+            "#,
+        )
+        .bind(&table_name)
+        .bind(&player)
+        .bind(&s_start_time)
+        .bind(&s_end_time)
+        .bind(s_start_sec)
+        .bind(s_end_sec)
+        .bind(s_dist)
+        .bind(s_min)
+        .bind(s_max)
+        .bind(wc_start)
+        .bind(wc_end)
+        .bind(wc_dist)
+        .execute(&pool)
+        .await;
+    }
 
     let sprints_json: Vec<Value> = results
         .into_iter()
@@ -1144,14 +1316,14 @@ WITH base AS (
   SELECT
     player_display_name,
     time,
-    (speed::numeric) / 3.6 AS speed_ms,
+    (speed::numeric) AS speed_kph,
     EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time) AS epoch_time,
     LAG(EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) OVER (
       PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
     ) AS prev_epoch,
-    LAG((speed::numeric) / 3.6) OVER (
+    LAG((speed::numeric)) OVER (
       PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
-    ) AS prev_speed_ms
+    ) AS prev_speed_kph
   FROM public.{view}
 ),
 
@@ -1164,8 +1336,8 @@ delta AS (
   SELECT
     player_display_name,
     time,
-    speed_ms,
-    prev_speed_ms,
+    speed_kph,
+    prev_speed_kph,
     COALESCE(
       CASE
         WHEN prev_epoch IS NULL THEN 0
@@ -1180,10 +1352,10 @@ acc_calc AS (
   SELECT
     player_display_name,
     time,
-    speed_ms,
+    speed_kph,
     delta_time,
     CASE
-      WHEN delta_time > 0 AND prev_speed_ms IS NOT NULL THEN (speed_ms - prev_speed_ms) / delta_time
+      WHEN delta_time > 0 AND prev_speed_kph IS NOT NULL THEN (speed_kph - prev_speed_kph) / delta_time
       ELSE 0
     END AS calc_acceleration
   FROM delta
@@ -1193,7 +1365,7 @@ filtered AS (
   SELECT
     player_display_name,
     time,
-    speed_ms,
+    speed_kph,
     delta_time,
     GREATEST(LEAST(calc_acceleration, 22), -22) AS acceleration_limited
   FROM acc_calc
@@ -1243,10 +1415,10 @@ grouped AS (
     MIN(time_s) AS start_time_s,
     MAX(time_s) AS end_time_s,
     SUM(delta_time) AS duration_s,
-    MAX(speed_ms) AS max_speed,
+    MAX(speed_kph) AS max_speed,
     MAX(acceleration_limited) AS max_acc,
     MIN(acceleration_limited) AS min_acc,
-    SUM(speed_ms * delta_time) AS distance_m
+    SUM(speed_kph * delta_time) AS distance_m
   FROM grp
   GROUP BY player_display_name, event_type, grp
 ),
@@ -1293,6 +1465,51 @@ classified AS (
     );
 
     if mode == "full" {
+        // Fast path: read cached acceleration events
+        let cached = sqlx::query(
+            r#"
+            SELECT player_display_name,
+                   seconds_since_midnight,
+                   start_time,
+                   end_time,
+                   duration_s,
+                   peak_acc,
+                   max_speed_kph,
+                   distance_m,
+                   accel_or_decel,
+                   intensity_category
+            FROM acceleration_events_cache
+            WHERE match_name = $1
+            ORDER BY player_display_name, seconds_since_midnight
+            "#,
+        )
+        .bind(&table_name)
+        .fetch_all(&pool)
+        .await
+        .unwrap_or_default();
+
+        if !cached.is_empty() {
+            let events: Vec<Value> = cached
+                .into_iter()
+                .map(|r| {
+                    json!({
+                        "id": 0,
+                        "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                        "accel_or_decel": r.try_get::<String,_>("accel_or_decel").unwrap_or_default(),
+                        "start_time": r.try_get::<String,_>("start_time").unwrap_or_default(),
+                        "end_time": r.try_get::<String,_>("end_time").unwrap_or_default(),
+                        "duration_s": r.try_get::<f64,_>("duration_s").unwrap_or(0.0),
+                        "peak_acc": r.try_get::<f64,_>("peak_acc").unwrap_or(0.0),
+                        "max_speed_kph": r.try_get::<f64,_>("max_speed_kph").unwrap_or(0.0),
+                        "distance_m": r.try_get::<f64,_>("distance_m").unwrap_or(0.0),
+                        "seconds_since_midnight": r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0),
+                        "intensity_category": r.try_get::<String,_>("intensity_category").unwrap_or_default()
+                    })
+                })
+                .collect();
+            return Json(json!({"events": events}));
+        }
+
         let sql_full = format!(
             r#"{base}
 SELECT
@@ -1303,7 +1520,7 @@ SELECT
   end_time_text AS end_time,
   ROUND(duration_s::numeric, 3)::double precision AS duration_s,
   ROUND(peak_acc::numeric, 3)::double precision AS peak_acc,
-  ROUND(max_speed::numeric, 3)::double precision AS max_speed_m_s,
+  ROUND(max_speed::numeric, 3)::double precision AS max_speed_kph,
   ROUND(distance_m::numeric, 3)::double precision AS distance_m,
   EXTRACT(EPOCH FROM to_timestamp(start_time_text, 'HH24:MI:SS.MS')::time)::double precision AS seconds_since_midnight,
   intensity_category
@@ -1324,6 +1541,39 @@ ORDER BY player_display_name, start_time_s"#,
             Err(e) => return Json(json!({"events": [], "error": format!("db error: {}", e)})),
         };
 
+        // Write-through cache of events
+        for r in &rows {
+            let _ = sqlx::query(
+                r#"
+                INSERT INTO acceleration_events_cache (
+                  match_name, player_display_name, seconds_since_midnight, start_time, end_time,
+                  duration_s, peak_acc, max_speed_kph, distance_m, accel_or_decel, intensity_category
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                ON CONFLICT (match_name, player_display_name, seconds_since_midnight, start_time, end_time) DO UPDATE SET
+                  duration_s = EXCLUDED.duration_s,
+                  peak_acc = EXCLUDED.peak_acc,
+                  max_speed_kph = EXCLUDED.max_speed_kph,
+                  distance_m = EXCLUDED.distance_m,
+                  accel_or_decel = EXCLUDED.accel_or_decel,
+                  intensity_category = EXCLUDED.intensity_category,
+                  updated_at = NOW()
+                "#,
+            )
+            .bind(&table_name)
+            .bind(r.try_get::<String,_>("player_display_name").unwrap_or_default())
+            .bind(r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0))
+            .bind(r.try_get::<String,_>("start_time").unwrap_or_default())
+            .bind(r.try_get::<String,_>("end_time").unwrap_or_default())
+            .bind(r.try_get::<f64,_>("duration_s").unwrap_or(0.0))
+            .bind(r.try_get::<f64,_>("peak_acc").unwrap_or(0.0))
+            .bind(r.try_get::<f64,_>("max_speed_kph").unwrap_or(0.0))
+            .bind(r.try_get::<f64,_>("distance_m").unwrap_or(0.0))
+            .bind(r.try_get::<String,_>("accel_or_decel").unwrap_or_default())
+            .bind(r.try_get::<String,_>("intensity_category").unwrap_or_default())
+            .execute(&pool)
+            .await;
+        }
+
         let events: Vec<Value> = rows
             .into_iter()
             .map(|r| {
@@ -1335,7 +1585,7 @@ ORDER BY player_display_name, start_time_s"#,
                     "end_time": r.try_get::<String,_>("end_time").unwrap_or_default(),
                     "duration_s": r.try_get::<f64,_>("duration_s").unwrap_or(0.0),
                     "peak_acc": r.try_get::<f64,_>("peak_acc").unwrap_or(0.0),
-                    "max_speed_m_s": r.try_get::<f64,_>("max_speed_m_s").unwrap_or(0.0),
+                    "max_speed_kph": r.try_get::<f64,_>("max_speed_kph").unwrap_or(0.0),
                     "distance_m": r.try_get::<f64,_>("distance_m").unwrap_or(0.0),
                     "seconds_since_midnight": r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0),
                     "intensity_category": r.try_get::<String,_>("intensity_category").unwrap_or_default()
@@ -1347,6 +1597,49 @@ ORDER BY player_display_name, start_time_s"#,
     }
 
     // Summary (default)
+    // Fast path: cached summary
+    let cached_sum = sqlx::query(
+        r#"
+        SELECT player_display_name,
+               total_accel_events, accel_low, accel_medium, accel_high,
+               total_decel_events, decel_low, decel_medium, decel_high,
+               total_distance_m, total_time_s
+        FROM acceleration_summary_cache
+        WHERE match_name = $1
+        ORDER BY player_display_name
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    if !cached_sum.is_empty() {
+        let out: Vec<Value> = cached_sum
+            .into_iter()
+            .enumerate()
+            .map(|(idx, r)| {
+                let name = r.try_get::<String,_>("player_display_name").unwrap_or_default();
+                let v1 = r.try_get::<i64,_>("total_accel_events").unwrap_or(0) as f64;
+                let v2 = r.try_get::<i64,_>("accel_low").unwrap_or(0) as f64;
+                let v3 = r.try_get::<i64,_>("accel_medium").unwrap_or(0) as f64;
+                let v4 = r.try_get::<i64,_>("accel_high").unwrap_or(0) as f64;
+                let v5 = r.try_get::<i64,_>("total_decel_events").unwrap_or(0) as f64;
+                let v6 = r.try_get::<i64,_>("decel_low").unwrap_or(0) as f64;
+                let v7 = r.try_get::<i64,_>("decel_medium").unwrap_or(0) as f64;
+                let v8 = r.try_get::<i64,_>("decel_high").unwrap_or(0) as f64;
+                let v9 = r.try_get::<f64,_>("total_distance_m").unwrap_or(0.0);
+                let v10 = r.try_get::<f64,_>("total_time_s").unwrap_or(0.0);
+                json!({
+                    "id": (idx as i64) + 1,
+                    "player_display_name": name,
+                    "values": [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10]
+                })
+            })
+            .collect();
+        return Json(json!({"accelerations": out}));
+    }
+
     let sql_summary = format!(
         r#"{base}
 SELECT
@@ -1379,6 +1672,46 @@ ORDER BY player_display_name"#,
         Ok(r) => r,
         Err(e) => return Json(json!({"accelerations": [], "error": format!("db error: {}", e)})),
     };
+
+    // Write-through summary cache
+    for r in &rows {
+        let _ = sqlx::query(
+            r#"
+            INSERT INTO acceleration_summary_cache (
+              match_name, player_display_name,
+              total_accel_events, accel_low, accel_medium, accel_high,
+              total_decel_events, decel_low, decel_medium, decel_high,
+              total_distance_m, total_time_s
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            ON CONFLICT (match_name, player_display_name) DO UPDATE SET
+              total_accel_events = EXCLUDED.total_accel_events,
+              accel_low = EXCLUDED.accel_low,
+              accel_medium = EXCLUDED.accel_medium,
+              accel_high = EXCLUDED.accel_high,
+              total_decel_events = EXCLUDED.total_decel_events,
+              decel_low = EXCLUDED.decel_low,
+              decel_medium = EXCLUDED.decel_medium,
+              decel_high = EXCLUDED.decel_high,
+              total_distance_m = EXCLUDED.total_distance_m,
+              total_time_s = EXCLUDED.total_time_s,
+              updated_at = NOW()
+            "#,
+        )
+        .bind(&table_name)
+        .bind(r.try_get::<String,_>("player_display_name").unwrap_or_default())
+        .bind(r.try_get::<i64,_>("total_accel_events").unwrap_or(0))
+        .bind(r.try_get::<i64,_>("accel_low").unwrap_or(0))
+        .bind(r.try_get::<i64,_>("accel_medium").unwrap_or(0))
+        .bind(r.try_get::<i64,_>("accel_high").unwrap_or(0))
+        .bind(r.try_get::<i64,_>("total_decel_events").unwrap_or(0))
+        .bind(r.try_get::<i64,_>("decel_low").unwrap_or(0))
+        .bind(r.try_get::<i64,_>("decel_medium").unwrap_or(0))
+        .bind(r.try_get::<i64,_>("decel_high").unwrap_or(0))
+        .bind(r.try_get::<f64,_>("total_distance_m").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("total_time_s").unwrap_or(0.0))
+        .execute(&pool)
+        .await;
+    }
 
     let out: Vec<Value> = rows
         .into_iter()
@@ -1454,14 +1787,14 @@ WITH base AS (
   SELECT
     player_display_name,
     time,
-    (speed::numeric) / 3.6 AS speed_ms,
+    (speed::numeric) AS speed_kph,
     EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time) AS epoch_time,
     LAG(EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) OVER (
       PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
     ) AS prev_epoch,
-    LAG((speed::numeric) / 3.6) OVER (
+    LAG((speed::numeric)) OVER (
       PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
-    ) AS prev_speed_ms
+    ) AS prev_speed_kph
   FROM public.{view}
 ),
 filtered_base AS (
@@ -1472,7 +1805,7 @@ delta AS (
   SELECT
     player_display_name,
     time,
-    speed_ms,
+    speed_kph,
     prev_speed_ms,
     COALESCE(
       CASE
@@ -1487,10 +1820,10 @@ acc_calc AS (
   SELECT
     player_display_name,
     time,
-    speed_ms,
+    speed_kph,
     delta_time,
     CASE
-      WHEN delta_time > 0 AND prev_speed_ms IS NOT NULL THEN (speed_ms - prev_speed_ms) / delta_time
+      WHEN delta_time > 0 AND prev_speed_kph IS NOT NULL THEN (speed_kph - prev_speed_kph) / delta_time
       ELSE 0
     END AS calc_acceleration
   FROM delta
@@ -1499,7 +1832,7 @@ filtered AS (
   SELECT
     player_display_name,
     time,
-    speed_ms,
+    speed_kph,
     delta_time,
     GREATEST(LEAST(calc_acceleration, 22), -22) AS acceleration_limited
   FROM acc_calc
@@ -1515,7 +1848,7 @@ labeled AS (
   SELECT
     *,
     CASE
-      WHEN speed_ms >= 5.556 THEN 'sprint_potential'
+      WHEN speed_kph >= 19.8 THEN 'sprint_potential'
       ELSE 'none'
     END AS event_type
   FROM time_cum
@@ -1543,10 +1876,10 @@ grouped AS (
     MIN(time_s) AS start_time_s,
     MAX(time_s) AS end_time_s,
     SUM(delta_time) AS duration_s,
-    MAX(speed_ms) AS max_speed,
+    MAX(speed_kph) AS max_speed,
     MAX(acceleration_limited) AS max_acc,
     MIN(acceleration_limited) AS min_acc,
-    SUM(speed_ms * delta_time) AS distance_m
+    SUM(speed_kph * delta_time) AS distance_m
   FROM grp
   GROUP BY player_display_name, event_type, grp
 ),
@@ -1594,7 +1927,7 @@ SELECT
   start_time_text AS start_time,
   end_time_text AS end_time,
   ROUND(duration_s::numeric, 3)::double precision AS duration_s,
-  ROUND(max_speed::numeric, 3)::double precision AS max_speed_m_s,
+  ROUND(max_speed::numeric, 3)::double precision AS max_speed_kph,
   ROUND(max_acc::numeric, 3)::double precision AS peak_acc_m_s2,
   ROUND(distance_m::numeric, 3)::double precision AS distance_m,
   EXTRACT(EPOCH FROM to_timestamp(start_time_text, 'HH24:MI:SS.MS')::time)::double precision AS seconds_since_midnight,
@@ -1603,6 +1936,51 @@ FROM classified
 ORDER BY player_display_name, start_time_s"#,
         base = base_cte
     );
+
+    // Try cache first
+    let cached = sqlx::query(
+        r#"
+        SELECT player_display_name,
+               seconds_since_midnight,
+               start_time,
+               end_time,
+               duration_s,
+               max_speed_kph,
+               peak_acc_m_s2,
+               distance_m,
+               intensity_category
+        FROM sprint_events_cache
+        WHERE match_name = $1
+        ORDER BY player_display_name, seconds_since_midnight
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    if !cached.is_empty() {
+        let sprints: Vec<Value> = cached
+            .into_iter()
+            .enumerate()
+            .map(|(idx, r)| {
+                json!({
+                    "id": (idx as i64) + 1,
+                    "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                    "sprint_type": "sprint",
+                    "start_time": r.try_get::<String,_>("start_time").unwrap_or_default(),
+                    "end_time": r.try_get::<String,_>("end_time").unwrap_or_default(),
+                    "duration_s": r.try_get::<f64,_>("duration_s").unwrap_or(0.0),
+                    "max_speed_kph": r.try_get::<f64,_>("max_speed_kph").unwrap_or(0.0),
+                    "peak_acc_m_s2": r.try_get::<f64,_>("peak_acc_m_s2").unwrap_or(0.0),
+                    "distance_m": r.try_get::<f64,_>("distance_m").unwrap_or(0.0),
+                    "seconds_since_midnight": r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0),
+                    "intensity_category": r.try_get::<String,_>("intensity_category").unwrap_or_default()
+                })
+            })
+            .collect();
+        return Json(json!({"sprints": sprints}));
+    }
 
     let rows = match sqlx::query(&sql_full)
         .bind(s1)
@@ -1616,6 +1994,37 @@ ORDER BY player_display_name, start_time_s"#,
         Err(e) => return Json(json!({"sprints": [], "error": format!("db error: {}", e)})),
     };
 
+    // Write-through cache
+    for r in &rows {
+        let _ = sqlx::query(
+            r#"
+            INSERT INTO sprint_events_cache (
+              match_name, player_display_name, seconds_since_midnight,
+              start_time, end_time, duration_s, max_speed_kph, peak_acc_m_s2, distance_m, intensity_category
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            ON CONFLICT (match_name, player_display_name, seconds_since_midnight, start_time, end_time) DO UPDATE SET
+              duration_s = EXCLUDED.duration_s,
+              max_speed_kph = EXCLUDED.max_speed_kph,
+              peak_acc_m_s2 = EXCLUDED.peak_acc_m_s2,
+              distance_m = EXCLUDED.distance_m,
+              intensity_category = EXCLUDED.intensity_category,
+              updated_at = NOW()
+            "#,
+        )
+        .bind(&table_name)
+        .bind(r.try_get::<String,_>("player_display_name").unwrap_or_default())
+        .bind(r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0))
+        .bind(r.try_get::<String,_>("start_time").unwrap_or_default())
+        .bind(r.try_get::<String,_>("end_time").unwrap_or_default())
+        .bind(r.try_get::<f64,_>("duration_s").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("max_speed_kph").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("peak_acc_m_s2").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("distance_m").unwrap_or(0.0))
+        .bind(r.try_get::<String,_>("intensity_category").unwrap_or_default())
+        .execute(&pool)
+        .await;
+    }
+
     let sprints: Vec<Value> = rows
         .into_iter()
         .map(|r| {
@@ -1626,7 +2035,7 @@ ORDER BY player_display_name, start_time_s"#,
                 "start_time": r.try_get::<String,_>("start_time").unwrap_or_default(),
                 "end_time": r.try_get::<String,_>("end_time").unwrap_or_default(),
                 "duration_s": r.try_get::<f64,_>("duration_s").unwrap_or(0.0),
-                "max_speed_m_s": r.try_get::<f64,_>("max_speed_m_s").unwrap_or(0.0),
+                "max_speed_kph": r.try_get::<f64,_>("max_speed_kph").unwrap_or(0.0),
                 "peak_acc_m_s2": r.try_get::<f64,_>("peak_acc_m_s2").unwrap_or(0.0),
                 "distance_m": r.try_get::<f64,_>("distance_m").unwrap_or(0.0),
                 "seconds_since_midnight": r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0),

@@ -92,7 +92,7 @@ interface AccelEventRow {
   seconds_since_midnight: number;
   duration_s: number;
   peak_acc: number;
-  max_speed_m_s: number;
+  max_speed_kph: number;
   distance_m: number;
   intensity_category: string;
 }
@@ -105,7 +105,7 @@ interface SprintEventRow {
   end_time: string;
   seconds_since_midnight: number;
   duration_s: number;
-  max_speed_m_s: number;
+  max_speed_kph: number;
   peak_acc_m_s2: number;
   distance_m: number;
   intensity_category: string;
@@ -1971,7 +1971,7 @@ export default function Page() {
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('seconds_since_midnight')}>Seconds since midnight</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('duration_s')}>Duration (s)</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('peak_acc')}>Peak acc (m/s²)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('max_speed_m_s')}>Max speed (m/s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('max_speed_kph')}>Max speed (km/h)</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('distance_m')}>Distance (m)</th>
                           <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSort('intensity_category')}>Intensity</th>
                         </tr>
@@ -2075,7 +2075,7 @@ export default function Page() {
                                 const el = document.getElementById('unified-video');
                                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.max_speed_m_s.toFixed(3)}</button>
+                              }} className="underline-offset-2 hover:underline">{ev.max_speed_kph.toFixed(3)}</button>
                             </td>
                             <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
                               <button onClick={()=>{
@@ -2153,7 +2153,7 @@ export default function Page() {
                           <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('end_time')}>End</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('seconds_since_midnight')}>Seconds since midnight</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('duration_s')}>Duration (s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('max_speed_m_s')}>Max speed (m/s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('max_speed_kph')}>Max speed (km/h)</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('peak_acc_m_s2')}>Peak acc (m/s²)</th>
                           <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('distance_m')}>Distance (m)</th>
                           <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('intensity_category')}>Intensity</th>
@@ -2246,7 +2246,7 @@ export default function Page() {
                                 const el = document.getElementById('unified-video');
                                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.max_speed_m_s.toFixed(3)}</button>
+                              }} className="underline-offset-2 hover:underline">{ev.max_speed_kph.toFixed(3)}</button>
                             </td>
                             <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
                               <button onClick={()=>{
