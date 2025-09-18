@@ -755,7 +755,40 @@ pub async fn get_player_worst_cases_from_view(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
 ) -> Json<Value> {
-    // Fast path: try cache first
+    // Fetch manual period boundaries (seconds since midnight)
+    let periods_row = sqlx::query(
+        r#"
+        SELECT 
+            manual_first_half_start AS s1,
+            manual_first_half_end   AS e1,
+            manual_second_half_start AS s2,
+            manual_second_half_end   AS e2
+        FROM match_periods
+        WHERE match_name = $1
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_one(&pool)
+    .await;
+
+    let (s1, e1, s2, e2) = match periods_row {
+        Ok(r) => {
+            let s1: Option<i32> = r.try_get("s1").ok();
+            let e1: Option<i32> = r.try_get("e1").ok();
+            let s2: Option<i32> = r.try_get("s2").ok();
+            let e2: Option<i32> = r.try_get("e2").ok();
+            if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
+                (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
+            } else {
+                return Json(json!({ "worst_cases": [], "error": "manual periods not available for this match" }));
+            }
+        }
+        Err(_) => {
+            return Json(json!({ "worst_cases": [], "error": "manual periods not found for this match" }));
+        }
+    };
+
+    // Try cache: only return if cached windows fall within active play windows
     let cached = sqlx::query(
         r#"
         SELECT player_display_name,
@@ -773,21 +806,31 @@ pub async fn get_player_worst_cases_from_view(
     .unwrap_or_default();
 
     if !cached.is_empty() {
-        let worst_cases_json: Vec<Value> = cached
-            .into_iter()
-            .map(|row| {
-                json!({
-                    "player_display_name": row.try_get::<String,_>("player_display_name").unwrap_or_default(),
-                    "start_second": row.try_get::<f64,_>("start_second").unwrap_or(0.0),
-                    "end_second": row.try_get::<f64,_>("end_second").unwrap_or(0.0),
-                    "distance_covered": row.try_get::<f64,_>("distance_covered").unwrap_or(0.0)
+        let mut all_within = true;
+        for row in &cached {
+            let ss = row.try_get::<f64,_>("start_second").unwrap_or(0.0);
+            let ee = row.try_get::<f64,_>("end_second").unwrap_or(0.0);
+            let in_first  = ss >= s1 && ee <= e1;
+            let in_second = ss >= s2 && ee <= e2;
+            if !(in_first || in_second) { all_within = false; break; }
+        }
+        if all_within {
+            let worst_cases_json: Vec<Value> = cached
+                .into_iter()
+                .map(|row| {
+                    json!({
+                        "player_display_name": row.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                        "start_second": row.try_get::<f64,_>("start_second").unwrap_or(0.0),
+                        "end_second": row.try_get::<f64,_>("end_second").unwrap_or(0.0),
+                        "distance_covered": row.try_get::<f64,_>("distance_covered").unwrap_or(0.0)
+                    })
                 })
-            })
-            .collect();
-        return Json(json!({ "worst_cases": worst_cases_json }));
+                .collect();
+            return Json(json!({ "worst_cases": worst_cases_json }));
+        }
     }
 
-    // Query usando la vista procesada (como en tu query original)
+    // Query usando la vista procesada y filtrando por períodos manuales
     let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
     
     let worst_cases_query = format!(
@@ -804,6 +847,11 @@ pub async fn get_player_worst_cases_from_view(
                 + (SUBSTRING(time FROM 7) || ' seconds')::INTERVAL AS second_interval
             FROM public.{}
             WHERE speed > {}  -- High Speed Running threshold
+              AND (
+                (COALESCE((seconds_since_midnight)::double precision, EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) BETWEEN $1 AND $2)
+                OR
+                (COALESCE((seconds_since_midnight)::double precision, EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) BETWEEN $3 AND $4)
+              )
         ),
         minute_window_data AS (
             SELECT 
@@ -841,6 +889,10 @@ pub async fn get_player_worst_cases_from_view(
     );
 
     let results = sqlx::query(&worst_cases_query)
+        .bind(s1)
+        .bind(e1)
+        .bind(s2)
+        .bind(e2)
         .fetch_all(&pool)
         .await
         .unwrap_or_default();
@@ -1806,7 +1858,7 @@ delta AS (
     player_display_name,
     time,
     speed_kph,
-    prev_speed_ms,
+    prev_speed_kph,
     COALESCE(
       CASE
         WHEN prev_epoch IS NULL THEN 0

@@ -12,3 +12,5 @@ notebooks/new-front/node_modules/
 notebooks/new-front/.next/
 
 notebooks/new-front/next-env.d.ts
+
+ml/.env
