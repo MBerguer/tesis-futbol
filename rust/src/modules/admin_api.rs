@@ -1,4 +1,5 @@
 use axum::{extract::{Path, State}, Json};
+use axum::extract::Multipart;
 use axum::extract::Query;
 use serde::Deserialize;
 use serde_json::json;
@@ -549,6 +550,42 @@ pub async fn confirm_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Resu
 pub async fn upload_pdf() -> Json<serde_json::Value> { Json(json!({"status": "not_implemented"})) }
 pub async fn upload_status(Path(_id): Path<Uuid>) -> Json<serde_json::Value> { Json(json!({"status": "not_implemented"})) }
 
+// Minimal PDF + CSV multipart upload confirmation
+pub async fn upload_pdf_csv(mut multipart: Multipart) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    use axum::http::StatusCode;
+
+    let mut pdf_meta: Option<(String, usize)> = None;
+    let mut csv_meta: Option<(String, usize)> = None;
+
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        let name = field.name().map(|s| s.to_string());
+        let file_name = field.file_name().map(|s| s.to_string()).unwrap_or_else(|| "unknown".to_string());
+        let bytes = field.bytes().await.map_err(internal_err)?;
+        let size = bytes.len();
+
+        match name.as_deref() {
+            Some("pdf") => pdf_meta = Some((file_name, size)),
+            Some("csv") => csv_meta = Some((file_name, size)),
+            _ => {}
+        }
+    }
+
+    if pdf_meta.is_none() || csv_meta.is_none() {
+        return Err((StatusCode::BAD_REQUEST, "Both 'pdf' and 'csv' parts are required".into()));
+    }
+
+    let upload_id = Uuid::new_v4();
+    let (pdf_name, pdf_size) = pdf_meta.unwrap();
+    let (csv_name, csv_size) = csv_meta.unwrap();
+
+    Ok(Json(json!({
+        "status": "ok",
+        "upload_id": upload_id,
+        "pdf": {"filename": pdf_name, "size": pdf_size},
+        "csv": {"filename": csv_name, "size": csv_size}
+    })))
+}
+
 fn internal_err<E: std::fmt::Display>(e: E) -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
 }
@@ -564,18 +601,35 @@ pub async fn get_lineup(State(pool): State<Db>, Path(id): Path<Uuid>) -> Result<
               mp.player_id,
               a."Jugador" as jugador,
               mp.role,
-              mp.position,
+              COALESCE(mp.position, a."Posicion") AS position,
               mp.jersey_number,
-              -- minutes estimate: from 0 or sub_on minute to sub_off minute or 90
-              COALESCE(
-                (SELECT MIN(eo.minute) FROM events eo 
-                   WHERE eo.match_id = mp.match_id AND eo.team_id = mp.team_id 
-                     AND eo.type = 'sub_off' AND eo.player_id = mp.player_id),
-                90
-              ) - COALESCE(
-                (SELECT MIN(ei.minute) FROM events ei 
-                   WHERE ei.match_id = mp.match_id AND ei.team_id = mp.team_id 
-                     AND ei.type = 'sub_on' AND ei.player_id = mp.player_id),
+              -- minutes played: starters from 0 to sub_off/90; subs only if sub_on exists
+              GREATEST(
+                CASE 
+                  WHEN mp.role = 'starter' THEN
+                    COALESCE(
+                      (SELECT MIN(eo.minute) FROM events eo 
+                        WHERE eo.match_id = mp.match_id AND eo.team_id = mp.team_id 
+                          AND eo.type = 'sub_off' AND eo.player_id = mp.player_id),
+                      90
+                    )
+                  WHEN EXISTS (
+                      SELECT 1 FROM events ei 
+                      WHERE ei.match_id = mp.match_id AND ei.team_id = mp.team_id 
+                        AND ei.type = 'sub_on' AND ei.player_id = mp.player_id
+                  ) THEN
+                    COALESCE(
+                      (SELECT MIN(eo.minute) FROM events eo 
+                        WHERE eo.match_id = mp.match_id AND eo.team_id = mp.team_id 
+                          AND eo.type = 'sub_off' AND eo.player_id = mp.player_id),
+                      90
+                    ) - (
+                      SELECT MIN(ei.minute) FROM events ei 
+                        WHERE ei.match_id = mp.match_id AND ei.team_id = mp.team_id 
+                          AND ei.type = 'sub_on' AND ei.player_id = mp.player_id
+                    )
+                  ELSE 0
+                END,
                 0
               ) AS minutes_played
            FROM match_players mp

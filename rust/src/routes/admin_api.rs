@@ -35,6 +35,7 @@ pub fn admin_api(pool: PgPool) -> Router {
         .route("/matches/:id/confirm", post(handlers::confirm_match))
         // Upload/OCR pipeline
         .route("/upload_pdf", post(handlers::upload_pdf))
+        .route("/upload_pdf_csv", post(handlers::upload_pdf_csv))
         .route("/uploads/:id/status", get(handlers::upload_status))
         .with_state(pool)
 }

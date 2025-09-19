@@ -48,6 +48,7 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
             <Link href="/players" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Active Players</Link>
             <Link href="/plantel" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Full Plantel</Link>
             <Link href="/week-preparation" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Week preparation</Link>
+            <Link href="/upload" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Upload PDF + CSV</Link>
             <Link href="/admin" className="rounded-md px-2 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Admin</Link>
           </nav>
         </div>
