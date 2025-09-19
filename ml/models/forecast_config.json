@@ -1,0 +1,11 @@
+{
+  "horizon_seconds": 5.0,
+  "window_seconds": 4.0,
+  "hz": 10,
+  "window_steps": 40,
+  "seq_features": [
+    "speed_z",
+    "accel_z"
+  ],
+  "threshold": 0.88
+}

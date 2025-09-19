@@ -1,4 +1,4 @@
-use crate::modules::matches;
+use crate::modules::{matches, forecast_realtime};
 use axum::{routing::get, routing::post, Router};
 use sqlx::PgPool;
 
@@ -56,6 +56,10 @@ pub fn matches_routes(pool: PgPool) -> Router {
         .route(
             "/table/:table_name/trace",
             get(matches::get_player_trace_window),
+        )
+        .route(
+            "/table/:table_name/forecast",
+            post(forecast_realtime::forecast_realtime),
         )
         .with_state(pool)
 }

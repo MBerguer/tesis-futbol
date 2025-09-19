@@ -215,6 +215,11 @@ export default function Page() {
   const [sharpPage, setSharpPage] = useState<number>(1);
   const SHARP_PAGE_SIZE = 10;
   const [sharpTraces, setSharpTraces] = useState<Array<{ player: string; points: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }> }>>([]);
+  const [forecastHorizon, setForecastHorizon] = useState<number>(5.0);
+  const [forecastData, setForecastData] = useState<any | null>(null);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+  const [loadingForecast, setLoadingForecast] = useState<boolean>(false);
+  const [forecastAuto, setForecastAuto] = useState<boolean>(false);
   const accelColumns = React.useMemo(() => (
     [
       'Total Accels',
@@ -692,6 +697,29 @@ export default function Page() {
     return fhStartPatched + t;
   }, [periods, kickoffSpike, videoTimeSec, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration]);
 
+  const fetchForecast = React.useCallback(async () => {
+    if (!selectedTable) return;
+    setLoadingForecast(true);
+    setForecastError(null);
+    try {
+      const center = gpsCursorSecond;
+      const horizon = forecastHorizon;
+      const qs = new URLSearchParams({ center_sec: String(center.toFixed(3)), horizon_s: String(horizon) });
+      const res = await fetch(`${API_BASE}/match/table/${selectedTable}/forecast?` + qs.toString(), { method: 'POST' });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${txt}`);
+      }
+      const data = await res.json();
+      setForecastData(data);
+    } catch (_) {
+      setForecastError('Failed to fetch forecast.');
+      setForecastData(null);
+    } finally {
+      setLoadingForecast(false);
+    }
+  }, [API_BASE, selectedTable, gpsCursorSecond, forecastHorizon]);
+
   const { snapshot: livePositions, loading: loadingPositions } = usePositionsWindow(
     API_BASE,
     selectedTable || null,
@@ -1083,6 +1111,20 @@ export default function Page() {
     const closeEnough = Math.abs((videoTimeSec || 0) - (pendingSeek || 0)) <= 0.75;
     if (closeEnough) setPendingSeek(undefined);
   }, [videoTimeSec, pendingSeek]);
+
+  useEffect(() => {
+    if (!forecastAuto) return;
+    let cancelled = false;
+    let timer: any;
+    const tick = async () => {
+      if (cancelled) return;
+      await fetchForecast();
+      if (cancelled) return;
+      timer = setTimeout(tick, 1000);
+    };
+    tick();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [forecastAuto, fetchForecast]);
   
   useEffect(() => {
     if (!periods) return;
@@ -1454,6 +1496,49 @@ export default function Page() {
 
                       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-2" id="unified-video">
+                          <div className="mb-3 rounded-md border border-zinc-800 bg-zinc-900/60 p-2">
+                            <div className="flex items-end justify-between gap-3">
+                              <div className="flex-1">
+                                <Label className="text-xs text-zinc-400" htmlFor="forecast-horizon">Forecast horizon (s)</Label>
+                                <Input
+                                  id="forecast-horizon"
+                                  type="number"
+                                  step={0.1}
+                                  className="bg-zinc-900/60 border-zinc-800 text-zinc-100"
+                                  value={forecastHorizon}
+                                  onChange={(e)=> setForecastHorizon(Number(e.target.value))}
+                                />
+                              </div>
+                              <div className="text-xs text-zinc-400">center_sec: {gpsCursorSecond.toFixed(3)}</div>
+                              <div className="flex items-center gap-2">
+                                <Button variant={'secondary'} onClick={fetchForecast} disabled={!selectedTable || loadingForecast}>
+                                  <span className="inline-flex items-center gap-1">
+                                    {loadingForecast ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>Fetching…</span></>) : 'Fetch forecast'}
+                                  </span>
+                                </Button>
+                                <Button variant={forecastAuto ? 'destructive' : 'outline'} onClick={()=> setForecastAuto(v=>!v)} disabled={!selectedTable}>
+                                  {forecastAuto ? 'Stop' : 'Start 1s polling'}
+                                </Button>
+                              </div>
+                            </div>
+                            {forecastError && (<div className="text-red-400 text-xs mt-1">{forecastError}</div>)}
+                            {forecastData && (
+                              <div className="mt-2 text-xs max-h-40 overflow-auto">
+                                {Array.isArray(forecastData?.results) && forecastData.results.length > 0 ? (
+                                  <div className="flex flex-col gap-1">
+                                    {forecastData.results.map((r: any, idx: number) => (
+                                      <div key={r.id || r.name || idx} className={`flex items-center justify-between rounded px-2 py-1 border ${r.above_thr ? 'border-red-900 bg-red-900/20 text-red-200' : 'border-emerald-900 bg-emerald-900/20 text-emerald-200'}`}>
+                                        <div className="truncate mr-2">{r.name || r.id}</div>
+                                        <div className="tabular-nums">{(Number(r.prob)||0).toFixed(3)}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <pre className="whitespace-pre-wrap break-words">{JSON.stringify(forecastData, null, 2)}</pre>
+                                )}
+                              </div>
+                            )}
+                          </div>
                           <UnifiedVideo
                             youtubeId={searchParams.get('yt')}
                             videoUrl={youtubeLink || searchParams.get('video') || undefined}

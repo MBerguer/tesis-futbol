@@ -69,6 +69,24 @@ services:
     depends_on:
       - db-futbol
       - rust-futbol
+  
+  # Python FastAPI microservice for forecasting (shares DB network)
+  forecast-python:
+    image: python:3.11-slim
+    working_dir: /workspaces/tesis-futbol
+    environment:
+      - FORECAST_MODEL_DIR=/workspaces/tesis-futbol/ml/models
+      - FORECAST_HZ=10
+      - FORECAST_WINDOW_SECONDS=4
+      - FORECAST_SEQ_FEATURES=speed_z,accel_z
+      - FORECAST_THRESHOLD=0.88
+      - FORECAST_HORIZON_SECONDS=5
+    command: sh -c "pip install -r ml/requirements.txt && uvicorn ml.service:app --host 0.0.0.0 --port 8001 --reload"
+    volumes:
+      - ../..:/workspaces:cached
+    network_mode: service:db-futbol
+    depends_on:
+      - db-futbol
   # Volumes for persisting the data of the database
 volumes:
   db-futbol:
