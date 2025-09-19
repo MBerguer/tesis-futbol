@@ -1199,7 +1199,8 @@ export default function Page() {
     for (const sp of sprintsInWorstCases) {
       if (typeof sp.sprint_start_sec === 'number') {
         const at = toVideoSec(sp.sprint_start_sec);
-        out.push({ id: `sprint-${sp.sprint_id}`, at, type: 'emoji', side: 'bottom', content: '🏃', label: `Sprint #${sp.sprint_id}`, data: { type: 'sprint', player: sp.player_display_name, sprintId: sp.sprint_id } });
+        const startKey = typeof sp.sprint_start_sec === 'number' ? sp.sprint_start_sec : (typeof sp.start_second === 'number' ? sp.start_second : at);
+        out.push({ id: `sprint-${sp.player_display_name}-${sp.sprint_id}-${Math.round(startKey*1000)}`, at, type: 'emoji', side: 'bottom', content: '🏃', label: `Sprint #${sp.sprint_id}`, data: { type: 'sprint', player: sp.player_display_name, sprintId: sp.sprint_id } });
       }
     }
     // Map match events using minute and added_time fields → to video seconds
@@ -1344,30 +1345,27 @@ export default function Page() {
                         <div className="text-sm text-gray-600">No events.</div>
                       ) : (
                         <div className="space-y-1 text-sm">
-                          {matchEvents.map((ev: any) => (
-                            <>
-                            {ev.type.toLowerCase() !== 'suboff' && (
-                              
-                            <div key={ev.event_id} className="flex items-start gap-2 py-1 px-2 rounded border border-zinc-800">
-                              <div className="w-16 text-zinc-400">{ev.minute}{typeof ev.added_time === 'number' ? `+${ev.added_time}` : ''}'</div>
-                              <div className="flex-1">
+                          {matchEvents
+                            .filter((ev: any) => ev.type.toLowerCase() !== 'suboff')
+                            .map((ev: any) => (
+                              <div key={ev.event_id} className="flex items-start gap-2 py-1 px-2 rounded border border-zinc-800">
+                                <div className="w-16 text-zinc-400">{ev.minute}{typeof ev.added_time === 'number' ? `+${ev.added_time}` : ''}'</div>
+                                <div className="flex-1">
                                   <div>
                                     <span className="text-zinc-300">{ev.team_name}</span> · 
                                     <span className={`uppercase text-xs font-semibold  px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 ${ev.type.toLowerCase() === 'goal' ? 'bg-green-600' : ev.type.toLowerCase() === 'yellow' ? 'bg-yellow-500' : ev.type.toLowerCase() === 'red' ? 'bg-red-900' : ev.type.toLowerCase() === 'subon' ? 'bg-blue-900' : ''}`}>
                                       { ev.type.toLowerCase() === 'subon' ? 'substitution' : ev.type}
                                     </span>
                                   </div>
-                                <div className="text-zinc-400">
-                                  {ev.jugador || ''}
-                                  {ev.related_jugador ? ` ↔ ${ev.related_jugador}` : ''}
-                                  {ev.assist_jugador ? ` (assist: ${ev.assist_jugador})` : ''}
-                                  {ev.reason ? ` – ${ev.reason}` : ''}
+                                  <div className="text-zinc-400">
+                                    {ev.jugador || ''}
+                                    {ev.related_jugador ? ` ↔ ${ev.related_jugador}` : ''}
+                                    {ev.assist_jugador ? ` (assist: ${ev.assist_jugador})` : ''}
+                                    {ev.reason ? ` – ${ev.reason}` : ''}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            )}
-                            </>
-                          ))}
+                            ))}
                         </div>
                       )
                     ) : (
@@ -1446,8 +1444,8 @@ export default function Page() {
                             </tr>
                           </thead>
                           <tbody>
-                            {accelerations.slice(0, 10).map((row) => (
-                              <tr key={row.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                            {accelerations.slice(0, 10).map((row, idx) => (
+                              <tr key={`accsum-${row.id}-${row.player_display_name}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
                                 <td className="py-2 pr-3 align-top text-zinc-200">{row.player_display_name}</td>
                               {row.values.slice(0, 10).map((v, i) => (
                                 <td key={i} className="py-2 px-2 text-right tabular-nums text-zinc-300">{formatAccelValue(v, i)}</td>
@@ -2018,8 +2016,8 @@ export default function Page() {
                         </tr>
                       </thead>
                       <tbody>
-                        {accelWcsSummary.map((r) => (
-                          <tr key={r.player} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                        {accelWcsSummary.map((r, idx) => (
+                          <tr key={`accwcs-${r.player}-${r.wcsStart}-${r.wcsEnd}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
                             <td className="py-2 pr-3 text-zinc-200">{r.player}</td>
                             <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeBefore/60).toFixed(1)}</td>
                             <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeAfter/60).toFixed(1)}</td>
@@ -2068,8 +2066,8 @@ export default function Page() {
                         </tr>
                       </thead>
                       <tbody>
-                        {sprintWcsSummary.map((r) => (
-                          <tr key={r.player} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                        {sprintWcsSummary.map((r, idx) => (
+                          <tr key={`sprintwcs-${r.player}-${r.wcsStart}-${r.wcsEnd}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
                             <td className="py-2 pr-3 text-zinc-200">{r.player}</td>
                             <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeBefore/60).toFixed(1)}</td>
                             <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeAfter/60).toFixed(1)}</td>
@@ -2126,8 +2124,8 @@ export default function Page() {
                       <tbody>
                         {sortedAccelEvents
                           .slice((accelPage-1)*ACCEL_PAGE_SIZE, (accelPage)*ACCEL_PAGE_SIZE)
-                          .map((ev) => (
-                          <tr key={ev.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                          .map((ev, idx) => (
+                          <tr key={`accelev-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
                             <td className="py-2 pr-3 text-zinc-200">
                               <button onClick={()=>{
                                 const abs = Number(ev.seconds_since_midnight || 0);
@@ -2309,8 +2307,8 @@ export default function Page() {
                       <tbody>
                         {sortedSprintEvents
                           .slice((sprintPage-1)*SPRINT_PAGE_SIZE, sprintPage*SPRINT_PAGE_SIZE)
-                          .map((ev) => (
-                          <tr key={ev.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                          .map((ev, idx) => (
+                          <tr key={`sprintev-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
                             <td className="py-2 pr-3 text-zinc-200">
                               <button onClick={()=>{
                                 const abs = Number(ev.seconds_since_midnight || 0);
@@ -2515,8 +2513,8 @@ export default function Page() {
                       <tbody>
                         {sortedSharpAngles
                           .slice((sharpPage-1)*SHARP_PAGE_SIZE, sharpPage*SHARP_PAGE_SIZE)
-                          .map((ev) => (
-                          <tr key={ev.id} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                          .map((ev, idx) => (
+                          <tr key={`sharp-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
                             <td className="py-2 pr-3 text-zinc-200">
                               <button onClick={()=>{
                                 const abs = Number(ev.seconds_since_midnight || 0);
