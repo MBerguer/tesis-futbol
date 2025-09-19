@@ -834,6 +834,41 @@ export default function Page() {
     return map;
   }, [sprintEvents]);
 
+  const lineupSorted = React.useMemo(() => {
+    const normalize = (s: string) => (s || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const positionOrder = (pos?: string | null): number => {
+      const p = normalize(String(pos || ''));
+      if (!p) return 999;
+      if (p.includes('arquero')) return 1;
+      if (p.includes('defensa central')) return 2;
+      if (p.includes('lateral izquierdo')) return 3;
+      if (p.includes('lateral derecho')) return 4;
+      if (p.includes('volante central')) return 5;
+      if (p.includes('volante interior izquierdo')) return 6;
+      if (p.includes('volante interior derecho')) return 7;
+      if (p.includes('volante exterior izquierdo')) return 8;
+      if (p.includes('volante exterior derecho')) return 9;
+      if (p.includes('volante creativo')) return 10;
+      if (p.includes('mediapunta')) return 11;
+      if (p.includes('delantero')) return 12;
+      return 999;
+    };
+    const arr = [...lineupMinutes];
+    arr.sort((a: any, b: any) => {
+      const oa = positionOrder(a?.position);
+      const ob = positionOrder(b?.position);
+      if (oa !== ob) return oa - ob;
+      const ra = a?.role === 'starter' ? 0 : 1;
+      const rb = b?.role === 'starter' ? 0 : 1;
+      if (ra !== rb) return ra - rb;
+      return String(a?.jugador || '').localeCompare(String(b?.jugador || ''));
+    });
+    return arr;
+  }, [lineupMinutes]);
+
+  const lineupStarters = React.useMemo(() => lineupSorted.filter((r: any) => r?.role === 'starter'), [lineupSorted]);
+  const lineupBench = React.useMemo(() => lineupSorted.filter((r: any) => r?.role !== 'starter'), [lineupSorted]);
+
   // Build per-minute acceleration histogram per player and WCS highlight minutes
   const accelMinuteByPlayer = React.useMemo(() => {
     const normalize = (s: string) => (s || '').trim()
@@ -1345,15 +1380,30 @@ export default function Page() {
                       ) : lineupMinutes.length === 0 ? (
                         <div className="text-sm text-gray-600">No lineup data.</div>
                       ) : (
-                        <div className="text-sm space-y-1">
-                          {lineupMinutes.map((row: any) => (
-                            <div key={row.match_player_id} className="flex items-center justify-between border border-zinc-800 rounded px-2 py-1">
-                              <div className="truncate mr-2">
-                                <span className="text-zinc-300">{row.team_name}</span> · {row.jugador || '—'} {row.role === 'starter' ? '' : '(sub)'}
+                        <div className="text-sm space-y-2">
+                          <div className="space-y-1">
+                            {lineupStarters.map((row: any) => (
+                              <div key={row.match_player_id} className="flex items-center justify-between border border-zinc-800 rounded px-2 py-1">
+                                <div className="truncate mr-2">
+                                  <span className="text-zinc-300">{row.jugador || '—'}</span>
+                                  <span className="ml-2 text-xs text-zinc-400">{row.position ? `(${row.position})` : ''}</span>
+                                </div>
+                                <div className="text-zinc-400">{(row.minutes_played ?? 0) > 0 ? `${row.minutes_played} min` : '—'}</div>
                               </div>
-                              <div className="text-zinc-400">{row.minutes_played ?? 0} min</div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
+                          <Separator className="bg-zinc-800" />
+                          <div className="space-y-1">
+                            {lineupBench.map((row: any) => (
+                              <div key={row.match_player_id} className="flex items-center justify-between border border-zinc-800 rounded px-2 py-1">
+                                <div className="truncate mr-2">
+                                  <span className="text-zinc-300">{row.jugador || '—'}</span>
+                                  <span className="ml-2 text-xs text-zinc-400">{row.position ? `(${row.position})` : ''} (sub)</span>
+                                </div>
+                                <div className="text-zinc-400">{(row.minutes_played ?? 0) > 0 ? `${row.minutes_played} min` : '—'}</div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )
                     )}
