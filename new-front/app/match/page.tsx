@@ -220,6 +220,7 @@ export default function Page() {
   const [forecastError, setForecastError] = useState<string | null>(null);
   const [loadingForecast, setLoadingForecast] = useState<boolean>(false);
   const [forecastAuto, setForecastAuto] = useState<boolean>(false);
+  const [forecastOpen, setForecastOpen] = useState<boolean>(false);
   const accelColumns = React.useMemo(() => (
     [
       'Total Accels',
@@ -1494,52 +1495,62 @@ export default function Page() {
                         patchedSecondHalfStart={patchedSecondHalfStart}
                       />
 
-                      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-2" id="unified-video">
-                          <div className="mb-3 rounded-md border border-zinc-800 bg-zinc-900/60 p-2">
-                            <div className="flex items-end justify-between gap-3">
-                              <div className="flex-1">
-                                <Label className="text-xs text-zinc-400" htmlFor="forecast-horizon">Forecast horizon (s)</Label>
-                                <Input
-                                  id="forecast-horizon"
-                                  type="number"
-                                  step={0.1}
-                                  className="bg-zinc-900/60 border-zinc-800 text-zinc-100"
-                                  value={forecastHorizon}
-                                  onChange={(e)=> setForecastHorizon(Number(e.target.value))}
-                                />
-                              </div>
-                              <div className="text-xs text-zinc-400">center_sec: {gpsCursorSecond.toFixed(3)}</div>
-                              <div className="flex items-center gap-2">
-                                <Button variant={'secondary'} onClick={fetchForecast} disabled={!selectedTable || loadingForecast}>
-                                  <span className="inline-flex items-center gap-1">
-                                    {loadingForecast ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>Fetching…</span></>) : 'Fetch forecast'}
-                                  </span>
-                                </Button>
-                                <Button variant={forecastAuto ? 'destructive' : 'outline'} onClick={()=> setForecastAuto(v=>!v)} disabled={!selectedTable}>
-                                  {forecastAuto ? 'Stop' : 'Start 1s polling'}
-                                </Button>
-                              </div>
-                            </div>
-                            {forecastError && (<div className="text-red-400 text-xs mt-1">{forecastError}</div>)}
-                            {forecastData && (
-                              <div className="mt-2 text-xs max-h-40 overflow-auto">
-                                {Array.isArray(forecastData?.results) && forecastData.results.length > 0 ? (
-                                  <div className="flex flex-col gap-1">
-                                    {forecastData.results.map((r: any, idx: number) => (
-                                      <div key={r.id || r.name || idx} className={`flex items-center justify-between rounded px-2 py-1 border ${r.above_thr ? 'border-red-900 bg-red-900/20 text-red-200' : 'border-emerald-900 bg-emerald-900/20 text-emerald-200'}`}>
-                                        <div className="truncate mr-2">{r.name || r.id}</div>
-                                        <div className="tabular-nums">{(Number(r.prob)||0).toFixed(3)}</div>
+                      <div className="mt-3 relative">
+                        <div className={`${forecastOpen ? 'w-60 h-[660px]' : 'w-[15px]'} absolute left-0 top-2 transition-all duration-200 h-[700px]`}>
+                          <div className="h-full rounded-md border border-zinc-800 bg-zinc-900/60 flex flex-col">
+                            <button className="text-xs px-1 py-1 border-b border-zinc-800 hover:bg-zinc-800/50" onClick={()=> setForecastOpen(v=>!v)} title={forecastOpen ? 'Hide forecast' : 'Show forecast'}>
+                              {forecastOpen ? '⟨' : '⟩'}
+                            </button>
+                            {forecastOpen && (
+                              <div className="p-2 space-y-2 text-xs">
+                                <div>
+                                  <Label className="text-xs text-zinc-400" htmlFor="forecast-horizon">Horizon (s)</Label>
+                                  <Input
+                                    id="forecast-horizon"
+                                    type="number"
+                                    step={0.1}
+                                    className="bg-zinc-900/60 border-zinc-800 text-zinc-100 h-7"
+                                    value={forecastHorizon}
+                                    onChange={(e)=> setForecastHorizon(Number(e.target.value))}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button variant={'secondary'} size={'sm'} onClick={fetchForecast} disabled={!selectedTable || loadingForecast}>
+                                    <span className="inline-flex items-center gap-1">
+                                      {loadingForecast ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>Fetch…</span></>) : 'Fetch now'}
+                                    </span>
+                                  </Button>
+                                  <Button variant={'default'} className="bg-primary text-primary-foreground hover:bg-primary/90" size={'sm'} onClick={()=> setForecastAuto(v=>!v)} disabled={!selectedTable}>
+                                    {forecastAuto ? 'Stop' : 'Start'}
+                                  </Button>
+                                </div>
+                                {forecastError && (<div className="text-red-400 text-xs mt-1">{forecastError}</div>)}
+                                {forecastData && (
+                                  <div className="mt-1 text-xs">
+                                    {Array.isArray(forecastData?.results) && forecastData.results.length > 0 ? (
+                                      <div className="flex flex-col gap-1">
+                                        {forecastData.results
+                                          .slice()
+                                          .sort((a: any, b: any) => String(a.name||a.id||'').localeCompare(String(b.name||b.id||'')))
+                                          .map((r: any, idx: number) => (
+                                          <div key={r.id || r.name || idx} className={`flex items-center justify-between rounded px-2 py-1 border ${r.above_thr ? 'border-red-900 bg-red-900/20 text-red-200' : 'border-emerald-900 bg-emerald-900/20 text-emerald-200'}`}>
+                                            <div className="truncate mr-2">{r.name || r.id}</div>
+                                            <div className="tabular-nums">{(Number(r.prob)||0).toFixed(3)}</div>
+                                          </div>
+                                        ))}
                                       </div>
-                                    ))}
+                                    ) : (
+                                      <pre className="whitespace-pre-wrap break-words">{JSON.stringify(forecastData, null, 2)}</pre>
+                                    )}
                                   </div>
-                                ) : (
-                                  <pre className="whitespace-pre-wrap break-words">{JSON.stringify(forecastData, null, 2)}</pre>
                                 )}
                               </div>
                             )}
                           </div>
-                          <UnifiedVideo
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginLeft: forecastOpen ? 240 : 15 }}>
+                          <div className="p-2" id="unified-video">
+                            <UnifiedVideo
                             youtubeId={searchParams.get('yt')}
                             videoUrl={youtubeLink || searchParams.get('video') || undefined}
                             onSecondChange={handleVideoSecondChange}
@@ -1554,112 +1565,113 @@ export default function Page() {
                               const el = document.getElementById('unified-video')
                               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
                             }}
-                          />
-                          <div className="mt-2 w-[110px] text-xs text-zinc-300 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            <span>{(function(){
-                              const p = periods;
-                              const kickoff = kickoffSpike ?? 0;
-                              const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
-                              const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-                              const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - (fhStartPatched as number)) : undefined);
-                              if (!p) return Math.max(0, (fhStartPatched as number) + videoTimeSec).toFixed(3);
-                              if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
-                                const firstHalfDuration = Math.max(0, fhDurPatched);
-                                if (videoTimeSec <= firstHalfDuration) return ((fhStartPatched as number) + videoTimeSec).toFixed(3);
-                                return ((shStartPatched as number) + (videoTimeSec - firstHalfDuration)).toFixed(3);
-                              }
-                              return ((fhStartPatched as number) + videoTimeSec).toFixed(3);
-                            })()}</span>
-                          </div>
-                        </div>
-                        <div className="p-2">
-                          <div className="h-[660px] md:h-[760px]">
-                            <div className="sticky z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
-                              <div className="flex items-center gap-2 py-2">
-                                <label className="text-xs text-zinc-400">Orientation</label>
-                                <Slider
-                                  min={-180}
-                                  max={180}
-                                  step={1}
-                                  value={[mapBearing]}
-                                  onValueChange={(vals)=>{
-                                    const v = Number(vals?.[0] ?? 0);
-                                    setMapBearing(v);
-                                    if (orientationSaveTimer.current) clearTimeout(orientationSaveTimer.current);
-                                    orientationSaveTimer.current = setTimeout(()=>{ persistVenueOrientation(v); }, 600);
-                                  }}
-                                  onValueCommit={(vals)=>{
-                                    const v = Number(vals?.[0] ?? mapBearing);
-                                    persistVenueOrientation(v);
-                                  }}
-                                  className="w-44"
-                                />
-                                <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
-                                <span className="ml-2 text-xs text-zinc-400 min-w-[70px]">{savingOrientation ? 'Saving…' : (orientationSavedAt ? 'Saved' : '')}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
-                                <div className="flex items-center gap-2">
-                                  <Button variant={'destructive'} size={'sm'} onClick={()=> setSharpTraces([])}>Clear traces</Button>
-                                  {loadingSharpAngles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                                </div>
-                              </div>
+                            />
+                            <div className="mt-2 w-[110px] text-xs text-zinc-300 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              <span>{(function(){
+                                const p = periods;
+                                const kickoff = kickoffSpike ?? 0;
+                                const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
+                                const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+                                const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - (fhStartPatched as number)) : undefined);
+                                if (!p) return Math.max(0, (fhStartPatched as number) + videoTimeSec).toFixed(3);
+                                if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+                                  const firstHalfDuration = Math.max(0, fhDurPatched);
+                                  if (videoTimeSec <= firstHalfDuration) return ((fhStartPatched as number) + videoTimeSec).toFixed(3);
+                                  return ((shStartPatched as number) + (videoTimeSec - firstHalfDuration)).toFixed(3);
+                                }
+                                return ((fhStartPatched as number) + videoTimeSec).toFixed(3);
+                              })()}</span>
                             </div>
-                            {(!selectedTable || !periods) ? (
-                              <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
-                            ) : (
-                              <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
-                                <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
-                                  <PitchMap
-                                    points={livePositions}
-                                    styleObj={googleRasterStyle}
-                                    pinned={pinnedPlayers}
-                                    onToggle={togglePinned}
-                                    heightClass={'h-full'}
-                                    heightStyle={mapStacked ? undefined : undefined}
-                                    centerLatitude={(matchDetails?.venue_latitude ?? -34.795334) as number}
-                                    centerLongitude={(matchDetails?.venue_longitude ?? -56.147974) as number}
-                                    bearing={mapBearing}
-                                    traceLines={(sharpTraces && sharpTraces.length>0) ? sharpTraces.map(t => t.points.map(p=>({ lat: p.lat, lon: p.lon }))) : undefined}
-                                    traceColor={'#ef4444'}
+                          </div>
+                          <div className="p-2">
+                            <div className="h-[660px] md:h-[760px]">
+                              <div className="sticky z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
+                                <div className="flex items-center gap-2 py-2">
+                                  <label className="text-xs text-zinc-400">Orientation</label>
+                                  <Slider
+                                    min={-180}
+                                    max={180}
+                                    step={1}
+                                    value={[mapBearing]}
+                                    onValueChange={(vals)=>{
+                                      const v = Number(vals?.[0] ?? 0);
+                                      setMapBearing(v);
+                                      if (orientationSaveTimer.current) clearTimeout(orientationSaveTimer.current);
+                                      orientationSaveTimer.current = setTimeout(()=>{ persistVenueOrientation(v); }, 600);
+                                    }}
+                                    onValueCommit={(vals)=>{
+                                      const v = Number(vals?.[0] ?? mapBearing);
+                                      persistVenueOrientation(v);
+                                    }}
+                                    className="w-44"
                                   />
+                                  <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
+                                  <span className="ml-2 text-xs text-zinc-400 min-w-[70px]">{savingOrientation ? 'Saving…' : (orientationSavedAt ? 'Saved' : '')}</span>
                                 </div>
-                                <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
-                                  {loadingPlayers ? (
-                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                  ) : players.length === 0 ? (
-                                    <div className="text-sm text-gray-600">No players found.</div>
-                                  ) : (
-                                    <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
-                                      {players.map((player, index) => {
-                                        const { base, border } = stringToColorPair(player || "");
-                                        const active = !!pinnedPlayers[player];
-                                        return (
-                                          <button
-                                            key={index}
-                                            onClick={() => togglePinned(player)}
-                                            className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
-                                            style={{
-                                              background: active ? base : '#27272a',
-                                              color: active ? '#fff' : '#d4d4d8',
-                                              padding: '3px 8px',
-                                            }}
-                                            title={player}
-                                          >
-                                            <span
-                                              className="inline-block rounded-full"
-                                              style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
-                                            />
-                                            <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
+                                <div className="flex items-center gap-2">
+                                  <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
+                                  <div className="flex items-center gap-2">
+                                    <Button variant={'destructive'} size={'sm'} onClick={()=> setSharpTraces([])}>Clear traces</Button>
+                                    {loadingSharpAngles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                                  </div>
                                 </div>
                               </div>
-                            )}
+                              {(!selectedTable || !periods) ? (
+                                <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
+                              ) : (
+                                <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
+                                  <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
+                                    <PitchMap
+                                      points={livePositions}
+                                      styleObj={googleRasterStyle}
+                                      pinned={pinnedPlayers}
+                                      onToggle={togglePinned}
+                                      heightClass={'h-full'}
+                                      heightStyle={mapStacked ? undefined : undefined}
+                                      centerLatitude={(matchDetails?.venue_latitude ?? -34.795334) as number}
+                                      centerLongitude={(matchDetails?.venue_longitude ?? -56.147974) as number}
+                                      bearing={mapBearing}
+                                      traceLines={(sharpTraces && sharpTraces.length>0) ? sharpTraces.map(t => t.points.map(p=>({ lat: p.lat, lon: p.lon }))) : undefined}
+                                      traceColor={'#ef4444'}
+                                    />
+                                  </div>
+                                  <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
+                                    {loadingPlayers ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                    ) : players.length === 0 ? (
+                                      <div className="text-sm text-gray-600">No players found.</div>
+                                    ) : (
+                                      <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
+                                        {players.map((player, index) => {
+                                          const { base, border } = stringToColorPair(player || "");
+                                          const active = !!pinnedPlayers[player];
+                                          return (
+                                            <button
+                                              key={index}
+                                              onClick={() => togglePinned(player)}
+                                              className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
+                                              style={{
+                                                background: active ? base : '#27272a',
+                                                color: active ? '#fff' : '#d4d4d8',
+                                                padding: '3px 8px',
+                                              }}
+                                              title={player}
+                                            >
+                                              <span
+                                                className="inline-block rounded-full"
+                                                style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
+                                              />
+                                              <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
