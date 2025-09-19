@@ -113,3 +113,38 @@ pub struct Event {
 }
 
 
+// -------- Forecasting service DTOs --------
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ForecastSample {
+    pub ts: f64,
+    pub speed_z: Option<f64>,
+    pub accel_z: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ForecastPlayerWindow {
+    pub id: String,
+    pub name: String,
+    pub samples: Vec<ForecastSample>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ForecastRequest {
+    pub horizon_s: f64,
+    pub players: Vec<ForecastPlayerWindow>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ForecastResult {
+    pub id: String,
+    pub name: String,
+    pub prob: f64,
+    pub above_thr: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ForecastResponse {
+    pub horizon_s: f64,
+    pub results: Vec<ForecastResult>,
+}
+
