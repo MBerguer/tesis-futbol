@@ -1,5 +1,8 @@
 use axum::{extract::{Path, State}, Json};
 use axum::extract::Multipart;
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use axum::extract::Query;
 use serde::Deserialize;
 use serde_json::json;
@@ -548,42 +551,243 @@ pub async fn confirm_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Resu
 
 // Upload/OCR stubs
 pub async fn upload_pdf() -> Json<serde_json::Value> { Json(json!({"status": "not_implemented"})) }
-pub async fn upload_status(Path(_id): Path<Uuid>) -> Json<serde_json::Value> { Json(json!({"status": "not_implemented"})) }
+static UPLOAD_JOBS: Lazy<Mutex<HashMap<Uuid, serde_json::Value>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+pub async fn upload_status(Path(id): Path<Uuid>) -> Json<serde_json::Value> {
+    let jobs = UPLOAD_JOBS.lock().unwrap();
+    if let Some(v) = jobs.get(&id) { return Json(v.clone()); }
+    Json(json!({"status": "not_found"}))
+}
 
 // Minimal PDF + CSV multipart upload confirmation
 pub async fn upload_pdf_csv(mut multipart: Multipart) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     use axum::http::StatusCode;
 
     let mut pdf_meta: Option<(String, usize)> = None;
+    let mut pdf_bytes: Option<Vec<u8>> = None;
     let mut csv_meta: Option<(String, usize)> = None;
 
-    while let Ok(Some(mut field)) = multipart.next_field().await {
+    while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().map(|s| s.to_string());
         let file_name = field.file_name().map(|s| s.to_string()).unwrap_or_else(|| "unknown".to_string());
         let bytes = field.bytes().await.map_err(internal_err)?;
         let size = bytes.len();
 
         match name.as_deref() {
-            Some("pdf") => pdf_meta = Some((file_name, size)),
+            Some("pdf") => { pdf_meta = Some((file_name, size)); pdf_bytes = Some(bytes.to_vec()); },
             Some("csv") => csv_meta = Some((file_name, size)),
             _ => {}
         }
     }
 
-    if pdf_meta.is_none() || csv_meta.is_none() {
-        return Err((StatusCode::BAD_REQUEST, "Both 'pdf' and 'csv' parts are required".into()));
+    if pdf_meta.is_none() && csv_meta.is_none() {
+        return Err((StatusCode::BAD_REQUEST, "At least one of 'pdf' or 'csv' must be provided".into()));
     }
 
     let upload_id = Uuid::new_v4();
-    let (pdf_name, pdf_size) = pdf_meta.unwrap();
-    let (csv_name, csv_size) = csv_meta.unwrap();
+
+    // Kick off background OpenAI processing if we received a PDF
+    if let Some((pdf_name, pdf_size)) = pdf_meta.clone() {
+        let job_id = upload_id;
+        {
+            let mut jobs = UPLOAD_JOBS.lock().unwrap();
+            jobs.insert(job_id, json!({
+                "status": "processing",
+                "type": "pdf",
+                "pdf": {"filename": pdf_name, "size": pdf_size}
+            }));
+        }
+        let pdf_name_clone = pdf_name.clone();
+        let pdf_payload = pdf_bytes.clone().unwrap_or_default();
+        tokio::spawn(async move {
+            let result = process_pdf_with_openai(job_id, pdf_name_clone, pdf_payload).await;
+            let mut jobs = UPLOAD_JOBS.lock().unwrap();
+            jobs.insert(job_id, result);
+        });
+    }
 
     Ok(Json(json!({
         "status": "ok",
         "upload_id": upload_id,
-        "pdf": {"filename": pdf_name, "size": pdf_size},
-        "csv": {"filename": csv_name, "size": csv_size}
+        "pdf": pdf_meta.map(|(filename, size)| json!({"filename": filename, "size": size})),
+        "csv": csv_meta.map(|(filename, size)| json!({"filename": filename, "size": size}))
     })))
+}
+
+async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<u8>) -> serde_json::Value {
+    // Read API key from env
+    let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+    if api_key.is_empty() {
+        return json!({"status": "error", "error": "OPENAI_API_KEY not configured", "job_id": job_id});
+    }
+
+    let api_base = std::env::var("OPENAI_API_BASE").unwrap_or_else(|_| "https://api.openai.com".to_string());
+    let client = reqwest::Client::new();
+
+    // 1) Upload PDF to Files API
+    let form = reqwest::multipart::Form::new()
+        .text("purpose", "user_data")
+        .part(
+            "file",
+            reqwest::multipart::Part::bytes(pdf_bytes)
+                .file_name(pdf_name.clone())
+                .mime_str("application/pdf").unwrap()
+        );
+
+    let upload_resp = match client
+        .post(format!("{}/v1/files", api_base))
+        .bearer_auth(&api_key)
+        .multipart(form)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return json!({"status": "error", "error": format!("file upload failed: {}", e), "job_id": job_id}),
+    };
+
+    if !upload_resp.status().is_success() {
+        let status = upload_resp.status();
+        let txt = upload_resp.text().await.unwrap_or_default();
+        return json!({"status": "error", "error": format!("file upload http {}: {}", status, txt), "job_id": job_id});
+    }
+
+    let upload_json: serde_json::Value = match upload_resp.json().await {
+        Ok(j) => j,
+        Err(e) => return json!({"status": "error", "error": format!("file upload parse failed: {}", e), "job_id": job_id}),
+    };
+    let file_id = match upload_json.get("id").and_then(|v| v.as_str()) {
+        Some(s) => s.to_string(),
+        None => return json!({"status": "error", "error": "no file id returned", "job_id": job_id, "upload": upload_json}),
+    };
+
+    // 2) Create a Response with system prompt + file input
+    let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+    let body = json!({
+        "model": model,
+        "input": [
+          {
+            "role": "system",
+            "content": [ { "type": "input_text", "text": "You are an expert in PDFs. Tell me what this is about." } ]
+          },
+          {
+            "role": "user",
+            "content": [
+              { "type": "input_text", "text": "Please analyze the attached PDF and summarize what it's about." },
+              { "type": "input_file", "file_id": file_id }
+            ]
+          }
+        ]
+    });
+
+    // Create response with simple retry on rate limits
+    let mut attempt: i32 = 0;
+    let max_attempts: i32 = 6; // ~ up to ~63s total backoff
+    let mut last_err: String = String::new();
+    let response_id: String;
+    loop {
+        attempt += 1;
+        let resp_res = client
+            .post(format!("{}/v1/responses", api_base))
+            .bearer_auth(&api_key)
+            .json(&body)
+            .send()
+            .await;
+
+        match resp_res {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    let create_json: serde_json::Value = match resp.json().await {
+                        Ok(j) => j,
+                        Err(e) => return json!({"status": "error", "error": format!("create response parse failed: {}", e), "job_id": job_id}),
+                    };
+                    if let Some(id) = create_json.get("id").and_then(|v| v.as_str()) {
+                        response_id = id.to_string();
+                        break;
+                    } else {
+                        return json!({"status": "error", "error": "no response id returned", "job_id": job_id, "response": create_json});
+                    }
+                } else {
+                    let status = resp.status();
+                    let txt = resp.text().await.unwrap_or_default();
+                    if status.as_u16() == 429 {
+                        last_err = txt.clone();
+                        if attempt >= max_attempts {
+                            return json!({
+                                "status": "error",
+                                "error": format!("rate limited creating response after {} attempts: {}", attempt, last_err),
+                                "job_id": job_id,
+                                "rate_limited": true
+                            });
+                        }
+                        let delay = 1 << attempt.min(5); // 2,4,8,16,32
+                        tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
+                        continue;
+                    }
+                    return json!({"status": "error", "error": format!("create response http {}: {}", status, txt), "job_id": job_id});
+                }
+            }
+            Err(e) => return json!({"status": "error", "error": format!("create response failed: {}", e), "job_id": job_id}),
+        }
+    }
+
+    // 3) Poll until completed/failed
+    let mut attempts: i32 = 0;
+    loop {
+        attempts += 1;
+        let r = match client
+            .get(format!("{}/v1/responses/{}", api_base, response_id))
+            .bearer_auth(&api_key)
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => return json!({"status": "error", "error": format!("poll failed: {}", e), "job_id": job_id, "response_id": response_id}),
+        };
+        if !r.status().is_success() {
+            let status = r.status();
+            let txt = r.text().await.unwrap_or_default();
+            if status.as_u16() == 429 {
+                // backoff a bit and continue polling
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                continue;
+            }
+            return json!({"status": "error", "error": format!("poll http {}: {}", status, txt), "job_id": job_id, "response_id": response_id});
+        }
+        let js: serde_json::Value = match r.json().await { Ok(v) => v, Err(e) => json!({"error": format!("poll parse: {}", e)}) };
+        let status = js.get("status").and_then(|v| v.as_str()).unwrap_or("");
+        if status == "completed" {
+            // Try to extract a single text output if present
+            let summary = js.get("output_text").cloned().or_else(|| {
+                // fallback: traverse output array
+                let mut text = String::new();
+                if let Some(arr) = js.get("output").and_then(|v| v.as_array()) {
+                    for item in arr {
+                        if let Some(content_arr) = item.get("content").and_then(|v| v.as_array()) {
+                            for c in content_arr {
+                                if c.get("type").and_then(|t| t.as_str()) == Some("output_text") {
+                                    if let Some(t) = c.get("text").and_then(|t| t.as_str()) { text.push_str(t); text.push('\n'); }
+                                }
+                            }
+                        }
+                    }
+                }
+                if text.is_empty() { None } else { Some(json!(text)) }
+            });
+            return json!({
+                "status": "completed",
+                "job_id": job_id,
+                "response_id": response_id,
+                "summary": summary,
+                "raw": js
+            });
+        } else if status == "failed" || status == "cancelled" || status == "expired" {
+            return json!({"status": "error", "job_id": job_id, "response_id": response_id, "raw": js});
+        }
+        if attempts > 120 { // ~2 minutes at 1s interval
+            return json!({"status": "error", "error": "timeout waiting for openai response", "job_id": job_id, "response_id": response_id});
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
 }
 
 fn internal_err<E: std::fmt::Display>(e: E) -> (axum::http::StatusCode, String) {

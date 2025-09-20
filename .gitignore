@@ -14,3 +14,7 @@ notebooks/new-front/.next/
 notebooks/new-front/next-env.d.ts
 
 ml/.env
+
+rust/.container.env
+
+ml/__pycache__/
