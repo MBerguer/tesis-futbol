@@ -16,6 +16,9 @@ const REQUIRED_HEADERS = [
 
 export default function UploadPage() {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const [provider, setProvider] = React.useState<'openai' | 'gemini'>('openai');
+  const UPLOAD_TIMEOUT_MS = 30000; // 30s
+  const STATUS_TIMEOUT_MS = 8000;  // 8s per poll
   const [pdfFile, setPdfFile] = React.useState<File | null>(null);
   const [csvFile, setCsvFile] = React.useState<File | null>(null);
   const [csvError, setCsvError] = React.useState<string | null>(null);
@@ -79,17 +82,20 @@ export default function UploadPage() {
       const form = new FormData();
       if (pdfFile) form.append("pdf", pdfFile);
       if (csvFile) form.append("csv", csvFile);
+      form.append("provider", provider);
 
       // Use XMLHttpRequest to track upload progress
       const data = await new Promise<any>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${API_BASE}/api/upload_pdf_csv`);
+        xhr.timeout = UPLOAD_TIMEOUT_MS;
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const pct = Math.round((e.loaded / e.total) * 100);
             setUploadProgress(pct);
           }
         };
+        xhr.ontimeout = () => reject(new Error("Upload timed out"));
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
@@ -118,7 +124,7 @@ export default function UploadPage() {
         const timer = setInterval(async () => {
           tries += 1;
           try {
-            const res = await fetch(`${API_BASE}/api/uploads/${id}/status`);
+            const res = await fetch(`${API_BASE}/api/uploads/${id}/status`, { signal: (AbortSignal as any).timeout ? (AbortSignal as any).timeout(STATUS_TIMEOUT_MS) : undefined });
             if (!res.ok) throw new Error("status fetch failed");
             const js = await res.json();
             setJobStatus(js);
@@ -149,6 +155,18 @@ export default function UploadPage() {
     <div className="py-6">
       <h1 className="text-xl font-semibold mb-4">Upload PDF + CSV</h1>
       <form onSubmit={onSubmit} className="space-y-4 max-w-xl">
+        <div className="space-y-1">
+          <label className="text-sm text-zinc-300">Provider</label>
+          <select
+            value={provider}
+            onChange={(e)=>setProvider((e.target.value as 'openai' | 'gemini'))}
+            className="w-full h-9 rounded-md bg-zinc-900/50 border border-zinc-800 px-2 text-sm text-zinc-200"
+          >
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini</option>
+          </select>
+          <div className="text-xs text-zinc-500">Controls which model processes the PDF.</div>
+        </div>
         <div className="space-y-1">
           <label className="text-sm text-zinc-300">PDF file</label>
           <input
@@ -211,7 +229,7 @@ export default function UploadPage() {
                 <span>
                   {pdfState === 'uploading' && 'Uploading…'}
                   {pdfState === 'confirmed' && 'Uploaded'}
-                  {pdfState === 'analyzing' && 'Analyzing with OpenAI…'}
+                  {pdfState === 'analyzing' && (provider === 'gemini' ? 'Analyzing with Gemini…' : 'Analyzing with OpenAI…')}
                   {pdfState === 'completed' && 'Analysis complete'}
                   {pdfState === 'error' && 'Error'}
                 </span>
@@ -256,7 +274,7 @@ export default function UploadPage() {
 
       {jobStatus && (
         <div className="mt-4 text-sm text-zinc-300 bg-zinc-900/50 border border-zinc-800 rounded-md p-4">
-          <div className="mb-2">OpenAI processing status: <span className={`font-medium ${jobStatus.status === 'completed' ? 'text-emerald-400' : jobStatus.status === 'error' ? 'text-red-400' : 'text-zinc-300'}`}>{String(jobStatus.status)}</span></div>
+          <div className="mb-2">{String(jobStatus.provider || (provider === 'gemini' ? 'Gemini' : 'OpenAI'))} processing status: <span className={`font-medium ${jobStatus.status === 'completed' ? 'text-emerald-400' : jobStatus.status === 'error' ? 'text-red-400' : 'text-zinc-300'}`}>{String(jobStatus.status)}</span></div>
           <div className="font-mono whitespace-pre-wrap break-all">{JSON.stringify(jobStatus, null, 2)}</div>
           {polling && (
             <div className="mt-2 text-xs text-zinc-400">Updating every 5s…</div>

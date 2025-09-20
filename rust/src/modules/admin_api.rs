@@ -3,6 +3,7 @@ use axum::extract::Multipart;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use base64::Engine as _;
 use axum::extract::Query;
 use serde::Deserialize;
 use serde_json::json;
@@ -14,6 +15,71 @@ use crate::models::{Competition, EventType, Match, Player, Team, Venue};
 
 // Wrap pool in State
 type Db = PgPool;
+
+static SYSTEM_PROMPT: &str = "Eres un asistente experto en procesamiento de datos de fútbol juvenil. Tu tarea es leer documentos PDF que contienen información de partidos de Nacional Sub 19 y transformarlos en instrucciones SQL consistentes con un esquema ya definido en PostgreSQL.
+
+Objetivo
+
+Extraer de cada PDF todos los datos relevantes del partido y generar un script SQL completo, autoejecutable y consistente, que:
+	•	Inserte o actualice la información en las tablas ya existentes.
+	•	No cree funciones ni tablas nuevas (se asume que ya existen).
+	•	Use ON CONFLICT DO NOTHING o ON CONFLICT (...) DO UPDATE donde corresponda, para evitar duplicados.
+	•	Use la función auxiliar REEMPLAZAR_DOC_ID(nombre_del_jugador) al insertar jugadores.
+	•	Mantenga los nombres de los equipos consistentes: para Nacional usar siempre 'Nacional'.
+
+Tablas y lógica
+	•	competitions: insertar con (name, season), UNIQUE.
+	•	venues: insertar con (name), UNIQUE.
+	•	teams: insertar con (name, category), UNIQUE.
+	•	matches: insertar con (competition_id, match_date, home_team_id, away_team_id), UNIQUE. Incluir resultado, venue, y notas (DT).
+	•	match_players: insertar titulares y suplentes con (match_id, team_id, player_id, role). role ∈ {starter, sub}.
+	•	events: insertar goles (goal), tarjetas (yellow, red), sustituciones (dos registros: sub_off y sub_on), con related_player_id y data_json.
+	•	Siempre que haya sustitución:
+	•	sub_off: jugador que sale, related_player_id = quien entra.
+	•	sub_on: jugador que entra, related_player_id = quien sale.
+	•	Guardar en data_json {player_out_id, player_in_id}.
+
+Estilo de respuesta
+	•	Siempre devolver un script SQL completo que se pueda ejecutar de una sola vez en la base de datos.
+	•	Manejar upserts para que correr el script varias veces no genere duplicados.
+	•	No modificar esquemas ni constraints ya definidos.
+	•	Usar comentarios -- para separar secciones (competitions, venues, teams, matches, etc.).
+	•	Extraer absolutamente todos los goles, tarjetas y sustituciones que aparezcan en el PDF.
+
+Restricciones
+	•	No inventar jugadores ni eventos si no están en el PDF.
+	•	No alterar nombres de tablas ni columnas.
+	•	Siempre usar Nacional como nombre del club.
+	•	El script debe estar ordenado en secciones claras y ser idempotente (puede ejecutarse varias veces sin error).
+    •	No usar caracteres especiales en los nombres de las tablas ni columnas, jugadores ni eventos, etc.
+    •	Nunca escribir secciones como 'CREATE TABLE' o 'DELETE FROM' o 'UPDATE' o 'ALTER TABLE' o 'DROP TABLE' o 'DROP COLUMN' o 'DROP INDEX' o 'DROP CONSTRAINT' o 'DROP TRIGGER' o 'DROP VIEW' o 'DROP SEQUENCE' o 'DROP FUNCTION' o 'DROP TYPE' o 'DROP SCHEMA' o 'DROP DATABASE' o 'DROP USER' o 'DROP ROLE' o 'DROP ALL TABLES' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE'
+
+Output Final
+
+Siempre responde con el script SQL final y completo, listo para ejecutar.
+
+";
+
+static ACTION_PROMPT: &str = "Please analyze the attached PDF and give me the SQL script to insert the data into the database.
+Follow the instructions above and this example:
+
+-- Vázquez OUT (57'), López IN
+INSERT INTO events (event_id, match_id, team_id, player_id, related_player_id,
+                    minute, type, data_json)
+VALUES
+  (gen_random_uuid(), (SELECT match_id FROM matches WHERE match_date = '2024-04-20 09:00:00'),
+   (SELECT away_team_id FROM matches WHERE match_date = '2024-04-20 09:00:00'),
+   REEMPLAZAR_DOC_ID('Vazquez Lautaro'), REEMPLAZAR_DOC_ID('Lopez Nahuel'),
+   57, 'sub_off', jsonb_build_object('player_out_id', REEMPLAZAR_DOC_ID('Vazquez Lautaro'),
+                                     'player_in_id', REEMPLAZAR_DOC_ID('Lopez Nahuel'))),
+  (gen_random_uuid(), (SELECT match_id FROM matches WHERE match_date = '2024-04-20 09:00:00'),
+   (SELECT away_team_id FROM matches WHERE match_date = '2024-04-20 09:00:00'),
+   REEMPLAZAR_DOC_ID('Lopez Nahuel'), REEMPLAZAR_DOC_ID('Vazquez Lautaro'),
+   57, 'sub_on', jsonb_build_object('player_out_id', REEMPLAZAR_DOC_ID('Vazquez Lautaro'),
+                                    'player_in_id', REEMPLAZAR_DOC_ID('Lopez Nahuel')))
+ON CONFLICT (match_id, player_id, minute, type) DO NOTHING;
+
+";
 
 // Teams
 pub async fn create_team(State(pool): State<Db>, Json(mut t): Json<Team>) -> Result<Json<Team>, (axum::http::StatusCode, String)> {
@@ -567,6 +633,7 @@ pub async fn upload_pdf_csv(mut multipart: Multipart) -> Result<Json<serde_json:
     let mut pdf_bytes: Option<Vec<u8>> = None;
     let mut csv_meta: Option<(String, usize)> = None;
 
+    let mut provider_override: Option<String> = None;
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().map(|s| s.to_string());
         let file_name = field.file_name().map(|s| s.to_string()).unwrap_or_else(|| "unknown".to_string());
@@ -576,6 +643,12 @@ pub async fn upload_pdf_csv(mut multipart: Multipart) -> Result<Json<serde_json:
         match name.as_deref() {
             Some("pdf") => { pdf_meta = Some((file_name, size)); pdf_bytes = Some(bytes.to_vec()); },
             Some("csv") => csv_meta = Some((file_name, size)),
+            Some("provider") => {
+                // allow overriding provider via multipart form field
+                let s = String::from_utf8(bytes.to_vec()).unwrap_or_default();
+                let s = s.trim().to_lowercase();
+                if s == "openai" || s == "gemini" { provider_override = Some(s); }
+            }
             _ => {}
         }
     }
@@ -586,7 +659,11 @@ pub async fn upload_pdf_csv(mut multipart: Multipart) -> Result<Json<serde_json:
 
     let upload_id = Uuid::new_v4();
 
-    // Kick off background OpenAI processing if we received a PDF
+    // Determine provider for PDF processing (default openai)
+    // Provider selection: priority is multipart field 'provider', then env PDF_PROVIDER, default openai
+    let provider = provider_override.unwrap_or_else(|| std::env::var("PDF_PROVIDER").unwrap_or_else(|_| "openai".to_string()));
+
+    // Kick off background LLM processing if we received a PDF
     if let Some((pdf_name, pdf_size)) = pdf_meta.clone() {
         let job_id = upload_id;
         {
@@ -594,13 +671,25 @@ pub async fn upload_pdf_csv(mut multipart: Multipart) -> Result<Json<serde_json:
             jobs.insert(job_id, json!({
                 "status": "processing",
                 "type": "pdf",
+                "provider": provider,
                 "pdf": {"filename": pdf_name, "size": pdf_size}
             }));
         }
         let pdf_name_clone = pdf_name.clone();
         let pdf_payload = pdf_bytes.clone().unwrap_or_default();
+        let provider_clone = provider.clone();
         tokio::spawn(async move {
-            let result = process_pdf_with_openai(job_id, pdf_name_clone, pdf_payload).await;
+            let mut result = match provider_clone.as_str() {
+                "openai" => process_pdf_with_openai(job_id, pdf_name_clone, pdf_payload).await,
+                "gemini" => process_pdf_with_gemini(job_id, pdf_name_clone, pdf_payload).await,
+                other => json!({
+                    "status": "error",
+                    "error": format!("unknown provider: {}", other),
+                    "job_id": job_id
+                })
+            };
+            // ensure provider field is present in final result
+            if let Some(obj) = result.as_object_mut() { obj.entry("provider").or_insert(json!(provider_clone)); }
             let mut jobs = UPLOAD_JOBS.lock().unwrap();
             jobs.insert(job_id, result);
         });
@@ -667,12 +756,12 @@ async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<
         "input": [
           {
             "role": "system",
-            "content": [ { "type": "input_text", "text": "You are an expert in PDFs. Tell me what this is about." } ]
+            "content": [ { "type": "input_text", "text": SYSTEM_PROMPT} ]
           },
           {
             "role": "user",
             "content": [
-              { "type": "input_text", "text": "Please analyze the attached PDF and summarize what it's about." },
+              { "type": "input_text", "text": ACTION_PROMPT },
               { "type": "input_file", "file_id": file_id }
             ]
           }
@@ -682,7 +771,6 @@ async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<
     // Create response with simple retry on rate limits
     let mut attempt: i32 = 0;
     let max_attempts: i32 = 6; // ~ up to ~63s total backoff
-    let mut last_err: String = String::new();
     let response_id: String;
     loop {
         attempt += 1;
@@ -710,11 +798,10 @@ async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<
                     let status = resp.status();
                     let txt = resp.text().await.unwrap_or_default();
                     if status.as_u16() == 429 {
-                        last_err = txt.clone();
                         if attempt >= max_attempts {
                             return json!({
                                 "status": "error",
-                                "error": format!("rate limited creating response after {} attempts: {}", attempt, last_err),
+                                "error": format!("rate limited creating response after {} attempts: {}", attempt, txt),
                                 "job_id": job_id,
                                 "rate_limited": true
                             });
@@ -788,6 +875,72 @@ async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
+}
+
+async fn process_pdf_with_gemini(job_id: Uuid, _pdf_name: String, pdf_bytes: Vec<u8>) -> serde_json::Value {
+    // Requires: GOOGLE_API_KEY and GEMINI_MODEL (defaults to gemini-1.5-flash)
+    let api_key = match std::env::var("GOOGLE_API_KEY") {
+        Ok(v) if !v.is_empty() => v,
+        _ => return json!({"status": "error", "error": "GOOGLE_API_KEY not configured", "job_id": job_id})
+    };
+    let model = std::env::var("GEMINI_MODEL").unwrap_or_else(|_| "gemini-1.5-flash".to_string());
+    let client = reqwest::Client::new();
+
+    // Gemini multipart: https://ai.google.dev/api/rest/v1beta/models.generateContent
+    // We'll send inline data with application/pdf
+    let pdf_b64 = base64::engine::general_purpose::STANDARD.encode(pdf_bytes);
+    let body = json!({
+        "contents": [
+            {
+                "role": "system",
+                "parts": [
+                    { "text": SYSTEM_PROMPT },
+                    { "inline_data": { "mime_type": "application/pdf", "data": pdf_b64 } }
+                ]
+            },
+            {
+                "role": "user",
+                "parts": [
+                    { "text": ACTION_PROMPT },
+                    { "inline_data": { "mime_type": "application/pdf", "data": pdf_b64 } }
+                ]
+            }
+        ]
+    });
+
+    let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}", model, api_key);
+    let resp = match client.post(url).json(&body).send().await {
+        Ok(r) => r,
+        Err(e) => return json!({"status": "error", "error": format!("gemini request failed: {}", e), "job_id": job_id})
+    };
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let txt = resp.text().await.unwrap_or_default();
+        return json!({"status": "error", "error": format!("gemini http {}: {}", status, txt), "job_id": job_id});
+    }
+    let js: serde_json::Value = match resp.json().await {
+        Ok(v) => v,
+        Err(e) => return json!({"status": "error", "error": format!("gemini parse failed: {}", e), "job_id": job_id})
+    };
+
+    // Extract text
+    let mut summary = String::new();
+    if let Some(cands) = js.get("candidates").and_then(|v| v.as_array()) {
+        for c in cands {
+            if let Some(content) = c.get("content").and_then(|v| v.get("parts")).and_then(|v| v.as_array()) {
+                for p in content {
+                    if let Some(t) = p.get("text").and_then(|t| t.as_str()) { summary.push_str(t); summary.push('\n'); }
+                }
+            }
+        }
+    }
+    json!({
+        "status": "completed",
+        "job_id": job_id,
+        "provider": "gemini",
+        "summary": if summary.is_empty() { serde_json::Value::Null } else { json!(summary) },
+        "raw": js
+    })
 }
 
 fn internal_err<E: std::fmt::Display>(e: E) -> (axum::http::StatusCode, String) {

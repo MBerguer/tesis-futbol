@@ -642,7 +642,7 @@ pub async fn get_match_entries_seconds_since_midnight(
 
     println!("earliest_timestamp: {:?}", earliest_timestamp);
 
-    let earliest_timestamp = earliest_timestamp.unwrap();
+    let _earliest_timestamp = earliest_timestamp.unwrap();
 
     // Now get all entries using seconds since midnight (device time-of-day)
     let entries_query = format!(
