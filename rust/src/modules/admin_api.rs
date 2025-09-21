@@ -33,6 +33,7 @@ Tablas y lógica
 	•	venues: insertar con (name), UNIQUE.
 	•	teams: insertar con (name, category), UNIQUE.
 	•	matches: insertar con (competition_id, match_date, home_team_id, away_team_id, result_home, result_away), UNIQUE. Incluir resultado, venue, y notas (DT).
+    •	team_id no forma parte de los ON CONFLICT DO NOTHING NUNCA.
 	•	match_players: insertar titulares y suplentes con (match_id, team_id, player_id, role). role ∈ {starter, sub}.
 	•	events: insertar goles (goal), tarjetas (yellow, red), sustituciones (dos registros: sub_off y sub_on), con related_player_id y data_json.
 	•	Siempre que haya sustitución:
