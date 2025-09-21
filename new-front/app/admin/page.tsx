@@ -393,13 +393,17 @@ export default function AdminPage() {
           {matches.map(m => (
             <div key={m.match_id} className="border border-zinc-800 rounded p-3">
               {editingMatchId === m.match_id ? (
-                <div className="grid grid-cols-1 md:grid-cols-8 gap-2 items-center">
+                <div className="grid grid-cols-1 md:grid-cols-9 gap-2 items-center">
                   <input type="datetime-local" defaultValue={m.match_date?.slice(0,16)} onChange={e=>setMatchForm(s=>({...s, match_date: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm" />
                   <select defaultValue={m.home_team_id} onChange={e=>setMatchForm(s=>({...s, home_team_id: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm">
                     {teams.map(t=> <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
                   </select>
                   <select defaultValue={m.away_team_id} onChange={e=>setMatchForm(s=>({...s, away_team_id: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm">
                     {teams.map(t=> <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
+                  </select>
+                  <select defaultValue={m.venue_id || ''} onChange={e=>setMatchForm(s=>({...s, venue_id: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm">
+                    <option value="">Venue</option>
+                    {venues.map(v=> <option key={v.venue_id} value={v.venue_id}>{v.name}</option>)}
                   </select>
                   <input placeholder="Category" defaultValue={m.category||''} onChange={e=>setMatchForm(s=>({...s, category: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm" />
                   <input placeholder="YouTube" defaultValue={m.youtube_link||''} onChange={e=>setMatchForm(s=>({...s, youtube_link: e.target.value}))} className="h-9 rounded bg-zinc-900/50 border border-zinc-800 px-2 text-sm" />
