@@ -45,6 +45,10 @@ export default function UploadPage() {
   const [sentCsv, setSentCsv] = React.useState<boolean>(false);
   const [pdfState, setPdfState] = React.useState<'idle' | 'uploading' | 'confirmed' | 'analyzing' | 'completed' | 'error'>("idle");
   const [csvState, setCsvState] = React.useState<'idle' | 'uploading' | 'uploaded'>("idle");
+  const [runSqlLoading, setRunSqlLoading] = React.useState<boolean>(false);
+  const [runSqlResult, setRunSqlResult] = React.useState<any>(null);
+  const [runSqlError, setRunSqlError] = React.useState<string | null>(null);
+  const [copiedId, setCopiedId] = React.useState<boolean>(false);
 
   const extractSql = (s: any): string | null => {
     if (!s) return null;
@@ -109,6 +113,12 @@ export default function UploadPage() {
     setCsvFile(f);
     setResult(null);
     setError(null);
+    setJobStatus(null);
+    setRunSqlResult(null);
+    setRunSqlError(null);
+    setUploadProgress(null);
+    setPdfState('idle');
+    setCsvState('idle');
     if (!f) {
       setCsvError(null);
       return;
@@ -117,10 +127,25 @@ export default function UploadPage() {
     setCsvError(err);
   };
 
+  const onPdfChange = (f: File | null) => {
+    setPdfFile(f);
+    setResult(null);
+    setError(null);
+    setJobStatus(null);
+    setRunSqlResult(null);
+    setRunSqlError(null);
+    setUploadProgress(null);
+    setPdfState('idle');
+    setCsvState('idle');
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setResult(null);
+    setJobStatus(null);
+    setRunSqlResult(null);
+    setRunSqlError(null);
     if (!pdfFile && !csvFile) {
       setError("Please select at least a PDF or a CSV file.");
       return;
@@ -214,7 +239,8 @@ export default function UploadPage() {
           <select
             value={provider}
             onChange={(e)=>setProvider((e.target.value as 'openai' | 'gemini'))}
-            className="w-full h-9 rounded-md bg-zinc-900/50 border border-zinc-800 px-2 text-sm text-zinc-200"
+            disabled={submitting}
+            className={`w-full h-9 rounded-md px-2 text-sm ${submitting ? 'bg-zinc-900/30 border-zinc-900 text-zinc-500' : 'bg-zinc-900/50 border border-zinc-800 text-zinc-200'}`}
           >
             <option value="openai">OpenAI</option>
             <option value="gemini">Gemini</option>
@@ -226,8 +252,9 @@ export default function UploadPage() {
           <input
             type="file"
             accept="application/pdf,.pdf"
-            onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-            className="block w-full text-sm text-zinc-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700"
+            disabled={submitting}
+            onChange={(e) => onPdfChange(e.target.files?.[0] || null)}
+            className={`block w-full text-sm ${submitting ? 'text-zinc-500' : 'text-zinc-200'} file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold ${submitting ? 'file:bg-zinc-800/40 file:text-zinc-500' : 'file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700'}`}
           />
           {pdfFile && <div className="text-xs text-zinc-400">Selected: {pdfFile.name}</div>}
         </div>
@@ -238,12 +265,27 @@ export default function UploadPage() {
             type="file"
             accept="text/csv,.csv"
             onChange={(e) => onCsvChange(e.target.files?.[0] || null)}
-            className="block w-full text-sm text-zinc-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700"
+            disabled={submitting}
+            className={`block w-full text-sm ${submitting ? 'text-zinc-500' : 'text-zinc-200'} file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold ${submitting ? 'file:bg-zinc-800/40 file:text-zinc-500' : 'file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700'}`}
           />
-          {csvFile && <div className="text-xs text-zinc-400">Selected: {csvFile.name}</div>}
-          {csvError && <div className="text-xs text-red-400">{csvError}</div>}
-          {!csvError && csvFile && (
-            <div className="text-xs text-emerald-400">CSV headers look good.</div>
+          {csvFile && (
+            <Card title="CSV details" subtitle={csvError ? 'Validation error' : 'Ready to upload'}>
+              <div className="text-zinc-200 text-sm break-all mb-1">{csvFile.name}</div>
+              <div className="text-xs text-zinc-400 mb-2">{csvFile.size} bytes</div>
+              {csvError ? (
+                <div className="text-xs text-red-400">{csvError}</div>
+              ) : (
+                <>
+                  <div className="text-xs text-emerald-400 mb-2">CSV headers look good.</div>
+                  <div className="text-xs text-zinc-400">Required columns:</div>
+                  <ul className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-zinc-300">
+                    {REQUIRED_HEADERS.map((h)=> (
+                      <li key={h} className="rounded border border-zinc-800 bg-zinc-900/30 px-2 py-1">{h}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Card>
           )}
           <div className="text-xs text-zinc-500 mt-1">
             Required columns: {REQUIRED_HEADERS.join(", ")}
@@ -321,9 +363,49 @@ export default function UploadPage() {
       </form>
 
       {result && (
-        <div className="mt-6 text-sm text-zinc-300 bg-zinc-900/50 border border-zinc-800 rounded-md p-4">
-          <div className="font-mono whitespace-pre-wrap break-all">{JSON.stringify(result, null, 2)}</div>
-        </div>
+        <Card title="Upload confirmation" subtitle="Initial response from server">
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs border ${result.status === 'ok' ? 'border-emerald-500/40 bg-emerald-900/20 text-emerald-300' : 'border-red-500/40 bg-red-900/20 text-red-300'}`}>{String(result.status || 'unknown')}</span>
+            {uploadProgress !== null && <span className="text-xs text-zinc-400">Upload {uploadProgress}%</span>}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {result.pdf && (
+              <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
+                <div className="text-xs uppercase text-zinc-400 mb-1">PDF</div>
+                <div className="text-zinc-200 break-all">{result.pdf.filename || '—'}</div>
+                {typeof result.pdf.size === 'number' && (
+                  <div className="text-xs text-zinc-400 mt-0.5">{result.pdf.size} bytes</div>
+                )}
+              </div>
+            )}
+            {result.csv && (
+              <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
+                <div className="text-xs uppercase text-zinc-400 mb-1">CSV</div>
+                <div className="text-zinc-200 break-all">{result.csv.filename || '—'}</div>
+                {typeof result.csv.size === 'number' && (
+                  <div className="text-xs text-zinc-400 mt-0.5">{result.csv.size} bytes</div>
+                )}
+              </div>
+            )}
+          </div>
+          {result.upload_id && (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-xs text-zinc-400">Upload ID:</span>
+              <code className="text-xs bg-zinc-950/60 border border-zinc-800 rounded px-2 py-1 break-all">{String(result.upload_id)}</code>
+              <button
+                type="button"
+                onClick={async () => { try { await navigator.clipboard.writeText(String(result.upload_id)); setCopiedId(true); setTimeout(()=>setCopiedId(false), 1200); } catch {} }}
+                className="text-xs px-2 py-1 rounded border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900 text-zinc-200"
+              >
+                {copiedId ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs text-zinc-400">Show raw JSON</summary>
+            <div className="mt-2 font-mono whitespace-pre-wrap break-all">{JSON.stringify(result, null, 2)}</div>
+          </details>
+        </Card>
       )}
 
       {jobStatus && (
@@ -372,6 +454,46 @@ export default function UploadPage() {
                     .sql .com{ color:#9ca3af; font-style:italic; }
                     .sql .ty{ color:#ffa657; }
                   `}</style>
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={submitting || runSqlLoading}
+                      onClick={async () => {
+                        setRunSqlError(null);
+                        setRunSqlResult(null);
+                        setRunSqlLoading(true);
+                        try {
+                          const res = await fetch(`${API_BASE}/api/sql/execute`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sql }),
+                          });
+                          if (!res.ok) throw new Error(`Execute failed (${res.status})`);
+                          const js = await res.json();
+                          setRunSqlResult(js);
+                        } catch (err: any) {
+                          setRunSqlError(err?.message || 'Failed to execute SQL');
+                        } finally {
+                          setRunSqlLoading(false);
+                        }
+                      }}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border ${runSqlLoading || submitting ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : 'bg-zinc-900/50 border-zinc-800 text-zinc-200 hover:bg-zinc-900 hover:border-zinc-700'}`}
+                    >
+                      {runSqlLoading && (
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                        </svg>
+                      )}
+                      <span>Confirm & Store in DB</span>
+                    </button>
+                    {runSqlError && <span className="text-xs text-red-400">{runSqlError}</span>}
+                  </div>
+                  {runSqlResult && (
+                    <div className="mt-2 rounded-md border border-emerald-700/40 bg-emerald-950/20 p-2 text-xs text-emerald-300">
+                      {JSON.stringify(runSqlResult)}
+                    </div>
+                  )}
                 </div>
               );
             }
