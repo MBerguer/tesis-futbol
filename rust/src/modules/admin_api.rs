@@ -4,8 +4,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use base64::Engine as _;
-use sha2::{Sha256, Digest};
-// use regex::Regex;
+// use sha2::{Sha256, Digest};
 use axum::extract::Query;
 use serde::Deserialize;
 use serde_json::json;
@@ -33,7 +32,7 @@ Tablas y lógica
 	•	competitions: insertar con (name, season), UNIQUE.
 	•	venues: insertar con (name), UNIQUE.
 	•	teams: insertar con (name, category), UNIQUE.
-	•	matches: insertar con (competition_id, match_date, home_team_id, away_team_id), UNIQUE. Incluir resultado, venue, y notas (DT).
+	•	matches: insertar con (competition_id, match_date, home_team_id, away_team_id, result_home, result_away), UNIQUE. Incluir resultado, venue, y notas (DT).
 	•	match_players: insertar titulares y suplentes con (match_id, team_id, player_id, role). role ∈ {starter, sub}.
 	•	events: insertar goles (goal), tarjetas (yellow, red), sustituciones (dos registros: sub_off y sub_on), con related_player_id y data_json.
 	•	Siempre que haya sustitución:
@@ -55,6 +54,12 @@ Restricciones
 	•	El script debe estar ordenado en secciones claras y ser idempotente (puede ejecutarse varias veces sin error).
     •	No usar caracteres especiales en los nombres de las tablas ni columnas, jugadores ni eventos, etc.
     •	Nunca escribir secciones como 'CREATE TABLE' o 'DELETE FROM' o 'UPDATE' o 'ALTER TABLE' o 'DROP TABLE' o 'DROP COLUMN' o 'DROP INDEX' o 'DROP CONSTRAINT' o 'DROP TRIGGER' o 'DROP VIEW' o 'DROP SEQUENCE' o 'DROP FUNCTION' o 'DROP TYPE' o 'DROP SCHEMA' o 'DROP DATABASE' o 'DROP USER' o 'DROP ROLE' o 'DROP ALL TABLES' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE'
+
+Tipos de datos y constraints importantes
+    •	La columna `events.type` es de tipo ENUM `event_type`, no texto.
+    •	Los valores válidos de `event_type` son: 'goal', 'yellow', 'red', 'sub_on', 'sub_off'.
+    •	Al generar INSERTS para `events`, siempre castear los literales a `event_type`, por ejemplo: 'goal'::event_type, 'yellow'::event_type, 'sub_on'::event_type.
+    •	Nunca insertar strings crudos en la columna `type`, siempre usar el cast explícito.
 
 Output Final
 
@@ -620,8 +625,6 @@ pub async fn confirm_match(State(pool): State<Db>, Path(id): Path<Uuid>) -> Resu
 // Upload/OCR stubs
 pub async fn upload_pdf() -> Json<serde_json::Value> { Json(json!({"status": "not_implemented"})) }
 static UPLOAD_JOBS: Lazy<Mutex<HashMap<Uuid, serde_json::Value>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static PDF_RESULT_CACHE: Lazy<Mutex<HashMap<String, serde_json::Value>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static OPENAI_FILE_ID_CACHE: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 pub async fn upload_status(Path(id): Path<Uuid>) -> Json<serde_json::Value> {
     let jobs = UPLOAD_JOBS.lock().unwrap();
@@ -670,57 +673,13 @@ pub async fn upload_pdf_csv(State(pool): State<Db>, mut multipart: Multipart) ->
     // Kick off background LLM processing if we received a PDF
     if let Some((pdf_name, pdf_size)) = pdf_meta.clone() {
         let job_id = upload_id;
-        // Compute stable content hash to avoid re-sending same file to providers
-        let mut hasher = Sha256::new();
-        if let Some(ref bytes) = pdf_bytes { hasher.update(bytes); }
-        let pdf_hash = hex::encode(hasher.finalize());
-
-        // Ensure cache table exists
-        if let Err(e) = ensure_pdf_cache_table(&pool).await { return Err(internal_err(e)); }
-
-        // If already processed (provider+hash), reuse cached result (DB first)
-        if let Ok(opt) = sqlx::query(
-            r#"SELECT result_json FROM pdf_llm_cache WHERE provider = $1 AND pdf_hash = $2"#
-        ).bind(&provider).bind(&pdf_hash).fetch_optional(&pool).await {
-            if let Some(row) = opt {
-                let mut cached_with_job: serde_json::Value = row.try_get("result_json").unwrap_or(json!({"status":"completed"}));
-                if let Some(obj) = cached_with_job.as_object_mut() {
-                    obj.insert("job_id".into(), json!(job_id));
-                    obj.entry("provider").or_insert(json!(provider.clone()));
-                }
-                let mut jobs = UPLOAD_JOBS.lock().unwrap();
-                jobs.insert(job_id, cached_with_job);
-                return Ok(Json(json!({
-                    "status": "ok",
-                    "upload_id": upload_id,
-                    "pdf": pdf_meta.map(|(filename, size)| json!({"filename": filename, "size": size})),
-                    "csv": csv_meta.map(|(filename, size)| json!({"filename": filename, "size": size}))
-                })));
-            }
-        }
-
-        // If already processed (provider+hash), reuse cached result (in-memory)
-        let cache_key = format!("{}:{}", provider, pdf_hash);
-        if let Some(cached) = PDF_RESULT_CACHE.lock().unwrap().get(&cache_key).cloned() {
-            let mut cached_with_job = cached.clone();
-            if let Some(obj) = cached_with_job.as_object_mut() { obj.insert("job_id".into(), json!(job_id)); }
-            let mut jobs = UPLOAD_JOBS.lock().unwrap();
-            jobs.insert(job_id, cached_with_job);
-            return Ok(Json(json!({
-                "status": "ok",
-                "upload_id": upload_id,
-                "pdf": pdf_meta.map(|(filename, size)| json!({"filename": filename, "size": size})),
-                "csv": csv_meta.map(|(filename, size)| json!({"filename": filename, "size": size}))
-            })));
-        }
         {
             let mut jobs = UPLOAD_JOBS.lock().unwrap();
             jobs.insert(job_id, json!({
                 "status": "processing",
                 "type": "pdf",
                 "provider": provider,
-                "pdf": {"filename": pdf_name, "size": pdf_size},
-                "pdf_hash": pdf_hash
+                "pdf": {"filename": pdf_name, "size": pdf_size}
             }));
         }
         let pdf_name_clone = pdf_name.clone();
@@ -729,7 +688,7 @@ pub async fn upload_pdf_csv(State(pool): State<Db>, mut multipart: Multipart) ->
         let pool_clone = pool.clone();
         tokio::spawn(async move {
             let mut result = match provider_clone.as_str() {
-                "openai" => process_pdf_with_openai(job_id, pdf_name_clone, pdf_payload, Some(pdf_hash.clone())).await,
+                "openai" => process_pdf_with_openai(job_id, pdf_name_clone, pdf_payload, None).await,
                 "gemini" => process_pdf_with_gemini(job_id, pdf_name_clone, pdf_payload).await,
                 other => json!({
                     "status": "error",
@@ -740,33 +699,13 @@ pub async fn upload_pdf_csv(State(pool): State<Db>, mut multipart: Multipart) ->
             // ensure provider/hash present in final result
             if let Some(obj) = result.as_object_mut() {
                 obj.entry("provider").or_insert(json!(provider_clone));
-                if !obj.contains_key("pdf_hash") { obj.insert("pdf_hash".into(), json!(pdf_hash.clone())); }
             }
             {
                 let mut jobs = UPLOAD_JOBS.lock().unwrap();
                 jobs.insert(job_id, result.clone());
             }
             // Cache final result per provider+hash
-            if let Some(status) = result.get("status").and_then(|v| v.as_str()) {
-                if status == "completed" || status == "error" {
-                    PDF_RESULT_CACHE.lock().unwrap().insert(cache_key.clone(), result.clone());
-                    // Persist to DB
-                    // (no locks are held while awaiting)
-                    let _ = ensure_pdf_cache_table(&pool_clone).await;
-                    let file_id: Option<String> = result.get("openai_file_id").and_then(|v| v.as_str()).map(|s| s.to_string());
-                    let _ = sqlx::query(
-                        r#"INSERT INTO pdf_llm_cache (cache_id, provider, pdf_hash, result_json, file_id)
-                            VALUES ($1,$2,$3,$4,$5)
-                           ON CONFLICT (provider, pdf_hash) DO UPDATE SET result_json = EXCLUDED.result_json, file_id = EXCLUDED.file_id, created_at = NOW()"#
-                    )
-                    .bind(Uuid::new_v4())
-                    .bind(&provider_clone)
-                    .bind(&pdf_hash)
-                    .bind(&result)
-                    .bind(&file_id)
-                    .execute(&pool_clone).await;
-                }
-            }
+            let _ = pool_clone; // silence unused warning now that cache is removed
         });
     }
 
@@ -778,7 +717,7 @@ pub async fn upload_pdf_csv(State(pool): State<Db>, mut multipart: Multipart) ->
     })))
 }
 
-async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<u8>, pdf_hash_opt: Option<String>) -> serde_json::Value {
+async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<u8>, _pdf_hash_opt: Option<String>) -> serde_json::Value {
     // Read API key from env
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
     if api_key.is_empty() {
@@ -788,12 +727,7 @@ async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<
     let api_base = std::env::var("OPENAI_API_BASE").unwrap_or_else(|_| "https://api.openai.com".to_string());
     let client = reqwest::Client::new();
 
-    // 1) Upload PDF to Files API (with cache by pdf_hash)
-    let mut file_id_opt: Option<String> = None;
-    if let Some(h) = &pdf_hash_opt {
-        if let Some(fid) = OPENAI_FILE_ID_CACHE.lock().unwrap().get(h).cloned() { file_id_opt = Some(fid); }
-    }
-    let file_id = if let Some(fid) = file_id_opt { fid } else {
+    // 1) Upload PDF to Files API (no caching)
         let form = reqwest::multipart::Form::new()
             .text("purpose", "user_data")
             .part(
@@ -824,13 +758,11 @@ async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<
             Ok(j) => j,
             Err(e) => return json!({"status": "error", "error": format!("file upload parse failed: {}", e), "job_id": job_id}),
         };
-        let fid = match upload_json.get("id").and_then(|v| v.as_str()) {
+        let file_id = match upload_json.get("id").and_then(|v| v.as_str()) {
             Some(s) => s.to_string(),
             None => return json!({"status": "error", "error": "no file id returned", "job_id": job_id, "upload": upload_json}),
         };
-        if let Some(h) = &pdf_hash_opt { OPENAI_FILE_ID_CACHE.lock().unwrap().insert(h.clone(), fid.clone()); }
-        fid
-    };
+    
 
     // 2) Create a Response with system prompt + file input
     let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
@@ -850,6 +782,7 @@ async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<
           }
         ]
     });
+    if let Ok(pretty) = serde_json::to_string_pretty(&body) { println!("[DEBUG] OpenAI request body: {}", pretty); }
 
     // Create response with simple retry on rate limits
     let mut attempt: i32 = 0;
@@ -893,7 +826,7 @@ async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<
                         tokio::time::sleep(std::time::Duration::from_secs(delay as u64)).await;
                         continue;
                     }
-                    return json!({"status": "error", "error": format!("create response http {}: {}", status, txt), "job_id": job_id});
+                    return json!({"status": "error", "error": format!("create response http {}: {}", status, txt), "job_id": job_id, "request": body});
                 }
             }
             Err(e) => return json!({"status": "error", "error": format!("create response failed: {}", e), "job_id": job_id}),
@@ -948,10 +881,11 @@ async fn process_pdf_with_openai(job_id: Uuid, pdf_name: String, pdf_bytes: Vec<
                 "job_id": job_id,
                 "response_id": response_id,
                 "summary": summary,
-                "raw": js
+                "raw": js,
+                "request": body
             });
         } else if status == "failed" || status == "cancelled" || status == "expired" {
-            return json!({"status": "error", "job_id": job_id, "response_id": response_id, "raw": js});
+            return json!({"status": "error", "job_id": job_id, "response_id": response_id, "raw": js, "request": body});
         }
         if attempts > 120 { // ~2 minutes at 1s interval
             return json!({"status": "error", "error": "timeout waiting for openai response", "job_id": job_id, "response_id": response_id});
@@ -969,26 +903,20 @@ async fn process_pdf_with_gemini(job_id: Uuid, _pdf_name: String, pdf_bytes: Vec
     let model = std::env::var("GEMINI_MODEL").unwrap_or_else(|_| "gemini-1.5-flash".to_string());
     let client = reqwest::Client::new();
 
-    // Gemini REST: only roles 'user' and 'model' are valid. Put instruction + action as a single user message.
+    // Gemini REST: send a single user message with instructions + PDF using camelCase fields
     let pdf_b64 = base64::engine::general_purpose::STANDARD.encode(pdf_bytes);
     let body = json!({
         "contents": [
             {
-                "role": "model",
-                "parts": [
-                    { "text": SYSTEM_PROMPT },
-                    { "inline_data": { "mime_type": "application/pdf", "data": pdf_b64 } }
-                ]
-            },
-            {
                 "role": "user",
                 "parts": [
-                    { "text": ACTION_PROMPT },
-                    { "inline_data": { "mime_type": "application/pdf", "data": pdf_b64 } }
+                    { "text": format!("{}\n\n{}", SYSTEM_PROMPT, ACTION_PROMPT) },
+                    { "inlineData": { "mimeType": "application/pdf", "data": pdf_b64 } }
                 ]
             }
         ]
     });
+    if let Ok(pretty) = serde_json::to_string_pretty(&body) { eprintln!("[DEBUG] Gemini request body: {}", pretty); }
 
     let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}", model, api_key);
     let resp = match client.post(url).json(&body).send().await {
@@ -998,7 +926,7 @@ async fn process_pdf_with_gemini(job_id: Uuid, _pdf_name: String, pdf_bytes: Vec
     if !resp.status().is_success() {
         let status = resp.status();
         let txt = resp.text().await.unwrap_or_default();
-        return json!({"status": "error", "error": format!("gemini http {}: {}", status, txt), "job_id": job_id});
+        return json!({"status": "error", "error": format!("gemini http {}: {}", status, txt), "job_id": job_id, "request": body});
     }
     let js: serde_json::Value = match resp.json().await {
         Ok(v) => v,
@@ -1021,29 +949,13 @@ async fn process_pdf_with_gemini(job_id: Uuid, _pdf_name: String, pdf_bytes: Vec
         "job_id": job_id,
         "provider": "gemini",
         "summary": if summary.is_empty() { serde_json::Value::Null } else { json!(summary) },
-        "raw": js
+        "raw": js,
+        "request": body
     })
 }
 
-async fn ensure_pdf_cache_table(pool: &PgPool) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS pdf_llm_cache (
-            cache_id uuid PRIMARY KEY,
-            provider text NOT NULL,
-            pdf_hash text NOT NULL,
-            result_json jsonb NOT NULL,
-            file_id text,
-            created_at timestamptz NOT NULL DEFAULT NOW(),
-            UNIQUE(provider, pdf_hash)
-        )
-        "#,
-    )
-    .execute(pool)
-    .await?
-    .rows_affected();
-    Ok(())
-}
+// Cache table removed; helper retained as no-op for backwards compatibility
+async fn ensure_pdf_cache_table(_pool: &PgPool) -> Result<(), sqlx::Error> { Ok(()) }
 
 fn internal_err<E: std::fmt::Display>(e: E) -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())

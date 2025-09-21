@@ -2,6 +2,19 @@
 
 import React from "react";
 
+function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/50 shadow-sm">
+      <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-zinc-200">{title}</div>
+          {subtitle && <div className="text-xs text-zinc-400 mt-0.5">{subtitle}</div>}
+        </div>
+      </div>
+      <div className="p-4 text-sm text-zinc-300">{children}</div>
+    </div>
+  );
+}
 const REQUIRED_HEADERS = [
   "Player Id",
   "Player Display Name",
@@ -32,6 +45,47 @@ export default function UploadPage() {
   const [sentCsv, setSentCsv] = React.useState<boolean>(false);
   const [pdfState, setPdfState] = React.useState<'idle' | 'uploading' | 'confirmed' | 'analyzing' | 'completed' | 'error'>("idle");
   const [csvState, setCsvState] = React.useState<'idle' | 'uploading' | 'uploaded'>("idle");
+
+  const extractSql = (s: any): string | null => {
+    if (!s) return null;
+    const text = String(s);
+    const lower = text.toLowerCase();
+    const start = lower.indexOf("```sql");
+    if (start >= 0) {
+      const after = text.slice(start + 6);
+      const end = after.indexOf("```\n");
+      if (end >= 0) return after.slice(0, end).trim();
+      const end2 = after.indexOf("```");
+      if (end2 >= 0) return after.slice(0, end2).trim();
+      return after.trim();
+    }
+    return null;
+  };
+
+  const highlightSql = (sql: string): string => {
+    // Basic HTML escape
+    let h = sql
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    // Comments
+    h = h.replace(/(^|\n)\s*--.*(?=\n|$)/g, (m) => `<span class="com">${m}</span>`);
+    // Strings
+    h = h.replace(/'(?:''|[^'])*'/g, (m) => `<span class="str">${m}</span>`);
+    // Numbers
+    h = h.replace(/\b\d+(?:\.\d+)?\b/g, (m) => `<span class="num">${m}</span>`);
+    // Functions (common ones we use)
+    h = h.replace(/\b(jsonb?_build_object|gen_random_uuid|to_timestamp)\b/gi, (m) => `<span class="fn">${m}</span>`);
+    // Types
+    h = h.replace(/\b(event_type)\b/gi, (m) => `<span class="ty">${m}</span>`);
+    // Keywords
+    const kw = [
+      'select','insert','into','values','on','conflict','do','nothing','update','set','where','from','join','left','right','inner','outer','with','as','and','or','null','distinct','returning','order','by','group','limit','offset'
+    ];
+    const kwRe = new RegExp(`\\b(${kw.join('|')})\\b`, 'gi');
+    h = h.replace(kwRe, (m) => `<span class="kw">${m.toUpperCase()}</span>`);
+    return h;
+  };
 
   const validateCsvHeaders = async (file: File): Promise<string | null> => {
     try {
@@ -273,13 +327,73 @@ export default function UploadPage() {
       )}
 
       {jobStatus && (
-        <div className="mt-4 text-sm text-zinc-300 bg-zinc-900/50 border border-zinc-800 rounded-md p-4">
-          <div className="mb-2">{String(jobStatus.provider || (provider === 'gemini' ? 'Gemini' : 'OpenAI'))} processing status: <span className={`font-medium ${jobStatus.status === 'completed' ? 'text-emerald-400' : jobStatus.status === 'error' ? 'text-red-400' : 'text-zinc-300'}`}>{String(jobStatus.status)}</span></div>
-          <div className="font-mono whitespace-pre-wrap break-all">{JSON.stringify(jobStatus, null, 2)}</div>
+        <Card
+          title={`${String(jobStatus.provider || (provider === 'gemini' ? 'gemini' : 'openai'))} processing`}
+          subtitle={`Status: ${String(jobStatus.status)}`}
+        >
+          {/* Pretty header info for partial/progress */}
+          {jobStatus.status !== 'completed' && jobStatus.status !== 'error' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {jobStatus.pdf && (
+                <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
+                  <div className="text-xs uppercase text-zinc-400 mb-1">PDF</div>
+                  <div className="text-zinc-200 break-all">{jobStatus.pdf.filename || '—'}</div>
+                  {typeof jobStatus.pdf.size === 'number' && (
+                    <div className="text-xs text-zinc-400 mt-0.5">{jobStatus.pdf.size} bytes</div>
+                  )}
+                </div>
+              )}
+              <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3 flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4 text-zinc-300" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+                <div>
+                  <div className="text-zinc-200">Analyzing…</div>
+                  <div className="text-xs text-zinc-400">This may take up to a minute</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Completed/error pretty blocks */}
+          {jobStatus.status === 'completed' && jobStatus.summary && (() => {
+            const sql = extractSql(jobStatus.summary);
+            if (sql) {
+              return (
+                <div className="mt-3">
+                  <div className="text-xs uppercase text-zinc-400 mb-1">SQL</div>
+                  <pre className="font-mono bg-zinc-950/60 rounded p-3 border border-zinc-800 max-h-96 overflow-auto sql" dangerouslySetInnerHTML={{ __html: highlightSql(sql) }} />
+                  <style jsx global>{`
+                    .sql .kw{ color:#7ee787; font-weight:600; }
+                    .sql .fn{ color:#7cd4ff; }
+                    .sql .str{ color:#ffdf8a; }
+                    .sql .num{ color:#d2a8ff; }
+                    .sql .com{ color:#9ca3af; font-style:italic; }
+                    .sql .ty{ color:#ffa657; }
+                  `}</style>
+                </div>
+              );
+            }
+            return (
+              <div className="mt-3">
+                <div className="text-xs uppercase text-zinc-400 mb-1">Summary</div>
+                <pre className="font-mono whitespace-pre-wrap break-words text-zinc-200 bg-zinc-900/60 rounded p-3 border border-zinc-800 max-h-80 overflow-auto">{String(jobStatus.summary)}</pre>
+              </div>
+            );
+          })()}
+          {jobStatus.status === 'error' && (
+            <div className="mt-3 rounded-md border border-red-900/50 bg-red-950/30 p-3 text-red-300">There was an error while processing.</div>
+          )}
+
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs text-zinc-400">Show raw</summary>
+            <div className="mt-2 font-mono whitespace-pre-wrap break-all">{JSON.stringify(jobStatus, null, 2)}</div>
+          </details>
           {polling && (
             <div className="mt-2 text-xs text-zinc-400">Updating every 5s…</div>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );
