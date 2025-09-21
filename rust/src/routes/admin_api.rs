@@ -37,6 +37,8 @@ pub fn admin_api(pool: PgPool) -> Router {
         .route("/upload_pdf", post(handlers::upload_pdf))
         .route("/upload_pdf_csv", post(handlers::upload_pdf_csv))
         .route("/uploads/:id/status", get(handlers::upload_status))
+        // SQL execution (from LLM output)
+        .route("/sql/execute", post(handlers::execute_sql))
         .with_state(pool)
 }
 

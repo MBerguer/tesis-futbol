@@ -171,9 +171,20 @@ export default function AdminPage() {
   async function deleteTeam(id: string) {
     if (!confirm('Delete team?')) return;
     setSaving(true);
+    setError(null);
     try {
-      await fetch(`${API_BASE}/api/teams/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/api/teams/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => 'Failed to delete team');
+        setError(msg || 'Failed to delete team');
+        alert(`Could not delete team: ${msg}`);
+        return;
+      }
       await refreshAll();
+    } catch (e:any) {
+      const msg = String(e?.message || e);
+      setError(msg);
+      alert(`Could not delete team: ${msg}`);
     } finally { setSaving(false); }
   }
 
@@ -341,7 +352,10 @@ export default function AdminPage() {
               ) : (
                 <>
                   <div className="flex-1">
-                    <div className="font-medium">{t.name}</div>
+                    <div className="font-medium flex items-center gap-2">
+                      <span>{t.name}</span>
+                      <span className="text-xs text-zinc-500">{t.team_id.slice(0,4)}</span>
+                    </div>
                     <div className="text-xs text-zinc-400">{t.category || '—'}</div>
                   </div>
                   <button onClick={()=>{ setEditingTeamId(t.team_id); setTeamForm({ name: t.name, category: t.category }); }} className="h-8 px-2 rounded border border-zinc-800 hover:border-zinc-700">Edit</button>

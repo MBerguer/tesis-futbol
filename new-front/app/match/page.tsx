@@ -2597,7 +2597,7 @@ export default function Page() {
                                 const el = document.getElementById('unified-video');
                                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.angle_degrees.toFixed(3)}</button>
+                              }} className="underline-offset-2 hover:underline">{ev.angle_degrees > 300 ? (ev.angle_degrees - 360).toFixed(3) : ev.angle_degrees.toFixed(3)}</button>
                             </td>
                             <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
                               <button onClick={()=>{

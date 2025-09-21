@@ -41,8 +41,8 @@ Tablas y lógica
 	•	Guardar en data_json {player_out_id, player_in_id}.
 
 Estilo de respuesta
-	•	Siempre devolver un script SQL completo que se pueda ejecutar de una sola vez en la base de datos.
-	•	Manejar upserts para que correr el script varias veces no genere duplicados.
+	•	Siempre devolver un archivo solamente con sentencia en SQL completo que se pueda ejecutar de una sola vez en la base de datos.
+	•	Manejar upserts para que correr el las queries varias veces no genere duplicados.
 	•	No modificar esquemas ni constraints ya definidos.
 	•	Usar comentarios -- para separar secciones (competitions, venues, teams, matches, etc.).
 	•	Extraer absolutamente todos los goles, tarjetas y sustituciones que aparezcan en el PDF.
@@ -51,7 +51,7 @@ Restricciones
 	•	No inventar jugadores ni eventos si no están en el PDF.
 	•	No alterar nombres de tablas ni columnas.
 	•	Siempre usar Nacional como nombre del club.
-	•	El script debe estar ordenado en secciones claras y ser idempotente (puede ejecutarse varias veces sin error).
+	•	El código SQL debe estar ordenado en secciones claras y ser idempotente (puede ejecutarse varias veces sin error).
     •	No usar caracteres especiales en los nombres de las tablas ni columnas, jugadores ni eventos, etc.
     •	Nunca escribir secciones como 'CREATE TABLE' o 'DELETE FROM' o 'UPDATE' o 'ALTER TABLE' o 'DROP TABLE' o 'DROP COLUMN' o 'DROP INDEX' o 'DROP CONSTRAINT' o 'DROP TRIGGER' o 'DROP VIEW' o 'DROP SEQUENCE' o 'DROP FUNCTION' o 'DROP TYPE' o 'DROP SCHEMA' o 'DROP DATABASE' o 'DROP USER' o 'DROP ROLE' o 'DROP ALL TABLES' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE'
 
@@ -63,7 +63,7 @@ Tipos de datos y constraints importantes
 
 Output Final
 
-Siempre responde con el script SQL final y completo, listo para ejecutar.
+Siempre responde con el SQL final y completo, con transacciones BEGIN; ... COMMIT;, listo para ejecutar, no escribas otras cosas, como END $$; o END; o END.
 
 ";
 
@@ -87,6 +87,104 @@ VALUES
 ON CONFLICT (match_id, player_id, minute, type) DO NOTHING;
 
 ";
+
+// Execute arbitrary SQL in a single transaction (used for LLM-generated scripts)
+#[derive(Deserialize)]
+pub struct ExecuteSqlPayload { pub sql: String }
+
+fn extract_sql_block(input: &str) -> Option<String> {
+    let lower = input.to_lowercase();
+    if let Some(start) = lower.find("```sql") {
+        let after = &input[start + 6..];
+        if let Some(end) = after.find("```\n") {
+            return Some(after[..end].trim().to_string());
+        }
+        if let Some(end2) = after.find("```") {
+            return Some(after[..end2].trim().to_string());
+        }
+        return Some(after.trim().to_string());
+    }
+    None
+}
+
+fn split_sql_statements(sql: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut buf = String::new();
+    let mut chars = sql.chars().peekable();
+    let mut in_single = false; // '...'
+    let mut in_line_comment = false; // -- ... \n
+    let mut in_block_comment = false; // /* ... */
+    while let Some(c) = chars.next() {
+        if in_line_comment {
+            if c == '\n' { in_line_comment = false; buf.push(c); }
+            continue;
+        }
+        if in_block_comment {
+            if c == '*' { if let Some('/') = chars.peek() { chars.next(); in_block_comment = false; } }
+            continue;
+        }
+        if in_single {
+            if c == '\'' {
+                if let Some('\'') = chars.peek() { // escaped quote ''
+                    buf.push(c); buf.push('\''); chars.next();
+                    continue;
+                } else {
+                    in_single = false; buf.push(c); continue;
+                }
+            }
+            buf.push(c);
+            continue;
+        }
+        // not in string/comment
+        if c == '-' {
+            if let Some('-') = chars.peek() { chars.next(); in_line_comment = true; continue; }
+        }
+        if c == '/' {
+            if let Some('*') = chars.peek() { chars.next(); in_block_comment = true; continue; }
+        }
+        if c == '\'' { in_single = true; buf.push(c); continue; }
+        if c == ';' {
+            let stmt = buf.trim();
+            if !stmt.is_empty() { out.push(stmt.to_string()); }
+            buf.clear();
+            continue;
+        }
+        buf.push(c);
+    }
+    let tail = buf.trim();
+    if !tail.is_empty() { out.push(tail.to_string()); }
+    out
+}
+
+pub async fn execute_sql(State(pool): State<Db>, Json(p): Json<ExecuteSqlPayload>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let raw = p.sql;
+    let sql_text = extract_sql_block(&raw).unwrap_or(raw);
+    if sql_text.trim().is_empty() {
+        return Ok(Json(json!({"status":"ok","statements":0,"rows_affected":0,"per_statement":[]})));
+    }
+    let stmts = split_sql_statements(&sql_text);
+    if stmts.is_empty() {
+        return Ok(Json(json!({"status":"ok","statements":0,"rows_affected":0,"per_statement":[]})));
+    }
+
+    let mut tx = pool.begin().await.map_err(internal_err)?;
+    let mut total_rows: u64 = 0;
+    let mut per: Vec<u64> = Vec::new();
+    for s in stmts.iter() {
+        let res = sqlx::query(s.as_str()).execute(&mut *tx).await.map_err(internal_err)?;
+        let n = res.rows_affected();
+        total_rows += n;
+        per.push(n);
+    }
+    tx.commit().await.map_err(internal_err)?;
+
+    Ok(Json(json!({
+        "status": "ok",
+        "statements": stmts.len(),
+        "rows_affected": total_rows,
+        "per_statement": per
+    })))
+}
 
 // Teams
 pub async fn create_team(State(pool): State<Db>, Json(mut t): Json<Team>) -> Result<Json<Team>, (axum::http::StatusCode, String)> {

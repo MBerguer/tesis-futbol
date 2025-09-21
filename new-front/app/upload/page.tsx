@@ -29,7 +29,7 @@ const REQUIRED_HEADERS = [
 
 export default function UploadPage() {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  const [provider, setProvider] = React.useState<'openai' | 'gemini'>('openai');
+  const [provider, setProvider] = React.useState<'openai' | 'gemini'>('gemini');
   const UPLOAD_TIMEOUT_MS = 30000; // 30s
   const STATUS_TIMEOUT_MS = 8000;  // 8s per poll
   const [pdfFile, setPdfFile] = React.useState<File | null>(null);
@@ -49,6 +49,17 @@ export default function UploadPage() {
   const [runSqlResult, setRunSqlResult] = React.useState<any>(null);
   const [runSqlError, setRunSqlError] = React.useState<string | null>(null);
   const [copiedId, setCopiedId] = React.useState<boolean>(false);
+  const [sqlEditMode, setSqlEditMode] = React.useState<boolean>(false);
+  const [sqlEdited, setSqlEdited] = React.useState<string | null>(null);
+
+  // Initialize edited SQL when a completed job arrives
+  React.useEffect(() => {
+    if (jobStatus && jobStatus.status === 'completed' && jobStatus.summary) {
+      const sql = extractSql(jobStatus.summary);
+      setSqlEdited(sql || null);
+      setSqlEditMode(false);
+    }
+  }, [jobStatus]);
 
   const extractSql = (s: any): string | null => {
     if (!s) return null;
@@ -119,6 +130,8 @@ export default function UploadPage() {
     setUploadProgress(null);
     setPdfState('idle');
     setCsvState('idle');
+    setSqlEdited(null);
+    setSqlEditMode(false);
     if (!f) {
       setCsvError(null);
       return;
@@ -137,6 +150,8 @@ export default function UploadPage() {
     setUploadProgress(null);
     setPdfState('idle');
     setCsvState('idle');
+    setSqlEdited(null);
+    setSqlEditMode(false);
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -146,6 +161,8 @@ export default function UploadPage() {
     setJobStatus(null);
     setRunSqlResult(null);
     setRunSqlError(null);
+    setSqlEdited(null);
+    setSqlEditMode(false);
     if (!pdfFile && !csvFile) {
       setError("Please select at least a PDF or a CSV file.");
       return;
@@ -445,7 +462,15 @@ export default function UploadPage() {
               return (
                 <div className="mt-3">
                   <div className="text-xs uppercase text-zinc-400 mb-1">SQL</div>
-                  <pre className="font-mono bg-zinc-950/60 rounded p-3 border border-zinc-800 max-h-96 overflow-auto sql" dangerouslySetInnerHTML={{ __html: highlightSql(sql) }} />
+                  {!sqlEditMode ? (
+                    <pre className="font-mono bg-zinc-950/60 rounded p-3 border border-zinc-800 max-h-96 overflow-auto sql" dangerouslySetInnerHTML={{ __html: highlightSql(sqlEdited ?? sql) }} />
+                  ) : (
+                    <textarea
+                      className="w-full font-mono bg-zinc-950/60 rounded p-3 border border-zinc-800 text-zinc-200 min-h-[200px]"
+                      value={sqlEdited ?? sql}
+                      onChange={(e)=>setSqlEdited(e.target.value)}
+                    />
+                  )}
                   <style jsx global>{`
                     .sql .kw{ color:#7ee787; font-weight:600; }
                     .sql .fn{ color:#7cd4ff; }
@@ -458,15 +483,24 @@ export default function UploadPage() {
                     <button
                       type="button"
                       disabled={submitting || runSqlLoading}
+                      onClick={() => setSqlEditMode((v)=>!v)}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border ${runSqlLoading || submitting ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : 'bg-zinc-900/50 border-zinc-800 text-zinc-200 hover:bg-zinc-900 hover:border-zinc-700'}`}
+                    >
+                      {sqlEditMode ? 'View highlighted' : 'Edit SQL'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={submitting || runSqlLoading}
                       onClick={async () => {
                         setRunSqlError(null);
                         setRunSqlResult(null);
                         setRunSqlLoading(true);
                         try {
+                          const sqlToRun = (sqlEditMode ? (sqlEdited ?? sql) : sql);
                           const res = await fetch(`${API_BASE}/api/sql/execute`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ sql }),
+                            body: JSON.stringify({ sql: sqlToRun }),
                           });
                           if (!res.ok) throw new Error(`Execute failed (${res.status})`);
                           const js = await res.json();
