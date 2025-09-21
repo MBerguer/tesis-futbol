@@ -41,18 +41,28 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
         {!collapsed && <div className="text-sm font-semibold">Dashboard</div>}
       </div>
 
-      {!collapsed && (
-        <div className="px-3 py-3 border-b border-zinc-800 flex flex-col gap-2">
-          <div className="text-xs uppercase text-zinc-500">Sections</div>
+      <div className="px-3 py-3 border-b border-zinc-800 flex flex-col gap-2">
+        {collapsed ? (
           <nav className="flex flex-col gap-1">
-            <Link href="/players" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Active Players</Link>
-            <Link href="/plantel" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Full Plantel</Link>
-            <Link href="/week-preparation" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Week preparation</Link>
-            <Link href="/upload" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Upload PDF + CSV</Link>
-            <Link href="/admin" className="rounded-md px-2 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Admin</Link>
+            <Link href="/players" title="Active Players" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">AP</Link>
+            <Link href="/plantel" title="Full Plantel" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">FP</Link>
+            <Link href="/week-preparation" title="Week preparation" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">WP</Link>
+            <Link href="/upload" title="Upload PDF + CSV" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">UP</Link>
+            <Link href="/admin" title="Admin" className="rounded-md px-2 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">AD</Link>
           </nav>
-        </div>
-      )}
+        ) : (
+          <>
+            <div className="text-xs uppercase text-zinc-500">Sections</div>
+            <nav className="flex flex-col gap-1">
+              <Link href="/players" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Active Players</Link>
+              <Link href="/plantel" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Full Plantel</Link>
+              <Link href="/week-preparation" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Week preparation</Link>
+              <Link href="/upload" className="rounded-md px-2 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Upload PDF + CSV</Link>
+              <Link href="/admin" className="rounded-md px-2 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800/60 border border-transparent hover:border-zinc-700">Admin</Link>
+            </nav>
+          </>
+        )}
+      </div>
 
       <div className="px-3 py-3 flex-1 overflow-auto">
         {!collapsed && (
@@ -76,13 +86,16 @@ export default function SideNav({ collapsed, onToggle, loadingTables, tables, se
               <div className="h-9 rounded-md bg-zinc-800/60 animate-pulse" />
             </>
           ) : (
-            (matches || []).filter(m => {
+            (matches || [])
+            .filter(m => {
               if (!query) return true;
               const q = query.toLowerCase();
               const home = (m.home_team_name || '').toLowerCase();
               const away = (m.away_team_name || '').toLowerCase();
               return (m.category || '').toLowerCase().includes(q) || m.match_date.toLowerCase().includes(q) || m.match_id.toLowerCase().includes(q) || home.includes(q) || away.includes(q);
-            }).map((m) => {
+            })
+            .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime())
+            .map((m) => {
               const dateStr = new Date(m.match_date).toLocaleDateString();
               const teams = (m.home_team_name && m.away_team_name) ? `${m.home_team_name} vs ${m.away_team_name}` : `${m.home_team_id.slice(0,4)}… vs ${m.away_team_id.slice(0,4)}…`;
               return (

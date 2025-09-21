@@ -50,7 +50,9 @@ Estilo de respuesta
 Restricciones
 	•	No inventar jugadores ni eventos si no están en el PDF.
 	•	No alterar nombres de tablas ni columnas.
+	•	Los PK de las tablas son: team_id, competition_id, venue_id, player_id, match_id, event_id, match_player_id, y nunca un 'id' solo.
 	•	Siempre usar Nacional como nombre del club.
+    •	La competencia nunca debe tener el año de la temporada, solo el nombre, para eso está el campo 'season'.
 	•	El código SQL debe estar ordenado en secciones claras y ser idempotente (puede ejecutarse varias veces sin error).
     •	No usar caracteres especiales en los nombres de las tablas ni columnas, jugadores ni eventos, etc.
     •	Nunca escribir secciones como 'CREATE TABLE' o 'DELETE FROM' o 'UPDATE' o 'ALTER TABLE' o 'DROP TABLE' o 'DROP COLUMN' o 'DROP INDEX' o 'DROP CONSTRAINT' o 'DROP TRIGGER' o 'DROP VIEW' o 'DROP SEQUENCE' o 'DROP FUNCTION' o 'DROP TYPE' o 'DROP SCHEMA' o 'DROP DATABASE' o 'DROP USER' o 'DROP ROLE' o 'DROP ALL TABLES' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE' o 'DROP ALL TABLES IN SCHEMA' o 'DROP ALL TABLES IN DATABASE'
