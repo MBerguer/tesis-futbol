@@ -54,7 +54,8 @@ export default function Page() {
   const [filter, setFilter] = React.useState<string>("");
   const [selectedCategory, setSelectedCategory] = React.useState<string>("sub19");
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  const { isBlocked, block, unblock } = useServerPhotoBlocks(API_BASE);
+  const { isBlocked, block, unblock, getCustomUrl, uploadCustom, deleteCustom } = useServerPhotoBlocks(API_BASE);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
 
   const persons = React.useMemo(() => personsData as Person[], []);
   const categories = React.useMemo(() => {
@@ -83,6 +84,36 @@ export default function Page() {
       if (list.length > 0) setSelectedPerson(list[0]);
     }
   }, [list, selectedPerson]);
+
+  // Keyboard navigation
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTyping = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (isTyping) return;
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (!list || list.length === 0) return;
+      e.preventDefault();
+      const currentId = (selectedPerson?.id as any);
+      const idx = currentId != null ? list.findIndex(p => p.id === currentId) : -1;
+      let next = idx;
+      if (e.key === 'ArrowDown') next = Math.min(list.length - 1, idx + 1);
+      if (e.key === 'ArrowUp') next = Math.max(0, idx - 1);
+      if (next >= 0 && next < list.length) {
+        const np = list[next];
+        setSelectedPerson(np);
+        const container = listRef.current;
+        if (container) {
+          const el = container.querySelector(`[data-player-id="${(np.id as any)}"]`);
+          if (el && (el as HTMLElement).scrollIntoView) {
+            (el as HTMLElement).scrollIntoView({ block: 'nearest' });
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [list, selectedPerson?.id]);
 
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
@@ -125,7 +156,7 @@ export default function Page() {
                 className="w-full h-9 rounded-md bg-zinc-900/60 border border-zinc-800 px-3 text-sm"
               />
             </div>
-            <div className="h-[70vh] overflow-y-auto pr-1">
+            <div className="h-[70vh] overflow-y-auto pr-1" ref={listRef}>
               <ul className="space-y-2">
                 {list.map((person) => (
                   <li key={person.id as any}>
@@ -134,14 +165,17 @@ export default function Page() {
                       size="sm"
                       className="w-full justify-start gap-2 h-auto py-2 border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60"
                       onClick={() => setSelectedPerson(person)}
+                      data-player-id={(person.id as any)}
                     >
                       <Avatar className="h-7 w-7">
-                        <AvatarImage alt={person.Jugador} src={
-                          isBlocked(
-                            typeof person.id === 'number' ? person.id : (typeof (person as any).Documento_de_Identidad === 'number' ? (person as any).Documento_de_Identidad : undefined),
-                            person.path_foto || undefined
-                          ) ? undefined : (person.path_foto || undefined)
-                        } />
+                        <AvatarImage alt={person.Jugador} src={(() => {
+                          const pid = (typeof (person as any).id === 'number' ? (person as any).id : (typeof (person as any).Documento_de_Identidad === 'number' ? (person as any).Documento_de_Identidad : undefined));
+                          const custom = getCustomUrl(pid);
+                          if (custom) return custom;
+                          const path = person.path_foto || undefined;
+                          if (isBlocked(pid, path)) return undefined;
+                          return path;
+                        })()} />
                         <AvatarFallback>{(person.Jugador || person.nombre || "?").slice(0,1)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 text-left">
@@ -173,12 +207,14 @@ export default function Page() {
             <CardContent className="flex flex-col md:flex-row gap-6">
               <div className="md:w-1/3">
                 <Avatar className="w-full h-auto rounded-md overflow-hidden">
-                  <AvatarImage alt={selectedPerson.Jugador} src={
-                    isBlocked(
-                      typeof selectedPerson.id === 'number' ? selectedPerson.id : (typeof (selectedPerson as any).Documento_de_Identidad === 'number' ? (selectedPerson as any).Documento_de_Identidad : undefined),
-                      selectedPerson.path_foto || undefined
-                    ) ? undefined : (selectedPerson.path_foto || undefined)
-                  } className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
+                  <AvatarImage alt={selectedPerson.Jugador} src={(() => {
+                    const pid = (typeof (selectedPerson as any).id === 'number' ? (selectedPerson as any).id : (typeof (selectedPerson as any).Documento_de_Identidad === 'number' ? (selectedPerson as any).Documento_de_Identidad : undefined));
+                    const custom = getCustomUrl(pid);
+                    if (custom) return custom;
+                    const path = selectedPerson.path_foto || undefined;
+                    if (isBlocked(pid, path)) return undefined;
+                    return path;
+                  })()} className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
                   <AvatarFallback className="h-72 text-3xl">{(selectedPerson.Jugador || selectedPerson.nombre || "?").slice(0,1)}</AvatarFallback>
                 </Avatar>
                 <div className="mt-2 flex gap-2">
@@ -187,9 +223,29 @@ export default function Page() {
                     const path = selectedPerson.path_foto || undefined;
                     const blocked = isBlocked(pid, path);
                     return !blocked ? (
-                      <Button size="sm" variant="outline" className="h-7" onClick={() => block(pid, path)}>Quitar foto</Button>
+                      <Button size="sm" variant="destructive" className="h-7" onClick={() => block(pid, path)}>Quitar foto</Button>
                     ) : (
-                      <Button size="sm" variant="secondary" className="h-7" onClick={() => unblock(pid, path)}>Restaurar foto</Button>
+                      <Button size="sm" variant="default" className="h-7" onClick={() => unblock(pid, path)}>Restaurar foto</Button>
+                    );
+                  })()}
+                  {(() => {
+                    const pid = typeof selectedPerson.id === 'number' ? selectedPerson.id : (typeof (selectedPerson as any).Documento_de_Identidad === 'number' ? (selectedPerson as any).Documento_de_Identidad : undefined);
+                    const custom = getCustomUrl(pid);
+                    if (!custom) {
+                      return (
+                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs px-2 py-1 border border-zinc-700 rounded hover:bg-zinc-800/50">
+                          <input type="file" accept="image/*" className="hidden" onChange={async (e)=>{
+                            const inputEl = e.currentTarget;
+                            const file = inputEl.files?.[0];
+                            if (file && pid != null) await uploadCustom(pid, file);
+                            inputEl.value = "";
+                          }} />
+                          Subir foto
+                        </label>
+                      );
+                    }
+                    return (
+                      <Button size="sm" variant="destructive" className="h-7" onClick={async ()=>{ if (pid != null) await deleteCustom(pid); }}>Eliminar foto</Button>
                     );
                   })()}
                 </div>

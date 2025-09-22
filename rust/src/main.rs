@@ -2,6 +2,8 @@ use axum::{routing::get, Router};
 use sqlx::postgres::PgPoolOptions;
 use std::env;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
+use tokio::fs;
 
 mod config;
 mod models;
@@ -32,11 +34,15 @@ async fn main() {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    // Ensure uploads directory exists
+    let _ = fs::create_dir_all("uploads/player_photos").await;
+
     let app = Router::new()
         .route("/", get(|| async { "Cantera inagotable API" }))
         .nest("/match", routes::matches_routes::matches_routes(pool.clone()))
         .nest("/player", routes::players_routes::players_routes())
         .nest("/api", routes::admin_api::admin_api(pool))
+        .nest_service("/uploads", ServeDir::new("uploads"))
         .layer(cors);
 
     // Allow overriding the port via environment variable API_PORT (defaults to 8000)

@@ -1,9 +1,14 @@
 use axum::extract::Path;
-use axum::extract::{Json, RawPathParams};
+use axum::extract::{Json, RawPathParams, Multipart};
 use serde_json::{json, Value};
 use sqlx::Row;
-
+use uuid::Uuid;
+use std::path::Path as FsPath;
+use tokio::io::AsyncWriteExt;
 use crate::config::dbconfig::DbConfig;
+use axum::http::StatusCode;
+
+// DbConfig already imported above
 
 pub async fn get_players_basic_profile(Path(user_id): Path<u32>) -> String {
     (1 + user_id).to_string()
@@ -208,6 +213,92 @@ pub async fn remove_player_photo_block(Json(input): Json<PhotoBlockInput>) -> Js
         .await;
     }
     Json(json!({ "ok": true }))
+}
+
+// Custom photo management
+#[derive(serde::Deserialize)]
+pub struct CustomPhotoInput {
+    pub player_id: i32,
+}
+
+pub async fn upload_custom_photo(mut multipart: Multipart) -> Result<Json<Value>, (StatusCode, String)> {
+    // We expect fields: player_id (text), file (binary)
+    let mut player_id: Option<i32> = None;
+    let mut file_bytes: Option<Vec<u8>> = None;
+    let mut filename: Option<String> = None;
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or("").to_string();
+        if name == "player_id" {
+            let text = field.text().await.unwrap_or_default();
+            if let Ok(pid) = text.parse::<i32>() {
+                player_id = Some(pid);
+            }
+        } else if name == "file" {
+            filename = field.file_name().map(|s| s.to_string());
+            let data = field.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("read file: {}", e)))?;
+            file_bytes = Some(data.to_vec());
+        }
+    }
+
+    let player_id = match player_id {
+        Some(pid) => pid,
+        None => return Err((StatusCode::BAD_REQUEST, "missing player_id".into())),
+    };
+    let data = match file_bytes {
+        Some(b) => b,
+        None => return Err((StatusCode::BAD_REQUEST, "missing file".into())),
+    };
+    let ext = filename
+        .and_then(|f| FsPath::new(&f).extension().and_then(|e| e.to_str()).map(|s| s.to_string()))
+        .unwrap_or_else(|| "jpg".to_string());
+    let id = Uuid::new_v4().to_string();
+    let rel_path = format!("player_photos/{}_{}.{}", player_id, id, ext);
+    let full_path = format!("uploads/{}", rel_path);
+    if let Some(parent) = FsPath::new(&full_path).parent() { let _ = tokio::fs::create_dir_all(parent).await; }
+    let mut f = tokio::fs::File::create(&full_path).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("create file: {}", e)))?;
+    f.write_all(&data).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("write file: {}", e)))?;
+
+    // Persist mapping in DB
+    let dbconfig = DbConfig::new();
+    let pool = sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "db".into()))?;
+    let _ = sqlx::query(
+        r#"CREATE TABLE IF NOT EXISTS player_custom_photos(player_id integer primary key, photo_url text not null, updated_at timestamp without time zone default now())"#
+    ).execute(&pool).await;
+    let _ = sqlx::query!(
+        r#"INSERT INTO player_custom_photos(player_id, photo_url, updated_at) VALUES($1,$2,NOW()) ON CONFLICT (player_id) DO UPDATE SET photo_url = EXCLUDED.photo_url, updated_at = NOW()"#,
+        player_id,
+        format!("/uploads/{}", rel_path)
+    ).execute(&pool).await;
+
+    Ok(Json(json!({ "ok": true, "url": format!("/uploads/{}", rel_path) })))
+}
+
+pub async fn delete_custom_photo(Json(input): Json<CustomPhotoInput>) -> Json<Value> {
+    let dbconfig = DbConfig::new();
+    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await { Ok(p)=>p, Err(_)=> return Json(json!({"ok": false})) };
+    let _ = sqlx::query(
+        r#"CREATE TABLE IF NOT EXISTS player_custom_photos(player_id integer primary key, photo_url text not null, updated_at timestamp without time zone default now())"#
+    ).execute(&pool).await;
+    if let Ok(Some(row)) = sqlx::query!(r#"SELECT photo_url FROM player_custom_photos WHERE player_id = $1"#, input.player_id).fetch_optional(&pool).await {
+        let url: String = row.photo_url;
+        // try delete file from disk
+        let p = url.trim_start_matches('/');
+        let _ = tokio::fs::remove_file(p).await;
+    }
+    let _ = sqlx::query!(r#"DELETE FROM player_custom_photos WHERE player_id = $1"#, input.player_id).execute(&pool).await;
+    Json(json!({"ok": true}))
+}
+
+pub async fn get_custom_photos() -> Json<Value> {
+    let dbconfig = DbConfig::new();
+    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await { Ok(p)=>p, Err(_)=> return Json(json!({"photos": []})) };
+    let _ = sqlx::query(
+        r#"CREATE TABLE IF NOT EXISTS player_custom_photos(player_id integer primary key, photo_url text not null, updated_at timestamp without time zone default now())"#
+    ).execute(&pool).await;
+    let rows = sqlx::query!(r#"SELECT player_id, photo_url FROM player_custom_photos"#).fetch_all(&pool).await.unwrap_or_default();
+    let arr: Vec<Value> = rows.into_iter().map(|r| json!({"player_id": r.player_id, "url": r.photo_url})).collect();
+    Json(json!({"photos": arr}))
 }
 
 // Global extrema across players for comparator normalization
