@@ -114,6 +114,102 @@ pub async fn get_all_players_photos() -> Json<Value> {
     }))
 }
 
+// Persisted photo blocks: allow unlinking a mismatched photo (per player, per path)
+#[derive(serde::Deserialize)]
+pub struct PhotoBlockInput {
+    pub player_id: i32,
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
+async fn ensure_photo_blocks_table(pool: &sqlx::PgPool) {
+    let _ = sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS player_photo_blocks (
+            player_id integer NOT NULL,
+            photo_path text NOT NULL,
+            created_at timestamp without time zone DEFAULT NOW(),
+            PRIMARY KEY (player_id, photo_path)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await;
+}
+
+pub async fn get_player_photo_blocks() -> Json<Value> {
+    let dbconfig = DbConfig::new();
+    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await {
+        Ok(p) => p,
+        Err(_) => return Json(json!({ "blocks": [] })),
+    };
+    ensure_photo_blocks_table(&pool).await;
+
+    let rows = sqlx::query!(
+        r#"SELECT player_id, photo_path FROM player_photo_blocks ORDER BY player_id, photo_path"#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    let blocks: Vec<Value> = rows
+        .into_iter()
+        .map(|r| json!({ "player_id": r.player_id, "path": r.photo_path }))
+        .collect();
+    Json(json!({ "blocks": blocks }))
+}
+
+pub async fn add_player_photo_block(Json(input): Json<PhotoBlockInput>) -> Json<Value> {
+    let dbconfig = DbConfig::new();
+    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await {
+        Ok(p) => p,
+        Err(_) => return Json(json!({ "ok": false })),
+    };
+    ensure_photo_blocks_table(&pool).await;
+    let path = match input.path {
+        Some(p) if !p.is_empty() => p,
+        _ => return Json(json!({ "ok": false, "error": "missing path" })),
+    };
+    let _ = sqlx::query!(
+        r#"
+        INSERT INTO player_photo_blocks(player_id, photo_path)
+        VALUES ($1, $2)
+        ON CONFLICT (player_id, photo_path) DO NOTHING
+        "#,
+        input.player_id,
+        path
+    )
+    .execute(&pool)
+    .await;
+    Json(json!({ "ok": true }))
+}
+
+pub async fn remove_player_photo_block(Json(input): Json<PhotoBlockInput>) -> Json<Value> {
+    let dbconfig = DbConfig::new();
+    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await {
+        Ok(p) => p,
+        Err(_) => return Json(json!({ "ok": false })),
+    };
+    ensure_photo_blocks_table(&pool).await;
+    if let Some(p) = input.path {
+        let _ = sqlx::query!(
+            r#"DELETE FROM player_photo_blocks WHERE player_id = $1 AND photo_path = $2"#,
+            input.player_id,
+            p
+        )
+        .execute(&pool)
+        .await;
+    } else {
+        let _ = sqlx::query!(
+            r#"DELETE FROM player_photo_blocks WHERE player_id = $1"#,
+            input.player_id
+        )
+        .execute(&pool)
+        .await;
+    }
+    Json(json!({ "ok": true }))
+}
+
 // Global extrema across players for comparator normalization
 pub async fn get_player_metrics_extrema() -> Json<Value> {
     let dbconfig = DbConfig::new();

@@ -24,6 +24,7 @@ import {
 // Reuse time helpers from the match view
 import { formatMmSsFromSeconds } from "@/app/match/utils/time";
 import { Progress } from "@/components/ui/progress";
+import { useServerPhotoBlocks } from "../hooks/useServerPhotoBlocks";
 import SkillsetComparator from "@/app/components/SkillsetComparator";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -95,6 +96,7 @@ export default function Page() {
   const [persons, setPersons] = React.useState<Person[]>([]);
   const [maxMetrics, setMaxMetrics] = React.useState<PlayerMaxMetrics | null>(null);
   const [loadingMetrics, setLoadingMetrics] = React.useState<boolean>(false);
+  const { isBlocked, block, unblock } = useServerPhotoBlocks(API_BASE);
   type FotoIndexItem = { nombreNorm: string; path: string };
   const [fotosIndex, setFotosIndex] = React.useState<FotoIndexItem[]>([]);
   React.useEffect(() => {
@@ -141,7 +143,7 @@ export default function Page() {
     return union === 0 ? 0 : inter / union;
   }, [trigramSet]);
 
-  const findBestPhoto = React.useCallback((name: string): string | undefined => {
+  const findBestPhoto = React.useCallback((name: string, playerId?: number): string | undefined => {
     const normalize = (s: string) => s
       .toLowerCase()
       .normalize('NFD')
@@ -155,10 +157,14 @@ export default function Page() {
     let bestPath: string | undefined = undefined;
     for (const f of fotosIndex) {
       const s = similarity(n, f.nombreNorm);
-      if (s > bestS) { bestS = s; bestPath = f.path; }
+      if (s > bestS) {
+        // skip blocked path for this player if provided
+        if (playerId != null && isBlocked(playerId, f.path)) continue;
+        bestS = s; bestPath = f.path;
+      }
     }
     return bestS >= 0.28 ? bestPath : undefined; // threshold tuned lightly
-  }, [fotosIndex, similarity]);
+  }, [fotosIndex, similarity, isBlocked]);
   const list = React.useMemo(() => {
     const f = filter.trim().toLowerCase();
     if (!f) return persons;
@@ -177,7 +183,7 @@ export default function Page() {
             id: p.id ?? p.Documento_de_Identidad ?? undefined,
             path_foto: (() => {
               const display = (p.Jugador ?? p.nombre ?? '') as string;
-              return findBestPhoto(display);
+              return findBestPhoto(display, p.id ?? p.Documento_de_Identidad ?? undefined);
             })()
           }));
           setPersons(normalized);
@@ -195,7 +201,7 @@ export default function Page() {
     if (fotosIndex.length === 0 || persons.length === 0) return;
     setPersons(prev => prev.map(p => {
       const display = (p.Jugador ?? p.nombre ?? '') as string;
-      const best = findBestPhoto(display);
+      const best = findBestPhoto(display, p.id ?? p.Documento_de_Identidad ?? undefined);
       return best && best !== p.path_foto ? { ...p, path_foto: best } : p;
     }));
     // do not add findBestPhoto as dep to avoid function identity changes
@@ -608,7 +614,12 @@ export default function Page() {
                       onClick={() => setSelectedPerson(person)}
                     >
                       <Avatar className="h-4 w-4">
-                        <AvatarImage alt={person.Jugador ?? undefined} src={person.path_foto || undefined} />
+                        <AvatarImage alt={person.Jugador ?? undefined} src={
+                          isBlocked(
+                            (typeof person.id === 'number' ? person.id : undefined) ?? (typeof person.Documento_de_Identidad === 'number' ? person.Documento_de_Identidad : undefined),
+                            person.path_foto || undefined
+                          ) ? undefined : (person.path_foto || undefined)
+                        } />
                         <AvatarFallback>{(person.Jugador || person.nombre || "?").slice(0,1)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 text-left">
@@ -638,9 +649,26 @@ export default function Page() {
             <CardContent className="flex flex-col md:flex-row gap-6">
               <div className="md:w-1/5">
                 <Avatar className="h-auto w-full rounded-md overflow-hidden mx-auto">
-                  <AvatarImage alt={selected.Jugador ?? undefined} src={selected.path_foto || undefined} className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
+                  <AvatarImage alt={selected.Jugador ?? undefined} src={
+                    isBlocked(
+                      (typeof selected.id === 'number' ? selected.id : undefined) ?? (typeof selected.Documento_de_Identidad === 'number' ? selected.Documento_de_Identidad : undefined),
+                      selected.path_foto || undefined
+                    ) ? undefined : (selected.path_foto || undefined)
+                  } className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
                   <AvatarFallback className="h-44 text-2xl">{(selected.Jugador || selected.nombre || "?").slice(0,1)}</AvatarFallback>
                 </Avatar>
+                <div className="mt-2 flex gap-2">
+                  {(() => {
+                    const pid = ((typeof selected.id === 'number' ? selected.id : undefined) ?? (typeof selected.Documento_de_Identidad === 'number' ? selected.Documento_de_Identidad : undefined));
+                    const path = selected.path_foto || undefined;
+                    const blocked = isBlocked(pid, path);
+                    return !blocked ? (
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => block(pid, path)}>Quitar foto</Button>
+                    ) : (
+                      <Button size="sm" variant="secondary" className="h-7" onClick={() => unblock(pid, path)}>Restaurar foto</Button>
+                    );
+                  })()}
+                </div>
               </div>
               <div className="md:flex-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -723,7 +751,7 @@ export default function Page() {
                   </CardContent>
                 </Card>
                 <Card className="bg-zinc-900/50 border-zinc-800">
-                  <CardHeader><CardTitle className="text-base">Software Engineer Skillset Hexagon</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-base">Skillset Reference</CardTitle></CardHeader>
                   <CardContent>
                     <SkillsetComparator categories={skillCategories} series={skillSeries} max={10} height={320} />
                   </CardContent>

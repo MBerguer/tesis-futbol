@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "./components/ui/avatar";
+import { useServerPhotoBlocks } from "../hooks/useServerPhotoBlocks";
 import { Mail, Phone, Smartphone, User, Ruler, Activity, Calendar, FileText, Stamp, HeartPulse, GraduationCap, MapPin, Building2, Percent, Tag, List as ListIcon } from "lucide-react";
 import {
   BarChart,
@@ -52,6 +53,8 @@ export default function Page() {
   const [selectedPerson, setSelectedPerson] = React.useState<Person | null>(null);
   const [filter, setFilter] = React.useState<string>("");
   const [selectedCategory, setSelectedCategory] = React.useState<string>("sub19");
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const { isBlocked, block, unblock } = useServerPhotoBlocks(API_BASE);
 
   const persons = React.useMemo(() => personsData as Person[], []);
   const categories = React.useMemo(() => {
@@ -133,7 +136,12 @@ export default function Page() {
                       onClick={() => setSelectedPerson(person)}
                     >
                       <Avatar className="h-7 w-7">
-                        <AvatarImage alt={person.Jugador} src={person.path_foto || undefined} />
+                        <AvatarImage alt={person.Jugador} src={
+                          isBlocked(
+                            typeof person.id === 'number' ? person.id : (typeof (person as any).Documento_de_Identidad === 'number' ? (person as any).Documento_de_Identidad : undefined),
+                            person.path_foto || undefined
+                          ) ? undefined : (person.path_foto || undefined)
+                        } />
                         <AvatarFallback>{(person.Jugador || person.nombre || "?").slice(0,1)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 text-left">
@@ -165,9 +173,26 @@ export default function Page() {
             <CardContent className="flex flex-col md:flex-row gap-6">
               <div className="md:w-1/3">
                 <Avatar className="w-full h-auto rounded-md overflow-hidden">
-                  <AvatarImage alt={selectedPerson.Jugador} src={selectedPerson.path_foto || undefined} className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
+                  <AvatarImage alt={selectedPerson.Jugador} src={
+                    isBlocked(
+                      typeof selectedPerson.id === 'number' ? selectedPerson.id : (typeof (selectedPerson as any).Documento_de_Identidad === 'number' ? (selectedPerson as any).Documento_de_Identidad : undefined),
+                      selectedPerson.path_foto || undefined
+                    ) ? undefined : (selectedPerson.path_foto || undefined)
+                  } className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
                   <AvatarFallback className="h-72 text-3xl">{(selectedPerson.Jugador || selectedPerson.nombre || "?").slice(0,1)}</AvatarFallback>
                 </Avatar>
+                <div className="mt-2 flex gap-2">
+                  {(() => {
+                    const pid = typeof selectedPerson.id === 'number' ? selectedPerson.id : (typeof (selectedPerson as any).Documento_de_Identidad === 'number' ? (selectedPerson as any).Documento_de_Identidad : undefined);
+                    const path = selectedPerson.path_foto || undefined;
+                    const blocked = isBlocked(pid, path);
+                    return !blocked ? (
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => block(pid, path)}>Quitar foto</Button>
+                    ) : (
+                      <Button size="sm" variant="secondary" className="h-7" onClick={() => unblock(pid, path)}>Restaurar foto</Button>
+                    );
+                  })()}
+                </div>
               </div>
               <div className="md:flex-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
