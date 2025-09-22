@@ -331,7 +331,7 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO teams (name, category)
 VALUES
     ('Nacional', 'Sub 19'),
-    ('Miramar Misiones', 'Sub 19')
+    ('Deportivo Maldonado', 'Sub 19')
 ON CONFLICT (name, category) DO NOTHING;
 
 -- Matches
@@ -442,3 +442,45 @@ VALUES
 ON CONFLICT (match_id, player_id, minute, type) DO NOTHING;
 
 COMMIT;
+
+
+
+
+
+-- Venues
+INSERT INTO venues (name)
+VALUES ('Parque Las Delicias')
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Teams
+INSERT INTO teams (name, category)
+VALUES
+    ('Nacional', 'Sub 19'),
+    ('Deportivo Maldonado', 'Sub 19')
+ON CONFLICT (name, category) DO NOTHING;
+
+-- Matches
+WITH competition_info AS (
+    SELECT competition_id FROM competitions WHERE name = 'Juveniles A - Uruguayo' AND season = '2024'
+), venue_info AS (
+    SELECT venue_id FROM venues WHERE name = 'Nacional - Los Cespedes'
+), home_team_info AS (
+    SELECT team_id FROM teams WHERE name = 'Nacional' AND category = 'Sub 19'
+), away_team_info AS (
+    SELECT team_id FROM teams WHERE name = 'Deportivo Maldonado' AND category = 'Sub 19'
+)
+INSERT INTO matches (competition_id, venue_id, match_date, home_team_id, away_team_id, result_home, result_away, notes)
+SELECT
+    (SELECT competition_id FROM competition_info),
+    (SELECT venue_id FROM venue_info),
+    '2024-06-22 11:00:00',
+    (SELECT team_id FROM home_team_info),
+    (SELECT team_id FROM away_team_info),
+    7,
+    0,
+    jsonb_build_object('coach_home', 'Espasandin Santiago')
+ON CONFLICT (competition_id, home_team_id, away_team_id, match_date) DO UPDATE SET
+    result_home = EXCLUDED.result_home,
+    result_away = EXCLUDED.result_away,
+    notes = EXCLUDED.notes;

@@ -89,6 +89,15 @@ VALUES
                                     'player_in_id', REEMPLAZAR_DOC_ID('Lopez Nahuel')))
 ON CONFLICT (match_id, player_id, minute, type) DO NOTHING;
 
+
+
+THESE ARE THE SCHEMAS OF THE TABLES:
+INSERT INTO public.matches
+(match_id, competition_id, match_date, venue_id, category, home_team_id, away_team_id, result_home, result_away, youtube_link, notes, source_pdf_hash, parse_confidence, gps_table_name)
+
+INSERT INTO public.match_players
+(match_player_id, match_id, team_id, 'role', 'position', jersey_number, player_id)
+
 ";
 
 // Execute arbitrary SQL in a single transaction (used for LLM-generated scripts)

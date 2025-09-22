@@ -1134,6 +1134,7 @@ export default function Page() {
     setPinnedPlayers(prev => ({ ...prev, [name]: !prev[name] }));
   }, []);
   const [mapStacked, setMapStacked] = useState<boolean>(true);
+  const [zoomLimited, setZoomLimited] = useState<boolean>(true);
   const [mapBearing, setMapBearing] = useState<number>(0);
   const [savingOrientation, setSavingOrientation] = useState<boolean>(false);
   const [saveOrientationError, setSaveOrientationError] = useState<string | null>(null);
@@ -1659,6 +1660,9 @@ export default function Page() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
+                                  <Button variant={'ghost'} size={'sm'} onClick={()=>setZoomLimited(v=>!v)}>
+                                    {zoomLimited ? 'Enable full zoom' : 'Limit zoom'}
+                                  </Button>
                                   <div className="flex items-center gap-2">
                                     <Button variant={'destructive'} size={'sm'} onClick={()=> setSharpTraces([])}>Clear traces</Button>
                                     {loadingSharpAngles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
@@ -1682,6 +1686,7 @@ export default function Page() {
                                       bearing={mapBearing}
                                       traceLines={(sharpTraces && sharpTraces.length>0) ? sharpTraces.map(t => t.points.map(p=>({ lat: p.lat, lon: p.lon }))) : undefined}
                                       traceColor={'#ef4444'}
+                                      limitZoom={zoomLimited}
                                     />
                                   </div>
                                   <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>

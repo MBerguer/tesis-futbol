@@ -17,9 +17,14 @@ interface PitchMapProps {
   centerLongitude?: number; // initial/controlled center longitude
   traceLines?: Array<Array<{ lat: number; lon: number }>>;
   traceColor?: string;
+  // Zoom controls
+  limitZoom?: boolean; // when true, restrict zoom around initialZoom
+  initialZoom?: number; // default zoom level used when limiting is enabled
+  fullZoomMin?: number; // min zoom when limiting is disabled
+  fullZoomMax?: number; // max zoom when limiting is disabled
 }
 
-export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing, centerLatitude, centerLongitude, traceLines, traceColor }: PitchMapProps) {
+export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing, centerLatitude, centerLongitude, traceLines, traceColor, limitZoom = true, initialZoom = 18.5, fullZoomMin = 0, fullZoomMax = 22 }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
@@ -33,7 +38,6 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
   useEffect(() => {
     if (!containerRef.current) return;
     if (!mapRef.current) {
-      const initialZoom = 18.5;
       mapRef.current = new maplibregl.Map({
         container: containerRef.current,
         style: styleObj || styleUrl || `https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`,
@@ -42,8 +46,8 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
           (typeof centerLatitude === 'number' && isFinite(centerLatitude) ? centerLatitude : -34.795334)
         ],
         zoom: initialZoom,
-        minZoom: Math.max(0, initialZoom - 0.5),
-        maxZoom: initialZoom + 0.5,
+        minZoom: limitZoom ? Math.max(0, initialZoom - 0.5) : fullZoomMin,
+        maxZoom: limitZoom ? initialZoom + 0.5 : fullZoomMax,
         interactive: true,
       });
     }
@@ -51,7 +55,7 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
       markersRef.current.forEach(({ marker, popup }) => { try { popup.remove(); } catch {} marker.remove(); });
       markersRef.current = new Map();
     };
-  }, [styleUrl, styleObj]);
+  }, [styleUrl, styleObj, initialZoom, limitZoom, fullZoomMin, fullZoomMax]);
 
   // Ensure map resizes when container size/layout changes
   useEffect(() => {
@@ -82,6 +86,23 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
       try { map.setBearing(bearing); } catch {}
     }
   }, [bearing]);
+
+  // Apply zoom limit/full-zoom toggles and reset zoom when limiting is re-enabled
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    try {
+      if (limitZoom) {
+        map.setMinZoom(Math.max(0, initialZoom - 0.5));
+        map.setMaxZoom(initialZoom + 0.5);
+        // reset to default zoom when limiting is enabled again
+        map.setZoom(initialZoom);
+      } else {
+        map.setMinZoom(fullZoomMin);
+        map.setMaxZoom(fullZoomMax);
+      }
+    } catch {}
+  }, [limitZoom, initialZoom, fullZoomMin, fullZoomMax]);
 
   // Apply center changes when venue coordinates update
   useEffect(() => {
