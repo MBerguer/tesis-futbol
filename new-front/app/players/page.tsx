@@ -24,6 +24,7 @@ import {
 // Reuse time helpers from the match view
 import { formatMmSsFromSeconds } from "@/app/match/utils/time";
 import { Progress } from "@/components/ui/progress";
+import SkillsetComparator from "@/app/components/SkillsetComparator";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -211,7 +212,7 @@ export default function Page() {
   // If current selection is filtered out, pick first in current list
   React.useEffect(() => {
     if (selectedPerson && !list.some(p => p.id === selectedPerson.id)) {
-      setSelectedPerson(list[0] ?? null);
+      if (list.length > 0) setSelectedPerson(list[0]);
     }
   }, [list, selectedPerson]);
 
@@ -500,6 +501,80 @@ export default function Page() {
     { title: "z6", value: maxMetrics ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)` : '—', link: z6Href },
   ]), [maxMetrics, matchHref, maxDistanceHref, hsrHref, z6Href]);
 
+  // Skill comparator: normalize values 0-10 using extrema from API
+  type Extrema = {
+    max_distance_m: { min: number; max: number };
+    hsr_max_m: { min: number; max: number };
+    max_speed_kmh: { min: number; max: number };
+    hmld_25_5_m: { min: number; max: number };
+    z6_seconds: { min: number; max: number };
+    averages?: {
+      max_distance_m: number;
+      hsr_max_m: number;
+      max_speed_kmh: number;
+      hmld_25_5_m: number;
+      z6_seconds: number;
+      age_years: number;
+    }
+  } | null;
+  const [extrema, setExtrema] = React.useState<Extrema>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/player/metrics/extrema`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled) setExtrema(json);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const normalize = (value: number, min: number, max: number) => {
+    if (!isFinite(value) || !isFinite(min) || !isFinite(max) || max <= min) return 0;
+    return clamp(((value - min) / (max - min)) * 10, 0, 10);
+  };
+
+  const age = React.useMemo(() => calcAge(selected?.Fecha_Nacimiento), [selected?.Fecha_Nacimiento]);
+  const ageRange = React.useMemo(() => ({ min: 14, max: 45 }), []);
+
+  const skillCategories = [
+    "Max. Dist",
+    "HSR Max",
+    "Velocidad Max.",
+    "HMLD 25.5",
+    "z6 segs",
+    "Edad",
+  ];
+
+  const playerSkillValues = React.useMemo(() => {
+    if (!maxMetrics) return [0,0,0,0,0, age ? normalize(age, ageRange.min, ageRange.max) : 0];
+    const v1 = normalize(maxMetrics.max_distance_m ?? 0, extrema?.max_distance_m.min ?? 0, extrema?.max_distance_m.max ?? 1);
+    const v2 = normalize(maxMetrics.hsr_max_m ?? 0, extrema?.hsr_max_m.min ?? 0, extrema?.hsr_max_m.max ?? 1);
+    const v3 = normalize(maxMetrics.max_speed_kmh ?? 0, extrema?.max_speed_kmh.min ?? 0, extrema?.max_speed_kmh.max ?? 1);
+    const v4 = normalize((maxMetrics.hmld?.m25_5 ?? 0), extrema?.hmld_25_5_m.min ?? 0, extrema?.hmld_25_5_m.max ?? 1);
+    const v5 = normalize((maxMetrics.z6?.seconds ?? 0), extrema?.z6_seconds.min ?? 0, extrema?.z6_seconds.max ?? 1);
+    const v6 = age ? normalize(age, ageRange.min, ageRange.max) : 0;
+    return [v1,v2,v3,v4,v5,v6];
+  }, [maxMetrics, extrema, age, ageRange.min, ageRange.max]);
+
+  const referenceSkillValues = React.useMemo(() => {
+    if (!extrema?.averages) return [7.5,7.5,7.5,7.5,7.5,5.0];
+    const a1 = normalize(extrema.averages.max_distance_m, extrema.max_distance_m.min, extrema.max_distance_m.max);
+    const a2 = normalize(extrema.averages.hsr_max_m, extrema.hsr_max_m.min, extrema.hsr_max_m.max);
+    const a3 = normalize(extrema.averages.max_speed_kmh, extrema.max_speed_kmh.min, extrema.max_speed_kmh.max);
+    const a4 = normalize(extrema.averages.hmld_25_5_m, extrema.hmld_25_5_m.min, extrema.hmld_25_5_m.max);
+    const a5 = normalize(extrema.averages.z6_seconds, extrema.z6_seconds.min, extrema.z6_seconds.max);
+    const a6 = normalize(extrema.averages.age_years, ageRange.min, ageRange.max);
+    return [a1,a2,a3,a4,a5,a6];
+  }, [extrema, ageRange.min, ageRange.max]);
+  const skillSeries = React.useMemo(() => ([
+    { name: selected?.Jugador || selected?.nombre || "Jugador", data: playerSkillValues, color: "#3b82f6", fillOpacity: 0.22 },
+    { name: "Referencia", data: referenceSkillValues, color: "#ef4444", strokeDasharray: "4 3", fillOpacity: 0.12 },
+  ]), [playerSkillValues, selected?.Jugador, selected?.nombre, referenceSkillValues]);
+
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
       {loadingMetrics && (
@@ -612,7 +687,7 @@ export default function Page() {
             </CardContent>
 
             <CardContent className="w-full mt-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="bg-zinc-900/50 border-zinc-800">
                   <CardHeader><CardTitle className="text-base flex items-center gap-2"><Ruler className="h-4 w-4"/>Medición del salto (curva y=x²)</CardTitle></CardHeader>
                   <CardContent>
@@ -645,6 +720,12 @@ export default function Page() {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-zinc-900/50 border-zinc-800">
+                  <CardHeader><CardTitle className="text-base">Software Engineer Skillset Hexagon</CardTitle></CardHeader>
+                  <CardContent>
+                    <SkillsetComparator categories={skillCategories} series={skillSeries} max={10} height={320} />
                   </CardContent>
                 </Card>
               </div>

@@ -77,7 +77,7 @@ export default function Page() {
   // If current selection is filtered out, pick first in current list
   React.useEffect(() => {
     if (selectedPerson && !list.some(p => p.id === selectedPerson.id)) {
-      setSelectedPerson(list[0] ?? null);
+      if (list.length > 0) setSelectedPerson(list[0]);
     }
   }, [list, selectedPerson]);
 

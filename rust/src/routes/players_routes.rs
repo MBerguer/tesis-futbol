@@ -6,6 +6,7 @@ pub fn players_routes() -> Router {
     Router::new()
         .route("/", get(players::get_all_players))
         .route("/photos", get(players::get_all_players_photos))
+        .route("/metrics/extrema", get(players::get_player_metrics_extrema))
         .route("/:user_id", get(players::get_players_basic_profile))
         .route(
             "/:user_id/matches/:match_id",

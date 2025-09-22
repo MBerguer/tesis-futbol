@@ -114,6 +114,84 @@ pub async fn get_all_players_photos() -> Json<Value> {
     }))
 }
 
+// Global extrema across players for comparator normalization
+pub async fn get_player_metrics_extrema() -> Json<Value> {
+    let dbconfig = DbConfig::new();
+    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await {
+        Ok(p) => p,
+        Err(_) => {
+            return Json(json!({
+                "max_distance_m": {"min": 0, "max": 0},
+                "hsr_max_m": {"min": 0, "max": 0},
+                "max_speed_kmh": {"min": 0.0, "max": 0.0},
+                "hmld_25_5_m": {"min": 0, "max": 0},
+                "z6_seconds": {"min": 0, "max": 0}
+            }));
+        }
+    };
+
+    let row = sqlx::query!(
+        r#"
+        SELECT
+          MIN(max_distance_m)::double precision   AS min_max_distance_m,
+          MAX(max_distance_m)::double precision   AS max_max_distance_m,
+          MIN(hsr_max_m)::double precision        AS min_hsr_max_m,
+          MAX(hsr_max_m)::double precision        AS max_hsr_max_m,
+          MIN(max_speed_kmh)::double precision    AS min_max_speed_kmh,
+          MAX(max_speed_kmh)::double precision    AS max_max_speed_kmh,
+          MIN(hmld_25_5_m)::double precision      AS min_hmld_25_5_m,
+          MAX(hmld_25_5_m)::double precision      AS max_hmld_25_5_m,
+          MIN(z6_seconds)::double precision       AS min_z6_seconds,
+          MAX(z6_seconds)::double precision       AS max_z6_seconds,
+          AVG(max_distance_m)::double precision   AS avg_max_distance_m,
+          AVG(hsr_max_m)::double precision        AS avg_hsr_max_m,
+          AVG(max_speed_kmh)::double precision    AS avg_max_speed_kmh,
+          AVG(hmld_25_5_m)::double precision      AS avg_hmld_25_5_m,
+          AVG(z6_seconds)::double precision       AS avg_z6_seconds
+        FROM player_metrics_cache
+        "#
+    )
+    .fetch_one(&pool)
+    .await
+    .ok();
+
+    // Average age
+    let avg_age_row = sqlx::query!(
+        r#"
+        SELECT AVG(EXTRACT(YEAR FROM age(CURRENT_DATE, to_date("Fecha_Nacimiento", 'DD/MM/YYYY'))))::double precision AS avg_age
+        FROM administrativo
+        WHERE "Fecha_Nacimiento" IS NOT NULL AND "Fecha_Nacimiento" ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
+        "#
+    ).fetch_one(&pool).await.ok();
+
+    if let Some(r) = row {
+        let avg_age_years: f64 = avg_age_row.and_then(|a| a.avg_age).unwrap_or(0.0);
+        return Json(json!({
+            "max_distance_m": { "min": (r.min_max_distance_m.unwrap_or(0.0).round() as i64), "max": (r.max_max_distance_m.unwrap_or(0.0).round() as i64) },
+            "hsr_max_m": { "min": (r.min_hsr_max_m.unwrap_or(0.0).round() as i64), "max": (r.max_hsr_max_m.unwrap_or(0.0).round() as i64) },
+            "max_speed_kmh": { "min": r.min_max_speed_kmh.unwrap_or(0.0), "max": r.max_max_speed_kmh.unwrap_or(0.0) },
+            "hmld_25_5_m": { "min": (r.min_hmld_25_5_m.unwrap_or(0.0).round() as i64), "max": (r.max_hmld_25_5_m.unwrap_or(0.0).round() as i64) },
+            "z6_seconds": { "min": (r.min_z6_seconds.unwrap_or(0.0).round() as i64), "max": (r.max_z6_seconds.unwrap_or(0.0).round() as i64) },
+            "averages": {
+                "max_distance_m": r.avg_max_distance_m.unwrap_or(0.0),
+                "hsr_max_m": r.avg_hsr_max_m.unwrap_or(0.0),
+                "max_speed_kmh": r.avg_max_speed_kmh.unwrap_or(0.0),
+                "hmld_25_5_m": r.avg_hmld_25_5_m.unwrap_or(0.0),
+                "z6_seconds": r.avg_z6_seconds.unwrap_or(0.0),
+                "age_years": avg_age_years
+            }
+        }));
+    }
+
+    Json(json!({
+        "max_distance_m": {"min": 0, "max": 0},
+        "hsr_max_m": {"min": 0, "max": 0},
+        "max_speed_kmh": {"min": 0.0, "max": 0.0},
+        "hmld_25_5_m": {"min": 0, "max": 0},
+        "z6_seconds": {"min": 0, "max": 0}
+    }))
+}
+
 // Placeholder: returns current hardcoded maximum metrics for a player across matches.
 // Later we will compute these by aggregating over matches and gps tables using pg_trgm.
 pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
