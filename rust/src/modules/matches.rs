@@ -2140,6 +2140,49 @@ pub async fn get_sharp_angles(
         }
     };
 
+    // Fast path: return cached results if any
+    let cached = sqlx::query(
+        r#"
+        SELECT 
+          player_display_name,
+          seconds_since_midnight,
+          start_time,
+          finish_time,
+          duration_seconds,
+          angle_degrees,
+          actual_dist_in,
+          actual_dist_out
+        FROM sharp_angles_cache
+        WHERE match_name = $1
+        ORDER BY player_display_name, seconds_since_midnight
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    if !cached.is_empty() {
+        let data: Vec<Value> = cached
+            .into_iter()
+            .enumerate()
+            .map(|(idx, r)| {
+                json!({
+                    "id": (idx as i64) + 1,
+                    "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                    "seconds_since_midnight": r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0),
+                    "start_time": r.try_get::<f64,_>("start_time").unwrap_or(0.0),
+                    "finish_time": r.try_get::<f64,_>("finish_time").unwrap_or(0.0),
+                    "duration_seconds": r.try_get::<f64,_>("duration_seconds").unwrap_or(0.0),
+                    "angle_degrees": r.try_get::<f64,_>("angle_degrees").unwrap_or(0.0),
+                    "actual_dist_in": r.try_get::<f64,_>("actual_dist_in").unwrap_or(0.0),
+                    "actual_dist_out": r.try_get::<f64,_>("actual_dist_out").unwrap_or(0.0)
+                })
+            })
+            .collect();
+        return Json(json!({"sharp_angles": data}));
+    }
+
     let base_cte = format!(
         r#"
 WITH base AS (
@@ -2262,7 +2305,7 @@ turn_analysis AS (
   WHERE ((angle_degrees <= 145 AND angle_degrees >= 35) OR (angle_degrees <= 325 AND angle_degrees >= 215))
     AND actual_dist_in >= 5.0
     AND actual_dist_out >= 4.0
-    AND (finish_time - start_time) < 1.8
+    AND (finish_time - start_time) < 2.5
     AND start_time IS NOT NULL AND finish_time IS NOT NULL
 )
 -- Group contiguous/overlapping windows into one event per player
@@ -2328,6 +2371,42 @@ ORDER BY player_display_name, start_time
         Ok(r) => r,
         Err(e) => return Json(json!({"sharp_angles": [], "error": format!("db error: {}", e)})),
     };
+
+    // Write-through cache
+    for r in &rows {
+        let _ = sqlx::query(
+            r#"
+            INSERT INTO sharp_angles_cache (
+              match_name,
+              player_display_name,
+              seconds_since_midnight,
+              start_time,
+              finish_time,
+              duration_seconds,
+              angle_degrees,
+              actual_dist_in,
+              actual_dist_out
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+            ON CONFLICT (match_name, player_display_name, seconds_since_midnight, start_time, finish_time) DO UPDATE SET
+              duration_seconds = EXCLUDED.duration_seconds,
+              angle_degrees = EXCLUDED.angle_degrees,
+              actual_dist_in = EXCLUDED.actual_dist_in,
+              actual_dist_out = EXCLUDED.actual_dist_out,
+              updated_at = NOW()
+            "#,
+        )
+        .bind(&table_name)
+        .bind(r.try_get::<String,_>("player_display_name").unwrap_or_default())
+        .bind(r.try_get::<f64,_>("seconds_since_midnight").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("start_time").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("finish_time").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("duration_seconds").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("angle_degrees").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("actual_dist_in").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("actual_dist_out").unwrap_or(0.0))
+        .execute(&pool)
+        .await;
+    }
 
     let data: Vec<Value> = rows
         .into_iter()

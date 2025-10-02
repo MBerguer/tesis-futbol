@@ -2466,25 +2466,20 @@ export default function Page() {
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <Button size={'sm'} variant={'secondary'} onClick={async()=>{
-                      setLoadingSharpAngles(true);
-                      try {
-                        const pageRows = sortedSharpAngles.slice((sharpPage-1)*SHARP_PAGE_SIZE, sharpPage*SHARP_PAGE_SIZE);
-                        const traces: Array<{ player: string; points: any[] }> = [];
-                        for (const ev of pageRows) {
-                          const qs = new URLSearchParams({ player: ev.player_display_name, start: String(ev.start_time), end: String(ev.finish_time) });
-                          const res = await fetch(`${API_BASE}/match/table/${selectedTable}/trace?`+qs.toString());
-                          if (res.ok) {
-                            const data = await res.json();
-                            traces.push({ player: ev.player_display_name, points: data?.trace || [] });
-                          }
+                      const pageRows = sortedSharpAngles.slice((sharpPage-1)*SHARP_PAGE_SIZE, sharpPage*SHARP_PAGE_SIZE);
+                      const traces: Array<{ player: string; points: any[] }> = [];
+                      for (const ev of pageRows) {
+                        const qs = new URLSearchParams({ player: ev.player_display_name, start: String(ev.start_time), end: String(ev.finish_time) });
+                        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/trace?`+qs.toString());
+                        if (res.ok) {
+                          const data = await res.json();
+                          traces.push({ player: ev.player_display_name, points: data?.trace || [] });
                         }
-                        setSharpTraces(traces);
-                        const el = document.getElementById('unified-video');
-                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      } catch {}
-                      finally { setLoadingSharpAngles(false); }
+                      }
+                      setSharpTraces(traces);
+                      const el = document.getElementById('unified-video');
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }}>Show all traces</Button>
-                    <Button size={'sm'} variant={'destructive'} onClick={()=> setSharpTraces([])}>Clear traces</Button>
                   </div>
                 </div>
               </CardHeader>
