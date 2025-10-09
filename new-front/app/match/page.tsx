@@ -124,6 +124,18 @@ interface SharpAngleRow {
   trace?: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }>;
 }
 
+interface SharpAngle2Row {
+  turn_id: number;
+  player_display_name: string;
+  start_time: number;
+  finish_time: number;
+  duration_seconds: number;
+  entry_speed: number;
+  turning_angle_degrees: number;
+  entry_speed_category: string;
+  turning_angle_category: string;
+}
+
   interface MatchDetails {
   match_id: string;
   competition_id: string | null;
@@ -215,6 +227,14 @@ export default function Page() {
   const [sharpPage, setSharpPage] = useState<number>(1);
   const SHARP_PAGE_SIZE = 10;
   const [sharpTraces, setSharpTraces] = useState<Array<{ player: string; points: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }> }>>([]);
+  
+  const [sharpAngles2, setSharpAngles2] = useState<SharpAngle2Row[]>([]);
+  const [loadingSharpAngles2, setLoadingSharpAngles2] = useState<boolean>(false);
+  const [sharpSort2, setSharpSort2] = useState<{ key: keyof SharpAngle2Row; dir: 'asc' | 'desc' } | null>(null);
+  const [sharpPage2, setSharpPage2] = useState<number>(1);
+  const SHARP_PAGE_SIZE_2 = 10;
+  const [sharpTraces2, setSharpTraces2] = useState<Array<{ player: string; points: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }> }>>([]);
+  
   const [forecastHorizon, setForecastHorizon] = useState<number>(5.0);
   const [forecastData, setForecastData] = useState<any | null>(null);
   const [forecastError, setForecastError] = useState<string | null>(null);
@@ -556,6 +576,30 @@ export default function Page() {
     return () => { cancelled = true; };
   }, [API_BASE, selectedTable]);
 
+  useEffect(() => {
+    if (!selectedTable) { setSharpAngles2([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingSharpAngles2(true);
+        setSharpPage2(1);
+        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/sharp-angles-2`);
+        if (res.ok) {
+          const data = await res.json();
+          const rows = Array.isArray(data?.sharp_angles_2) ? data.sharp_angles_2 as SharpAngle2Row[] : [];
+          if (!cancelled) setSharpAngles2(rows);
+        } else {
+          if (!cancelled) setSharpAngles2([]);
+        }
+      } catch {
+        if (!cancelled) setSharpAngles2([]);
+      } finally {
+        if (!cancelled) setLoadingSharpAngles2(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, selectedTable]);
+
   const sortedAccelEvents = React.useMemo(() => {
     const arr = [...accelEvents];
     if (!accelSort) return arr;
@@ -618,6 +662,26 @@ export default function Page() {
     if (sharpPage > totalPages) setSharpPage(totalPages);
   }, [sortedSharpAngles.length]);
 
+  const sortedSharpAngles2 = React.useMemo(() => {
+    const arr = [...sharpAngles2];
+    if (!sharpSort2) return arr;
+    arr.sort((a, b) => {
+      const k = sharpSort2.key;
+      const av = a[k] as any;
+      const bv = b[k] as any;
+      if (typeof av === 'number' && typeof bv === 'number') return sharpSort2.dir === 'asc' ? av - bv : bv - av;
+      const as = String(av || '');
+      const bs = String(bv || '');
+      return sharpSort2.dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+    });
+    return arr;
+  }, [sharpAngles2, sharpSort2]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(sortedSharpAngles2.length / SHARP_PAGE_SIZE_2));
+    if (sharpPage2 > totalPages) setSharpPage2(totalPages);
+  }, [sortedSharpAngles2.length]);
+
   const toggleSort = (key: keyof AccelEventRow) => {
     setAccelSort(prev => {
       if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
@@ -642,7 +706,13 @@ export default function Page() {
     setSharpPage(1);
   };
 
-  
+  const toggleSharpSort2 = (key: keyof SharpAngle2Row) => {
+    setSharpSort2(prev => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
+      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
+    });
+    setSharpPage2(1);
+  };
 
   const absToVideoSec = React.useCallback((abs: number): number => {
     const p = periods;
@@ -1686,6 +1756,8 @@ export default function Page() {
                                       bearing={mapBearing}
                                       traceLines={(sharpTraces && sharpTraces.length>0) ? sharpTraces.map(t => t.points.map(p=>({ lat: p.lat, lon: p.lon }))) : undefined}
                                       traceColor={'#ef4444'}
+                                      traceLines2={(sharpTraces2 && sharpTraces2.length>0) ? sharpTraces2.map(t => t.points.map(p=>({ lat: p.lat, lon: p.lon }))) : undefined}
+                                      traceColor2={'#60a5fa'}
                                       limitZoom={zoomLimited}
                                     />
                                   </div>
@@ -2459,7 +2531,7 @@ export default function Page() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="flex items-center gap-2">
-                    Sharp Angles
+                    Sharp Angles - Reilly 2021
                     {loadingSharpAngles && (
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     )}
@@ -2656,6 +2728,160 @@ export default function Page() {
                       <div className="flex gap-2">
                         <Button variant={'outline'} size={'sm'} disabled={sharpPage<=1} onClick={()=>setSharpPage(p=>Math.max(1, p-1))}>Prev</Button>
                         <Button variant={'outline'} size={'sm'} disabled={sharpPage>=Math.max(1, Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE))} onClick={()=>setSharpPage(p=>Math.min(Math.max(1, Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE)), p+1))}>Next</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sharp Angles 2 section */}
+          <div className="mt-6">
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2">
+                    Sharp Angles 2 - Dos'Santos, 2022
+                    {loadingSharpAngles2 && (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Button size={'sm'} variant={'secondary'} onClick={async()=>{
+                      const pageRows = sortedSharpAngles2.slice((sharpPage2-1)*SHARP_PAGE_SIZE_2, sharpPage2*SHARP_PAGE_SIZE_2);
+                      const traces: Array<{ player: string; points: any[] }> = [];
+                      for (const ev of pageRows) {
+                        const qs = new URLSearchParams({ player: ev.player_display_name, start: String(ev.start_time), end: String(ev.finish_time) });
+                        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/trace?`+qs.toString());
+                        if (res.ok) {
+                          const data = await res.json();
+                          traces.push({ player: ev.player_display_name, points: data?.trace || [] });
+                        }
+                      }
+                      setSharpTraces2(traces);
+                      const el = document.getElementById('unified-video');
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }}>Show all traces</Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!selectedTable ? (
+                  <div className="text-sm text-gray-600">Select a match to view sharp angles 2.</div>
+                ) : loadingSharpAngles2 ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : sharpAngles2.length === 0 ? (
+                  <div className="text-sm text-gray-600">No sharp angles 2.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-zinc-300">
+                        <tr className="border-b border-zinc-800">
+                          <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSharpSort2('player_display_name')}>Player</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('start_time')}>Start (s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('finish_time')}>Finish (s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('duration_seconds')}>Duration (s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('entry_speed')}>Entry Speed (m/s)</th>
+                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('turning_angle_degrees')}>Turning Angle (°)</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('entry_speed_category')}>Speed Category</th>
+                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('turning_angle_category')}>Angle Category</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedSharpAngles2
+                          .slice((sharpPage2-1)*SHARP_PAGE_SIZE_2, sharpPage2*SHARP_PAGE_SIZE_2)
+                          .map((ev, idx) => (
+                          <tr key={`sharp2-${ev.turn_id}-${ev.player_display_name}-${ev.start_time}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
+                            <td className="py-2 pr-3 text-zinc-200">
+                              <button onClick={()=>{
+                                const abs = Number(ev.start_time || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.start_time || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.start_time.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.finish_time || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.finish_time.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.start_time || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.duration_seconds.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.start_time || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.entry_speed.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
+                              <button onClick={()=>{
+                                const abs = Number(ev.start_time || 0);
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
+                                const el = document.getElementById('unified-video');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
+                              }} className="underline-offset-2 hover:underline">{ev.turning_angle_degrees.toFixed(3)}</button>
+                            </td>
+                            <td className="py-2 px-2 text-zinc-300">{ev.entry_speed_category}</td>
+                            <td className="py-2 px-2 text-zinc-300">{ev.turning_angle_category}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="flex items-center justify-between mt-3 text-sm text-zinc-300">
+                      <div>
+                        Page {sharpPage2} of {Math.max(1, Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant={'outline'} size={'sm'} disabled={sharpPage2<=1} onClick={()=>setSharpPage2(p=>Math.max(1, p-1))}>Prev</Button>
+                        <Button variant={'outline'} size={'sm'} disabled={sharpPage2>=Math.max(1, Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2))} onClick={()=>setSharpPage2(p=>Math.min(Math.max(1, Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2)), p+1))}>Next</Button>
                       </div>
                     </div>
                   </div>

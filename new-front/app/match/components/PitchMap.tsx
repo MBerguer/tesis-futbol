@@ -17,6 +17,8 @@ interface PitchMapProps {
   centerLongitude?: number; // initial/controlled center longitude
   traceLines?: Array<Array<{ lat: number; lon: number }>>;
   traceColor?: string;
+  traceLines2?: Array<Array<{ lat: number; lon: number }>>;
+  traceColor2?: string;
   // Zoom controls
   limitZoom?: boolean; // when true, restrict zoom around initialZoom
   initialZoom?: number; // default zoom level used when limiting is enabled
@@ -24,7 +26,7 @@ interface PitchMapProps {
   fullZoomMax?: number; // max zoom when limiting is disabled
 }
 
-export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing, centerLatitude, centerLongitude, traceLines, traceColor, limitZoom = true, initialZoom = 18.5, fullZoomMin = 0, fullZoomMax = 22 }: PitchMapProps) {
+export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle, heightClass, heightStyle, bearing, centerLatitude, centerLongitude, traceLines, traceColor, traceLines2, traceColor2, limitZoom = true, initialZoom = 18.5, fullZoomMin = 0, fullZoomMax = 22 }: PitchMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; popup: maplibregl.Popup }>>(new Map());
@@ -228,6 +230,45 @@ export default function PitchMap({ points, styleUrl, styleObj, pinned, onToggle,
       }
     } catch {}
   }, [traceLines, traceColor]);
+
+  // Draw or clear second polyline trace(s)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const srcId = 'trace-line-src-2';
+    const layerId = 'trace-line-lyr-2';
+    try {
+      // Ensure prior layer/source removed if no data
+      if (!traceLines2 || traceLines2.length === 0) {
+        if (map.getLayer(layerId)) { try { map.removeLayer(layerId); } catch {} }
+        if (map.getSource(srcId)) { try { (map.getSource(srcId) as any).setData({ type: 'FeatureCollection', features: [] }); map.removeSource(srcId); } catch {} }
+        return;
+      }
+      const features = traceLines2.map(line => ({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: line.map(p => [p.lon, p.lat]) },
+        properties: {}
+      }));
+      const collection = { type: 'FeatureCollection', features } as any;
+      if (!map.getSource(srcId)) {
+        map.addSource(srcId, { type: 'geojson', data: collection });
+      } else {
+        (map.getSource(srcId) as any).setData(collection);
+      }
+      if (!map.getLayer(layerId)) {
+        map.addLayer({
+          id: layerId,
+          type: 'line',
+          source: srcId,
+          paint: {
+            'line-color': traceColor2 || '#3b82f6',
+            'line-width': 3,
+            'line-opacity': 0.9
+          }
+        });
+      }
+    } catch {}
+  }, [traceLines2, traceColor2]);
 
   return (
     <div

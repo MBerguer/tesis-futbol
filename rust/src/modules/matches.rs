@@ -2428,6 +2428,211 @@ ORDER BY player_display_name, start_time
     Json(json!({"sharp_angles": data}))
 }
 
+/// GET /match/table/:table_name/sharp-angles-2
+/// Variant 2 of sharp angles detection with different SQL query
+pub async fn get_sharp_angles_2(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+) -> Json<Value> {
+    let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
+
+    let periods_row = sqlx::query(
+        r#"
+        SELECT 
+            manual_first_half_start AS s1,
+            manual_first_half_end   AS e1,
+            manual_second_half_start AS s2,
+            manual_second_half_end   AS e2
+        FROM match_periods
+        WHERE match_name = $1
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_one(&pool)
+    .await;
+
+    let (s1, e1, s2, e2) = match periods_row {
+        Ok(r) => {
+            let s1: Option<i32> = r.try_get("s1").ok();
+            let e1: Option<i32> = r.try_get("e1").ok();
+            let s2: Option<i32> = r.try_get("s2").ok();
+            let e2: Option<i32> = r.try_get("e2").ok();
+            if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
+                (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
+            } else {
+                return Json(json!({"sharp_angles_2": [], "error": "manual periods not available for this match"}));
+            }
+        }
+        Err(_) => {
+            return Json(json!({"sharp_angles_2": [], "error": "manual periods not found for this match"}));
+        }
+    };
+
+    let base_cte = format!(
+        r#"
+WITH config AS (
+  SELECT 5 AS minimum_points
+),
+base_data AS (
+  SELECT
+    player_display_name,
+    COALESCE((seconds_since_midnight)::double precision, EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) AS elapsed_time,
+    lat,
+    lon,
+    speed
+  FROM public.{view}
+),
+filtered_data AS (
+  SELECT * FROM base_data
+  WHERE (elapsed_time BETWEEN $1 AND $2) OR (elapsed_time BETWEEN $3 AND $4)
+),
+data_with_accel AS (
+  SELECT
+    *,
+    (speed - LAG(speed, 1, speed) OVER (PARTITION BY player_display_name ORDER BY elapsed_time)) / NULLIF(elapsed_time - LAG(elapsed_time, 1, elapsed_time) OVER (PARTITION BY player_display_name ORDER BY elapsed_time), 0) AS signed_acceleration,
+    lon - LAG(lon, 1) OVER (PARTITION BY player_display_name ORDER BY elapsed_time) AS dx,
+    lat - LAG(lat, 1) OVER (PARTITION BY player_display_name ORDER BY elapsed_time) AS dy
+  FROM filtered_data
+),
+data_with_state AS (
+  SELECT *,
+    CASE
+      WHEN signed_acceleration <= -2.0 THEN 'decelerating'
+      WHEN signed_acceleration >= 2.0 THEN 'accelerating'
+      ELSE 'neutral'
+    END AS player_state
+  FROM data_with_accel
+),
+state_changes AS (
+  SELECT
+    *,
+    CASE
+      WHEN player_state <> LAG(player_state, 1, player_state) OVER (PARTITION BY player_display_name ORDER BY elapsed_time) THEN 1
+      ELSE 0
+    END AS is_new_event
+  FROM data_with_state
+),
+event_groups AS (
+  SELECT
+    *,
+    SUM(is_new_event) OVER (PARTITION BY player_display_name ORDER BY elapsed_time) AS event_group_id
+  FROM state_changes
+),
+stable_events AS (
+  SELECT
+    player_display_name, event_group_id, player_state, elapsed_time, speed, dx, dy
+  FROM (
+    SELECT
+      *,
+      ROW_NUMBER() OVER (PARTITION BY player_display_name, event_group_id ORDER BY elapsed_time) as rn,
+      COUNT(*) OVER (PARTITION BY player_display_name, event_group_id) as consecutive_points
+    FROM event_groups
+  ) AS with_counts
+  WHERE
+    rn = 1 AND consecutive_points >= (SELECT minimum_points FROM config)
+),
+decel_starts AS (
+  SELECT * FROM stable_events WHERE player_state = 'decelerating'
+),
+accel_starts AS (
+  SELECT * FROM stable_events WHERE player_state = 'accelerating'
+),
+turn_candidates AS (
+  SELECT
+    d.player_display_name,
+    d.elapsed_time AS turn_start_time,
+    a.elapsed_time AS turn_finish_time,
+    d.speed AS entry_speed,
+    d.dx AS decel_dx,
+    d.dy AS decel_dy,
+    a.dx AS accel_dx,
+    a.dy AS accel_dy
+  FROM decel_starts d
+  LEFT JOIN accel_starts a
+    ON d.player_display_name = a.player_display_name
+    AND a.elapsed_time > d.elapsed_time
+    AND a.elapsed_time <= d.elapsed_time + 1.0
+    AND a.elapsed_time = (
+      SELECT MIN(sa.elapsed_time)
+      FROM accel_starts sa
+      WHERE sa.player_display_name = d.player_display_name AND sa.elapsed_time > d.elapsed_time AND sa.elapsed_time <= d.elapsed_time + 1.0
+    )
+),
+final_turns AS (
+  SELECT
+    player_display_name,
+    turn_start_time,
+    turn_finish_time,
+    (turn_finish_time - turn_start_time) as duration_seconds,
+    entry_speed,
+    DEGREES(ACOS(
+        LEAST(GREATEST((decel_dx * accel_dx + decel_dy * accel_dy) / (SQRT(decel_dx^2 + decel_dy^2) * SQRT(accel_dx^2 + accel_dy^2)), -1.0), 1.0)
+    )) AS turning_angle_degrees
+  FROM turn_candidates
+  WHERE
+    turn_finish_time IS NOT NULL
+    AND (decel_dx^2 + decel_dy^2) > 0 AND (accel_dx^2 + accel_dy^2) > 0
+    AND DEGREES(ACOS(
+          LEAST(GREATEST((decel_dx * accel_dx + decel_dy * accel_dy) / (SQRT(decel_dx^2 + decel_dy^2) * SQRT(accel_dx^2 + accel_dy^2)), -1.0), 1.0)
+        )) >= 20.0
+)
+SELECT
+  ROW_NUMBER() OVER (ORDER BY player_display_name, turn_start_time) AS turn_id,
+  player_display_name,
+  turn_start_time AS start_time,
+  turn_finish_time AS finish_time,
+  duration_seconds,
+  entry_speed,
+  turning_angle_degrees,
+  CASE
+    WHEN entry_speed < 3.0 THEN '<3.0 m/s'
+    WHEN entry_speed >= 3.0 AND entry_speed < 5.5 THEN '3.0-5.5 m/s'
+    WHEN entry_speed >= 5.5 AND entry_speed < 7.0 THEN '5.5-7.0 m/s'
+    ELSE '>7.0 m/s'
+  END AS entry_speed_category,
+  CASE
+    WHEN turning_angle_degrees >= 20 AND turning_angle_degrees < 60 THEN 'Low (20-59)'
+    WHEN turning_angle_degrees >= 60 AND turning_angle_degrees < 120 THEN 'Medium (60-119)'
+    ELSE 'High (120-180)'
+  END AS turning_angle_category
+FROM final_turns
+ORDER BY player_display_name, start_time
+        "#,
+        view = view_name
+    );
+
+    let rows = match sqlx::query(&base_cte)
+        .bind(s1)
+        .bind(e1)
+        .bind(s2)
+        .bind(e2)
+        .fetch_all(&pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return Json(json!({"sharp_angles_2": [], "error": format!("db error: {}", e)})),
+    };
+
+    let data: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "turn_id": r.try_get::<i64,_>("turn_id").unwrap_or(0),
+                "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                "start_time": r.try_get::<f64,_>("start_time").unwrap_or(0.0),
+                "finish_time": r.try_get::<f64,_>("finish_time").unwrap_or(0.0),
+                "duration_seconds": r.try_get::<f64,_>("duration_seconds").unwrap_or(0.0),
+                "entry_speed": r.try_get::<f64,_>("entry_speed").unwrap_or(0.0),
+                "turning_angle_degrees": r.try_get::<f64,_>("turning_angle_degrees").unwrap_or(0.0),
+                "entry_speed_category": r.try_get::<String,_>("entry_speed_category").unwrap_or_default(),
+                "turning_angle_category": r.try_get::<String,_>("turning_angle_category").unwrap_or_default()
+            })
+        })
+        .collect();
+
+    Json(json!({"sharp_angles_2": data}))
+}
+
 /// GET /match/table/:table_name/trace?player=Name&start=sec&end=sec&pad=0.3
 /// Returns all points for a player within [start-pad, end+pad] seconds_since_midnight
 pub async fn get_player_trace_window(
