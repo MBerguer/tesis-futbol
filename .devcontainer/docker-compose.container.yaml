@@ -37,7 +37,7 @@ services:
   # Jupyter service for hosting the jupyter notebook,
   # this service is dependent on the db-futbol service
   jupyter:
-    image: jupyter/base-notebook
+    image: jupyter/minimal-notebook
     environment:
       - JUPYTER_SERVER_DATA_RATE_LIMIT=1000000000
       - JUPYTER_ENABLE_LAB=yes

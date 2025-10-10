@@ -1,8 +1,8 @@
 # Dockerfile
-FROM rust:latest
+FROM rust:1.85
 
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-  && apt-get -y install clang curl eza bat ripgrep fd-find rustfmt \
+  && apt-get -y install clang curl bat ripgrep fd-find rustfmt \
   && apt-get autoremove -y \
   && apt-get clean -y
 
