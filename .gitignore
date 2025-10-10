@@ -18,3 +18,5 @@ ml/.env
 rust/.container.env
 
 ml/__pycache__/
+
+.playwright-mcp/
