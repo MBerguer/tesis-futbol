@@ -2302,10 +2302,11 @@ turn_analysis AS (
 , filtered_turns AS (
   SELECT *
   FROM turn_analysis
-  WHERE ((angle_degrees <= 145 AND angle_degrees >= 35) OR (angle_degrees <= 325 AND angle_degrees >= 215))
+  -- WHERE ((angle_degrees <= 145 AND angle_degrees >= 35) OR (angle_degrees <= 325 AND angle_degrees >= 215))
+  WHERE (angle_degrees <= 330 AND angle_degrees >= 30)
     AND actual_dist_in >= 5.0
     AND actual_dist_out >= 4.0
-    AND (finish_time - start_time) < 2.5
+    AND (finish_time - start_time) < 10
     AND start_time IS NOT NULL AND finish_time IS NOT NULL
 )
 -- Group contiguous/overlapping windows into one event per player
@@ -2355,6 +2356,7 @@ SELECT
   actual_dist_in,
   actual_dist_out
 FROM grouped
+where duration_seconds <= 3.5
 ORDER BY player_display_name, start_time
         "#,
         view = view_name
@@ -2467,6 +2469,49 @@ pub async fn get_sharp_angles_2(
             return Json(json!({"sharp_angles_2": [], "error": "manual periods not found for this match"}));
         }
     };
+
+    // Fast path: return cached results if any
+    let cached = sqlx::query(
+        r#"
+        SELECT 
+          player_display_name,
+          turn_id,
+          start_time,
+          finish_time,
+          duration_seconds,
+          entry_speed,
+          turning_angle_degrees,
+          entry_speed_category,
+          turning_angle_category
+        FROM sharp_angles_2_cache
+        WHERE match_name = $1
+        ORDER BY player_display_name, start_time
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    if !cached.is_empty() {
+        let data: Vec<Value> = cached
+            .into_iter()
+            .map(|r| {
+                json!({
+                    "turn_id": r.try_get::<i64,_>("turn_id").unwrap_or(0),
+                    "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                    "start_time": r.try_get::<f64,_>("start_time").unwrap_or(0.0),
+                    "finish_time": r.try_get::<f64,_>("finish_time").unwrap_or(0.0),
+                    "duration_seconds": r.try_get::<f64,_>("duration_seconds").unwrap_or(0.0),
+                    "entry_speed": r.try_get::<f64,_>("entry_speed").unwrap_or(0.0),
+                    "turning_angle_degrees": r.try_get::<f64,_>("turning_angle_degrees").unwrap_or(0.0),
+                    "entry_speed_category": r.try_get::<String,_>("entry_speed_category").unwrap_or_default(),
+                    "turning_angle_category": r.try_get::<String,_>("turning_angle_category").unwrap_or_default()
+                })
+            })
+            .collect();
+        return Json(json!({"sharp_angles_2": data}));
+    }
 
     let base_cte = format!(
         r#"
@@ -2614,7 +2659,7 @@ ORDER BY player_display_name, start_time
     };
 
     let data: Vec<Value> = rows
-        .into_iter()
+        .iter()
         .map(|r| {
             json!({
                 "turn_id": r.try_get::<i64,_>("turn_id").unwrap_or(0),
@@ -2629,6 +2674,45 @@ ORDER BY player_display_name, start_time
             })
         })
         .collect();
+
+    // Write-through cache
+    for r in &rows {
+        let _ = sqlx::query(
+            r#"
+            INSERT INTO sharp_angles_2_cache (
+              match_name,
+              player_display_name,
+              turn_id,
+              start_time,
+              finish_time,
+              duration_seconds,
+              entry_speed,
+              turning_angle_degrees,
+              entry_speed_category,
+              turning_angle_category
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            ON CONFLICT (match_name, player_display_name, turn_id, start_time, finish_time) DO UPDATE SET
+              duration_seconds = EXCLUDED.duration_seconds,
+              entry_speed = EXCLUDED.entry_speed,
+              turning_angle_degrees = EXCLUDED.turning_angle_degrees,
+              entry_speed_category = EXCLUDED.entry_speed_category,
+              turning_angle_category = EXCLUDED.turning_angle_category,
+              updated_at = NOW()
+            "#,
+        )
+        .bind(&table_name)
+        .bind(r.try_get::<String,_>("player_display_name").unwrap_or_default())
+        .bind(r.try_get::<i64,_>("turn_id").unwrap_or(0))
+        .bind(r.try_get::<f64,_>("start_time").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("finish_time").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("duration_seconds").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("entry_speed").unwrap_or(0.0))
+        .bind(r.try_get::<f64,_>("turning_angle_degrees").unwrap_or(0.0))
+        .bind(r.try_get::<String,_>("entry_speed_category").unwrap_or_default())
+        .bind(r.try_get::<String,_>("turning_angle_category").unwrap_or_default())
+        .execute(&pool)
+        .await;
+    }
 
     Json(json!({"sharp_angles_2": data}))
 }
