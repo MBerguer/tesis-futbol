@@ -1,6 +1,12 @@
 import React, { useRef, useState } from "react";
 
-export default function VideoComponent({ onSecondChange, seekTo }: { onSecondChange?: (sec: number) => void, seekTo?: number }) {
+export default function VideoComponent({
+  onSecondChange,
+  seekTo,
+}: {
+  onSecondChange?: (sec: number) => void;
+  seekTo?: number;
+}) {
   const videoSource =
     "https://s3.amazonaws.com/azvideotagtesting/21012876/videos/139069/Nacional%205-1%20Juventud%20Clausura%202023.mp4";
 
@@ -74,7 +80,9 @@ export default function VideoComponent({ onSecondChange, seekTo }: { onSecondCha
       ["canplaythrough", update],
       ["timeupdate", update],
     ];
-    handlers.forEach(([evt, fn]) => v.addEventListener(evt, fn as EventListener));
+    handlers.forEach(([evt, fn]) =>
+      v.addEventListener(evt, fn as EventListener)
+    );
     // Poll for a short while in case events are flaky due to caching/CORS
     let tries = 0;
     const id = window.setInterval(() => {
@@ -84,7 +92,9 @@ export default function VideoComponent({ onSecondChange, seekTo }: { onSecondCha
     }, 200);
     return () => {
       window.clearInterval(id);
-      handlers.forEach(([evt, fn]) => v.removeEventListener(evt, fn as EventListener));
+      handlers.forEach(([evt, fn]) =>
+        v.removeEventListener(evt, fn as EventListener)
+      );
     };
   }, [videoSource]);
 
@@ -95,9 +105,9 @@ export default function VideoComponent({ onSecondChange, seekTo }: { onSecondCha
 
   return (
     <>
-      <div className="sticky top-0 z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-border flex items-center justify-between">
         <div className="flex items-center gap-2 py-2">
-          <label className="text-xs text-zinc-400">Video time</label>
+          <label className="text-xs text-muted-foreground">Video time</label>
           <div className="relative h-10 overflow-visible">
             <input
               className="w-44 relative z-0"
@@ -107,7 +117,7 @@ export default function VideoComponent({ onSecondChange, seekTo }: { onSecondCha
               max={duration}
               value={currentTime}
               onChange={handleTimeChange}
-              style={{ accentColor: '#a1a1aa' }}
+              style={{ accentColor: "#a1a1aa" }}
             />
             {duration > 0 && (
               <div className="absolute inset-0 z-20 pointer-events-none">
@@ -167,9 +177,13 @@ export default function VideoComponent({ onSecondChange, seekTo }: { onSecondCha
               </div>
             )}
           </div>
-          <span className="ml-1 text-xs w-16 text-right text-zinc-300">{formatTime(currentTime)}</span>
+          <span className="ml-1 text-xs w-16 text-right text-foreground">
+            {formatTime(currentTime)}
+          </span>
         </div>
-        <div className="text-xs text-zinc-500">/ {formatTime(duration)}</div>
+        <div className="text-xs text-muted-foreground">
+          / {formatTime(duration)}
+        </div>
       </div>
       <video
         ref={vidRef}

@@ -48,29 +48,36 @@ export default function Page() {
   const persons = React.useMemo(() => personsData as unknown as Person[], []);
   const categories = React.useMemo(() => {
     const set = new Set<string>();
-    persons.forEach(p => { if (p.categoria) set.add((p.categoria as string).toLowerCase()); });
-    return Array.from(set).sort((a,b)=>a.localeCompare(b));
+    persons.forEach((p) => {
+      if (p.categoria) set.add((p.categoria as string).toLowerCase());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [persons]);
 
-  const [selectedCategory, setSelectedCategory] = React.useState<string>("sub19");
+  const [selectedCategory, setSelectedCategory] =
+    React.useState<string>("sub19");
 
   return (
     <main className="p-4 space-y-6">
-      <Card className="bg-zinc-900/50 border-zinc-800">
+      <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle>Preparación del fin de semana</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {categories.map((cat)=>{
+            {categories.map((cat) => {
               const active = selectedCategory === cat;
               return (
                 <Button
                   key={cat}
                   size="sm"
-                  variant={active?"default":"ghost"}
-                  className={`${active?"bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40":"border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60 text-zinc-200"} capitalize`}
-                  onClick={()=>setSelectedCategory(cat)}
+                  variant={active ? "default" : "ghost"}
+                  className={`${
+                    active
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40"
+                      : "border border-border bg-card hover:bg-accent text-foreground"
+                  } capitalize`}
+                  onClick={() => setSelectedCategory(cat)}
                 >
                   {cat}
                 </Button>
@@ -78,9 +85,13 @@ export default function Page() {
             })}
             <Button
               size="sm"
-              variant={selectedCategory?"ghost":"default"}
-              className={`${selectedCategory?"border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60 text-zinc-200":"bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40"}`}
-              onClick={()=>setSelectedCategory("")}
+              variant={selectedCategory ? "ghost" : "default"}
+              className={`${
+                selectedCategory
+                  ? "border border-border bg-card hover:bg-accent text-foreground"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90 ring-1 ring-primary/40"
+              }`}
+              onClick={() => setSelectedCategory("")}
             >
               Todos
             </Button>
@@ -88,47 +99,93 @@ export default function Page() {
 
           {/* KPI cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Card className="bg-zinc-900/60 border-zinc-800"><CardContent className="pt-4"><div className="text-xs text-zinc-400">Sub 16</div><div className="text-2xl font-semibold">—</div></CardContent></Card>
-            <Card className="bg-zinc-900/60 border-zinc-800"><CardContent className="pt-4"><div className="text-xs text-zinc-400">Sub 17</div><div className="text-2xl font-semibold">—</div></CardContent></Card>
-            <Card className="bg-zinc-900/60 border-zinc-800"><CardContent className="pt-4"><div className="text-xs text-zinc-400">Sub 19</div><div className="text-2xl font-semibold">—</div></CardContent></Card>
+            <Card className="bg-card border-border">
+              <CardContent className="pt-4">
+                <div className="text-xs text-muted-foreground">Sub 16</div>
+                <div className="text-2xl font-semibold">—</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-card border-border">
+              <CardContent className="pt-4">
+                <div className="text-xs text-muted-foreground">Sub 17</div>
+                <div className="text-2xl font-semibold">—</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-card border-border">
+              <CardContent className="pt-4">
+                <div className="text-xs text-muted-foreground">Sub 19</div>
+                <div className="text-2xl font-semibold">—</div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Charts */}
           <div className="grid grid-cols-1 gap-4">
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader><CardTitle className="text-base">Promedio de distancia total, HML y HSR (bloque)</CardTitle></CardHeader>
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Promedio de distancia total, HML y HSR (bloque)
+                </CardTitle>
+              </CardHeader>
               <CardContent>
                 <div className="h-[360px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={databloque}>
                       <XAxis dataKey="day" />
-                      <YAxis yAxisId={1} orientation="right" label={{ value: "Distancia Total", angle: -90 }} />
+                      <YAxis
+                        yAxisId={1}
+                        orientation="right"
+                        label={{ value: "Distancia Total", angle: -90 }}
+                      />
                       <Tooltip />
                       <Legend />
-                      <CartesianGrid stroke="#27272a" />
-                      <Bar yAxisId={1} dataKey="distanciaTotal" barSize={28} fill="#4f46e5" />
-                      <Bar yAxisId={1} dataKey="distanciaHML" barSize={28} fill="#06b6d4" />
-                      <YAxis yAxisId={2} label={{ value: "Promedio HSR", angle: -90 }} />
-                      <Line yAxisId={2} type="monotone" dataKey="promedioHSR" stroke="#fff" dot />
+                      <CartesianGrid stroke="hsl(var(--border))" />
+                      <Bar
+                        yAxisId={1}
+                        dataKey="distanciaTotal"
+                        barSize={28}
+                        fill="hsl(var(--chart-1))"
+                      />
+                      <Bar
+                        yAxisId={1}
+                        dataKey="distanciaHML"
+                        barSize={28}
+                        fill="hsl(var(--chart-2))"
+                      />
+                      <YAxis
+                        yAxisId={2}
+                        label={{ value: "Promedio HSR", angle: -90 }}
+                      />
+                      <Line
+                        yAxisId={2}
+                        type="monotone"
+                        dataKey="promedioHSR"
+                        stroke="hsl(var(--foreground))"
+                        dot
+                      />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader><CardTitle className="text-base">Promedio de desaceleraciones z4-z6 y aceleraciones z4-z6</CardTitle></CardHeader>
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Promedio de desaceleraciones z4-z6 y aceleraciones z4-z6
+                </CardTitle>
+              </CardHeader>
               <CardContent>
                 <div className="h-[360px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data}>
-                      <CartesianGrid stroke="#27272a" />
+                      <CartesianGrid stroke="hsl(var(--border))" />
                       <XAxis dataKey="name" />
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Bar dataKey="x" stackId="a" fill="#8884d8" />
-                      <Bar dataKey="y" stackId="a" fill="#82ca9d" />
+                      <Bar dataKey="x" stackId="a" fill="hsl(var(--chart-1))" />
+                      <Bar dataKey="y" stackId="a" fill="hsl(var(--chart-2))" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -139,23 +196,31 @@ export default function Page() {
       </Card>
 
       {/* Players table for selected category (placeholder) */}
-      <Card className="bg-zinc-900/50 border-zinc-800">
-        <CardHeader><CardTitle className="text-base">Tabla de jugadores {selectedCategory?`· ${selectedCategory}`:""}</CardTitle></CardHeader>
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-base">
+            Tabla de jugadores {selectedCategory ? `· ${selectedCategory}` : ""}
+          </CardTitle>
+        </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-zinc-400">
+                <tr className="text-left text-muted-foreground">
                   <th className="px-3 py-2">Nombre</th>
                   <th className="px-3 py-2">Categoría</th>
                 </tr>
               </thead>
               <tbody>
                 {persons
-                  .filter(p => !selectedCategory || (p.categoria || "").toLowerCase() === selectedCategory)
+                  .filter(
+                    (p) =>
+                      !selectedCategory ||
+                      (p.categoria || "").toLowerCase() === selectedCategory
+                  )
                   .slice(0, 20)
                   .map((p) => (
-                    <tr key={p.id as any} className="border-t border-zinc-800">
+                    <tr key={p.id as any} className="border-t border-border">
                       <td className="px-3 py-2">{p.nombre}</td>
                       <td className="px-3 py-2 capitalize">{p.categoria}</td>
                     </tr>

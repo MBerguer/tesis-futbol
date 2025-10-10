@@ -26,7 +26,11 @@ export default function UnifiedVideo({
     const url = (videoUrl || "").trim();
     if (!url) return { kind: "html5" as const };
     const lower = url.toLowerCase();
-    if (lower.includes("youtube.com/watch?v=") || lower.includes("youtu.be/") || lower.includes("youtube.com/embed/")) {
+    if (
+      lower.includes("youtube.com/watch?v=") ||
+      lower.includes("youtu.be/") ||
+      lower.includes("youtube.com/embed/")
+    ) {
       // Try to parse id
       try {
         const u = new URL(url);
@@ -35,18 +39,35 @@ export default function UnifiedVideo({
         const parts = u.pathname.split("/").filter(Boolean);
         const last = parts[parts.length - 1];
         if (last) return { kind: "yt" as const, id: last };
-      } catch {/* fallthrough */}
+      } catch {
+        /* fallthrough */
+      }
       return { kind: "yt" as const, id: "" };
     }
     return { kind: "html5" as const };
   }, [videoUrl, youtubeId]);
 
   if (resolved.kind === "yt") {
-    if (!resolved.id) return <div className="text-sm text-gray-600">Invalid YouTube URL/ID.</div>;
-    return <YouTubeVideo videoId={resolved.id} onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} markers={markers} onMarkerClick={onMarkerClick} />;
+    if (!resolved.id)
+      return (
+        <div className="text-sm text-muted-foreground">
+          Invalid YouTube URL/ID.
+        </div>
+      );
+    return (
+      <YouTubeVideo
+        videoId={resolved.id}
+        onSecondChange={onSecondChange}
+        seekTo={seekTo ?? undefined}
+        markers={markers}
+        onMarkerClick={onMarkerClick}
+      />
+    );
   }
-  return <VideoComponent onSecondChange={onSecondChange} seekTo={seekTo ?? undefined} />;
+  return (
+    <VideoComponent
+      onSecondChange={onSecondChange}
+      seekTo={seekTo ?? undefined}
+    />
+  );
 }
-
-
-

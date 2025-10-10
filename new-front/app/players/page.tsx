@@ -6,7 +6,25 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "./components/ui/avatar";
-import { Mail, Phone, Smartphone, User, Ruler, Activity, Calendar, FileText, Stamp, HeartPulse, GraduationCap, MapPin, Building2, Percent, Tag, List as ListIcon, Loader2 } from "lucide-react";
+import {
+  Mail,
+  Phone,
+  Smartphone,
+  User,
+  Ruler,
+  Activity,
+  Calendar,
+  FileText,
+  Stamp,
+  HeartPulse,
+  GraduationCap,
+  MapPin,
+  Building2,
+  Percent,
+  Tag,
+  List as ListIcon,
+  Loader2,
+} from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -59,11 +77,20 @@ type PlayerMaxMetrics = {
   high_metabolic_distance_m: number;
   z6: { seconds: number; distance_m: number };
   z6_detail?: { match_id?: string; gps_table_name?: string };
-  max_speed_detail?: { match_id?: string; gps_table_name?: string; minute?: string; time?: string; manual_first_half_start?: number|null };
+  max_speed_detail?: {
+    match_id?: string;
+    gps_table_name?: string;
+    minute?: string;
+    time?: string;
+    manual_first_half_start?: number | null;
+  };
   max_distance_detail?: { match_id?: string; gps_table_name?: string };
   hsr_max_detail?: { match_id?: string; gps_table_name?: string };
   hmld?: { m25_5?: number; m18?: number };
-  hmld_detail?: { m25_5?: { match_id?: string; gps_table_name?: string }, m18?: { match_id?: string; gps_table_name?: string } };
+  hmld_detail?: {
+    m25_5?: { match_id?: string; gps_table_name?: string };
+    m18?: { match_id?: string; gps_table_name?: string };
+  };
 };
 
 const rendimiento = [
@@ -83,7 +110,9 @@ const databloque = [
 function calcAge(birthDate?: string | null) {
   if (!birthDate) return undefined as number | undefined;
   const today = new Date();
-  const birth = new Date((birthDate || "").replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$2/$1/$3"));
+  const birth = new Date(
+    (birthDate || "").replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$2/$1/$3")
+  );
   let age = today.getFullYear() - birth.getFullYear();
   const m = today.getMonth() - birth.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
@@ -91,12 +120,23 @@ function calcAge(birthDate?: string | null) {
 }
 
 export default function Page() {
-  const [selectedPerson, setSelectedPerson] = React.useState<Person | null>(null);
+  const [selectedPerson, setSelectedPerson] = React.useState<Person | null>(
+    null
+  );
   const [filter, setFilter] = React.useState<string>("");
   const [persons, setPersons] = React.useState<Person[]>([]);
-  const [maxMetrics, setMaxMetrics] = React.useState<PlayerMaxMetrics | null>(null);
+  const [maxMetrics, setMaxMetrics] = React.useState<PlayerMaxMetrics | null>(
+    null
+  );
   const [loadingMetrics, setLoadingMetrics] = React.useState<boolean>(false);
-  const { isBlocked, block, unblock, getCustomUrl, uploadCustom, deleteCustom } = useServerPhotoBlocks(API_BASE);
+  const {
+    isBlocked,
+    block,
+    unblock,
+    getCustomUrl,
+    uploadCustom,
+    deleteCustom,
+  } = useServerPhotoBlocks(API_BASE);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   type FotoIndexItem = { nombreNorm: string; path: string };
   const [fotosIndex, setFotosIndex] = React.useState<FotoIndexItem[]>([]);
@@ -104,25 +144,40 @@ export default function Page() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/player/photos`, { cache: 'no-store' });
+        const res = await fetch(`${API_BASE}/player/photos`, {
+          cache: "no-store",
+        });
         const json = await res.json();
-        const normalize = (s: string) => s
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9\s]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+        const normalize = (s: string) =>
+          s
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9\s]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
         const arr = Array.isArray(json?.fotos) ? json.fotos : [];
         const idx: FotoIndexItem[] = arr
-          .filter((f: any) => f && typeof f.nombre === 'string' && f.nombre.trim() && typeof f.path === 'string' && f.path.trim())
-          .map((f: any) => ({ nombreNorm: normalize(f.nombre as string), path: f.path as string }));
+          .filter(
+            (f: any) =>
+              f &&
+              typeof f.nombre === "string" &&
+              f.nombre.trim() &&
+              typeof f.path === "string" &&
+              f.path.trim()
+          )
+          .map((f: any) => ({
+            nombreNorm: normalize(f.nombre as string),
+            path: f.path as string,
+          }));
         if (!cancelled) setFotosIndex(idx);
       } catch (e) {
         console.error(e);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const trigramSet = React.useCallback((s: string) => {
@@ -134,58 +189,78 @@ export default function Page() {
     return set;
   }, []);
 
-  const similarity = React.useCallback((a: string, b: string) => {
-    if (!a || !b) return 0;
-    const A = trigramSet(a);
-    const B = trigramSet(b);
-    let inter = 0;
-    A.forEach((t) => { if (B.has(t)) inter++; });
-    const union = A.size + B.size - inter;
-    return union === 0 ? 0 : inter / union;
-  }, [trigramSet]);
+  const similarity = React.useCallback(
+    (a: string, b: string) => {
+      if (!a || !b) return 0;
+      const A = trigramSet(a);
+      const B = trigramSet(b);
+      let inter = 0;
+      A.forEach((t) => {
+        if (B.has(t)) inter++;
+      });
+      const union = A.size + B.size - inter;
+      return union === 0 ? 0 : inter / union;
+    },
+    [trigramSet]
+  );
 
-  const findBestPhoto = React.useCallback((name: string, playerId?: number): string | undefined => {
-    const normalize = (s: string) => s
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    const n = normalize(name);
-    if (!n) return undefined;
-    let bestS = 0;
-    let bestPath: string | undefined = undefined;
-    for (const f of fotosIndex) {
-      const s = similarity(n, f.nombreNorm);
-      if (s > bestS) {
-        // skip blocked path for this player if provided
-        if (playerId != null && isBlocked(playerId, f.path)) continue;
-        bestS = s; bestPath = f.path;
+  const findBestPhoto = React.useCallback(
+    (name: string, playerId?: number): string | undefined => {
+      const normalize = (s: string) =>
+        s
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9\s]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      const n = normalize(name);
+      if (!n) return undefined;
+      let bestS = 0;
+      let bestPath: string | undefined = undefined;
+      for (const f of fotosIndex) {
+        const s = similarity(n, f.nombreNorm);
+        if (s > bestS) {
+          // skip blocked path for this player if provided
+          if (playerId != null && isBlocked(playerId, f.path)) continue;
+          bestS = s;
+          bestPath = f.path;
+        }
       }
-    }
-    return bestS >= 0.28 ? bestPath : undefined; // threshold tuned lightly
-  }, [fotosIndex, similarity, isBlocked]);
+      return bestS >= 0.28 ? bestPath : undefined; // threshold tuned lightly
+    },
+    [fotosIndex, similarity, isBlocked]
+  );
   const list = React.useMemo(() => {
     const f = filter.trim().toLowerCase();
     if (!f) return persons;
-    return persons.filter(p => `${p.Jugador ?? ""} ${p.nombre ?? ""} ${p.Posicion ?? ""}`.toLowerCase().includes(f));
+    return persons.filter((p) =>
+      `${p.Jugador ?? ""} ${p.nombre ?? ""} ${p.Posicion ?? ""}`
+        .toLowerCase()
+        .includes(f)
+    );
   }, [persons, filter]);
 
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/players/active?limit_matches=20`, { cache: "no-store" });
+        const res = await fetch(
+          `${API_BASE}/api/players/active?limit_matches=20`,
+          { cache: "no-store" }
+        );
         const data = await res.json();
         if (!cancelled && Array.isArray(data)) {
           const normalized: Person[] = data.map((p: any) => ({
             ...p,
             id: p.id ?? p.Documento_de_Identidad ?? undefined,
             path_foto: (() => {
-              const display = (p.Jugador ?? p.nombre ?? '') as string;
-              return findBestPhoto(display, p.id ?? p.Documento_de_Identidad ?? undefined);
-            })()
+              const display = (p.Jugador ?? p.nombre ?? "") as string;
+              return findBestPhoto(
+                display,
+                p.id ?? p.Documento_de_Identidad ?? undefined
+              );
+            })(),
           }));
           setPersons(normalized);
           if (normalized.length > 0) setSelectedPerson(normalized[0]);
@@ -194,17 +269,24 @@ export default function Page() {
         console.error(e);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Re-enrich photos when the fotosIndex arrives
   React.useEffect(() => {
     if (fotosIndex.length === 0 || persons.length === 0) return;
-    setPersons(prev => prev.map(p => {
-      const display = (p.Jugador ?? p.nombre ?? '') as string;
-      const best = findBestPhoto(display, p.id ?? p.Documento_de_Identidad ?? undefined);
-      return best && best !== p.path_foto ? { ...p, path_foto: best } : p;
-    }));
+    setPersons((prev) =>
+      prev.map((p) => {
+        const display = (p.Jugador ?? p.nombre ?? "") as string;
+        const best = findBestPhoto(
+          display,
+          p.id ?? p.Documento_de_Identidad ?? undefined
+        );
+        return best && best !== p.path_foto ? { ...p, path_foto: best } : p;
+      })
+    );
     // do not add findBestPhoto as dep to avoid function identity changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fotosIndex]);
@@ -218,7 +300,7 @@ export default function Page() {
 
   // If current selection is filtered out, pick first in current list
   React.useEffect(() => {
-    if (selectedPerson && !list.some(p => p.id === selectedPerson.id)) {
+    if (selectedPerson && !list.some((p) => p.id === selectedPerson.id)) {
       if (list.length > 0) setSelectedPerson(list[0]);
     }
   }, [list, selectedPerson]);
@@ -226,7 +308,7 @@ export default function Page() {
   // Always use the freshest instance of the selected person from persons (keeps path_foto in sync)
   const selected = React.useMemo(() => {
     if (!selectedPerson) return null;
-    return persons.find(p => p.id === selectedPerson.id) ?? selectedPerson;
+    return persons.find((p) => p.id === selectedPerson.id) ?? selectedPerson;
   }, [persons, selectedPerson]);
 
   // Fetch player maximum metrics from API when selection changes
@@ -236,10 +318,15 @@ export default function Page() {
       const pid = selected?.id;
       setLoadingMetrics(true);
       setMaxMetrics(null);
-      if (!pid) { setLoadingMetrics(false); return; }
+      if (!pid) {
+        setLoadingMetrics(false);
+        return;
+      }
       try {
-        const res = await fetch(`${API_BASE}/player/${pid}/metrics/max`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('failed');
+        const res = await fetch(`${API_BASE}/player/${pid}/metrics/max`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("failed");
         const json = await res.json();
         if (!cancelled) setMaxMetrics(json as PlayerMaxMetrics);
       } catch (e) {
@@ -248,25 +335,33 @@ export default function Page() {
         if (!cancelled) setLoadingMetrics(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selected?.id]);
 
   // Helpers to derive soccer minute from absolute time-of-day, using same logic as match view
-  const parseHmsToSec = React.useCallback((t?: string | null): number | undefined => {
-    if (!t) return undefined;
-    const m = t.match(/^(\d{2}):(\d{2}):(\d{2})(?:[\.:](\d+))?/);
-    if (!m) return undefined;
-    const h = parseInt(m[1] || "0", 10);
-    const mi = parseInt(m[2] || "0", 10);
-    const s = parseInt(m[3] || "0", 10);
-    return h * 3600 + mi * 60 + s;
-  }, []);
+  const parseHmsToSec = React.useCallback(
+    (t?: string | null): number | undefined => {
+      if (!t) return undefined;
+      const m = t.match(/^(\d{2}):(\d{2}):(\d{2})(?:[\.:](\d+))?/);
+      if (!m) return undefined;
+      const h = parseInt(m[1] || "0", 10);
+      const mi = parseInt(m[2] || "0", 10);
+      const s = parseInt(m[3] || "0", 10);
+      return h * 3600 + mi * 60 + s;
+    },
+    []
+  );
 
   const soccerMinute = React.useMemo(() => {
     const d = maxMetrics?.max_speed_detail;
     if (!d) return undefined;
     const absSec = parseHmsToSec(d.time);
-    const fh = typeof d.manual_first_half_start === "number" ? d.manual_first_half_start : undefined;
+    const fh =
+      typeof d.manual_first_half_start === "number"
+        ? d.manual_first_half_start
+        : undefined;
     if (absSec === undefined || fh === undefined) return undefined;
     const halftime = 15 * 60; // fallback if we don't have detected halftime
     const sh = fh + 45 * 60 + halftime;
@@ -290,7 +385,9 @@ export default function Page() {
     return "/match";
   }, [maxMetrics?.max_speed_detail]);
 
-  const [maxSpeedMatchLabel, setMaxSpeedMatchLabel] = React.useState<string | null>(null);
+  const [maxSpeedMatchLabel, setMaxSpeedMatchLabel] = React.useState<
+    string | null
+  >(null);
   React.useEffect(() => {
     const d = maxMetrics?.max_speed_detail;
     setMaxSpeedMatchLabel(null);
@@ -311,10 +408,14 @@ export default function Page() {
           const res = await fetch(`${API_BASE}/api/matches`);
           if (res.ok) {
             const arr = await res.json();
-            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            const found = Array.isArray(arr)
+              ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name)
+              : null;
             if (found) {
-              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
-              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const home =
+                found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away =
+                found?.away_team_name || found?.away_team_id?.slice(0, 8);
               const label = home && away ? `${home} vs ${away}` : undefined;
               if (!cancelled && label) setMaxSpeedMatchLabel(label);
             }
@@ -322,7 +423,9 @@ export default function Page() {
         }
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, maxMetrics?.max_speed_detail]);
 
   const maxDistanceHref = React.useMemo(() => {
@@ -381,10 +484,14 @@ export default function Page() {
           const res = await fetch(`${API_BASE}/api/matches`);
           if (res.ok) {
             const arr = await res.json();
-            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            const found = Array.isArray(arr)
+              ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name)
+              : null;
             if (found) {
-              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
-              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const home =
+                found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away =
+                found?.away_team_name || found?.away_team_id?.slice(0, 8);
               const label = home && away ? `${home} vs ${away}` : undefined;
               if (!cancelled && label) setZ6MatchLabel(label);
             }
@@ -392,10 +499,14 @@ export default function Page() {
         }
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, maxMetrics?.z6_detail]);
 
-  const [maxDistanceMatchLabel, setMaxDistanceMatchLabel] = React.useState<string | null>(null);
+  const [maxDistanceMatchLabel, setMaxDistanceMatchLabel] = React.useState<
+    string | null
+  >(null);
   React.useEffect(() => {
     const d = maxMetrics?.max_distance_detail;
     setMaxDistanceMatchLabel(null);
@@ -416,10 +527,14 @@ export default function Page() {
           const res = await fetch(`${API_BASE}/api/matches`);
           if (res.ok) {
             const arr = await res.json();
-            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            const found = Array.isArray(arr)
+              ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name)
+              : null;
             if (found) {
-              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
-              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const home =
+                found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away =
+                found?.away_team_name || found?.away_team_id?.slice(0, 8);
               const label = home && away ? `${home} vs ${away}` : undefined;
               if (!cancelled && label) setMaxDistanceMatchLabel(label);
             }
@@ -427,7 +542,9 @@ export default function Page() {
         }
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, maxMetrics?.max_distance_detail]);
 
   const [hsrMatchLabel, setHsrMatchLabel] = React.useState<string | null>(null);
@@ -451,10 +568,14 @@ export default function Page() {
           const res = await fetch(`${API_BASE}/api/matches`);
           if (res.ok) {
             const arr = await res.json();
-            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            const found = Array.isArray(arr)
+              ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name)
+              : null;
             if (found) {
-              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
-              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const home =
+                found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away =
+                found?.away_team_name || found?.away_team_id?.slice(0, 8);
               const label = home && away ? `${home} vs ${away}` : undefined;
               if (!cancelled && label) setHsrMatchLabel(label);
             }
@@ -462,10 +583,14 @@ export default function Page() {
         }
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, maxMetrics?.hsr_max_detail]);
 
-  const [hmld25MatchLabel, setHmld25MatchLabel] = React.useState<string | null>(null);
+  const [hmld25MatchLabel, setHmld25MatchLabel] = React.useState<string | null>(
+    null
+  );
   React.useEffect(() => {
     const d = maxMetrics?.hmld_detail?.m25_5;
     setHmld25MatchLabel(null);
@@ -486,10 +611,14 @@ export default function Page() {
           const res = await fetch(`${API_BASE}/api/matches`);
           if (res.ok) {
             const arr = await res.json();
-            const found = Array.isArray(arr) ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name) : null;
+            const found = Array.isArray(arr)
+              ? arr.find((m: any) => m?.gps_table_name === d.gps_table_name)
+              : null;
             if (found) {
-              const home = found?.home_team_name || found?.home_team_id?.slice(0, 8);
-              const away = found?.away_team_name || found?.away_team_id?.slice(0, 8);
+              const home =
+                found?.home_team_name || found?.home_team_id?.slice(0, 8);
+              const away =
+                found?.away_team_name || found?.away_team_id?.slice(0, 8);
               const label = home && away ? `${home} vs ${away}` : undefined;
               if (!cancelled && label) setHmld25MatchLabel(label);
             }
@@ -497,16 +626,50 @@ export default function Page() {
         }
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, maxMetrics?.hmld_detail?.m25_5]);
 
-  const kpis = React.useMemo(() => ([
-    { title: "Max. Dist", value: maxMetrics ? `${maxMetrics.max_distance_m} m` : "—", link: maxDistanceHref },
-    { title: "HSR Max", value: maxMetrics ? `${maxMetrics.hsr_max_m} m` : "—", link: hsrHref },
-    { title: "Velocidad Max.", value: maxMetrics ? `${(Math.round(maxMetrics.max_speed_kmh * 100) / 100).toFixed(2)} km/h` : "27 km/h", link: matchHref },
-    { title: `HMLD ${maxMetrics ? `(25.5 · 18)` : ''}`, value: maxMetrics ? `${Math.round(maxMetrics.hmld?.m25_5 ?? 0)} m · ${Math.round(maxMetrics.hmld?.m18 ?? 0)} m` : "—" },
-    { title: "z6", value: maxMetrics ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)` : '—', link: z6Href },
-  ]), [maxMetrics, matchHref, maxDistanceHref, hsrHref, z6Href]);
+  const kpis = React.useMemo(
+    () => [
+      {
+        title: "Max. Dist",
+        value: maxMetrics ? `${maxMetrics.max_distance_m} m` : "—",
+        link: maxDistanceHref,
+      },
+      {
+        title: "HSR Max",
+        value: maxMetrics ? `${maxMetrics.hsr_max_m} m` : "—",
+        link: hsrHref,
+      },
+      {
+        title: "Velocidad Max.",
+        value: maxMetrics
+          ? `${(Math.round(maxMetrics.max_speed_kmh * 100) / 100).toFixed(
+              2
+            )} km/h`
+          : "27 km/h",
+        link: matchHref,
+      },
+      {
+        title: `HMLD ${maxMetrics ? `(25.5 · 18)` : ""}`,
+        value: maxMetrics
+          ? `${Math.round(maxMetrics.hmld?.m25_5 ?? 0)} m · ${Math.round(
+              maxMetrics.hmld?.m18 ?? 0
+            )} m`
+          : "—",
+      },
+      {
+        title: "z6",
+        value: maxMetrics
+          ? `${maxMetrics.z6.seconds}\" (${maxMetrics.z6.distance_m}m)`
+          : "—",
+        link: z6Href,
+      },
+    ],
+    [maxMetrics, matchHref, maxDistanceHref, hsrHref, z6Href]
+  );
 
   // Skill comparator: normalize values 0-10 using extrema from API
   type Extrema = {
@@ -522,29 +685,38 @@ export default function Page() {
       hmld_25_5_m: number;
       z6_seconds: number;
       age_years: number;
-    }
+    };
   } | null;
   const [extrema, setExtrema] = React.useState<Extrema>(null);
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/player/metrics/extrema`, { cache: 'no-store' });
+        const res = await fetch(`${API_BASE}/player/metrics/extrema`, {
+          cache: "no-store",
+        });
         if (!res.ok) return;
         const json = await res.json();
         if (!cancelled) setExtrema(json);
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const clamp = (v: number, lo: number, hi: number) =>
+    Math.max(lo, Math.min(hi, v));
   const normalize = (value: number, min: number, max: number) => {
-    if (!isFinite(value) || !isFinite(min) || !isFinite(max) || max <= min) return 0;
+    if (!isFinite(value) || !isFinite(min) || !isFinite(max) || max <= min)
+      return 0;
     return clamp(((value - min) / (max - min)) * 10, 0, 10);
   };
 
-  const age = React.useMemo(() => calcAge(selected?.Fecha_Nacimiento), [selected?.Fecha_Nacimiento]);
+  const age = React.useMemo(
+    () => calcAge(selected?.Fecha_Nacimiento),
+    [selected?.Fecha_Nacimiento]
+  );
   const ageRange = React.useMemo(() => ({ min: 14, max: 45 }), []);
 
   const skillCategories = [
@@ -557,70 +729,150 @@ export default function Page() {
   ];
 
   const playerSkillValues = React.useMemo(() => {
-    if (!maxMetrics) return [0,0,0,0,0, age ? normalize(age, ageRange.min, ageRange.max) : 0];
-    const v1 = normalize(maxMetrics.max_distance_m ?? 0, extrema?.max_distance_m.min ?? 0, extrema?.max_distance_m.max ?? 1);
-    const v2 = normalize(maxMetrics.hsr_max_m ?? 0, extrema?.hsr_max_m.min ?? 0, extrema?.hsr_max_m.max ?? 1);
-    const v3 = normalize(maxMetrics.max_speed_kmh ?? 0, extrema?.max_speed_kmh.min ?? 0, extrema?.max_speed_kmh.max ?? 1);
-    const v4 = normalize((maxMetrics.hmld?.m25_5 ?? 0), extrema?.hmld_25_5_m.min ?? 0, extrema?.hmld_25_5_m.max ?? 1);
-    const v5 = normalize((maxMetrics.z6?.seconds ?? 0), extrema?.z6_seconds.min ?? 0, extrema?.z6_seconds.max ?? 1);
+    if (!maxMetrics)
+      return [
+        0,
+        0,
+        0,
+        0,
+        0,
+        age ? normalize(age, ageRange.min, ageRange.max) : 0,
+      ];
+    const v1 = normalize(
+      maxMetrics.max_distance_m ?? 0,
+      extrema?.max_distance_m.min ?? 0,
+      extrema?.max_distance_m.max ?? 1
+    );
+    const v2 = normalize(
+      maxMetrics.hsr_max_m ?? 0,
+      extrema?.hsr_max_m.min ?? 0,
+      extrema?.hsr_max_m.max ?? 1
+    );
+    const v3 = normalize(
+      maxMetrics.max_speed_kmh ?? 0,
+      extrema?.max_speed_kmh.min ?? 0,
+      extrema?.max_speed_kmh.max ?? 1
+    );
+    const v4 = normalize(
+      maxMetrics.hmld?.m25_5 ?? 0,
+      extrema?.hmld_25_5_m.min ?? 0,
+      extrema?.hmld_25_5_m.max ?? 1
+    );
+    const v5 = normalize(
+      maxMetrics.z6?.seconds ?? 0,
+      extrema?.z6_seconds.min ?? 0,
+      extrema?.z6_seconds.max ?? 1
+    );
     const v6 = age ? normalize(age, ageRange.min, ageRange.max) : 0;
-    return [v1,v2,v3,v4,v5,v6];
+    return [v1, v2, v3, v4, v5, v6];
   }, [maxMetrics, extrema, age, ageRange.min, ageRange.max]);
 
   const referenceSkillValues = React.useMemo(() => {
-    if (!extrema?.averages) return [7.5,7.5,7.5,7.5,7.5,5.0];
-    const a1 = normalize(extrema.averages.max_distance_m, extrema.max_distance_m.min, extrema.max_distance_m.max);
-    const a2 = normalize(extrema.averages.hsr_max_m, extrema.hsr_max_m.min, extrema.hsr_max_m.max);
-    const a3 = normalize(extrema.averages.max_speed_kmh, extrema.max_speed_kmh.min, extrema.max_speed_kmh.max);
-    const a4 = normalize(extrema.averages.hmld_25_5_m, extrema.hmld_25_5_m.min, extrema.hmld_25_5_m.max);
-    const a5 = normalize(extrema.averages.z6_seconds, extrema.z6_seconds.min, extrema.z6_seconds.max);
-    const a6 = normalize(extrema.averages.age_years, ageRange.min, ageRange.max);
-    return [a1,a2,a3,a4,a5,a6];
+    if (!extrema?.averages) return [7.5, 7.5, 7.5, 7.5, 7.5, 5.0];
+    const a1 = normalize(
+      extrema.averages.max_distance_m,
+      extrema.max_distance_m.min,
+      extrema.max_distance_m.max
+    );
+    const a2 = normalize(
+      extrema.averages.hsr_max_m,
+      extrema.hsr_max_m.min,
+      extrema.hsr_max_m.max
+    );
+    const a3 = normalize(
+      extrema.averages.max_speed_kmh,
+      extrema.max_speed_kmh.min,
+      extrema.max_speed_kmh.max
+    );
+    const a4 = normalize(
+      extrema.averages.hmld_25_5_m,
+      extrema.hmld_25_5_m.min,
+      extrema.hmld_25_5_m.max
+    );
+    const a5 = normalize(
+      extrema.averages.z6_seconds,
+      extrema.z6_seconds.min,
+      extrema.z6_seconds.max
+    );
+    const a6 = normalize(
+      extrema.averages.age_years,
+      ageRange.min,
+      ageRange.max
+    );
+    return [a1, a2, a3, a4, a5, a6];
   }, [extrema, ageRange.min, ageRange.max]);
-  const skillSeries = React.useMemo(() => ([
-    { name: selected?.Jugador || selected?.nombre || "Jugador", data: playerSkillValues, color: "#3b82f6", fillOpacity: 0.22 },
-    { name: "Referencia", data: referenceSkillValues, color: "#ef4444", strokeDasharray: "4 3", fillOpacity: 0.12 },
-  ]), [playerSkillValues, selected?.Jugador, selected?.nombre, referenceSkillValues]);
+  const skillSeries = React.useMemo(
+    () => [
+      {
+        name: selected?.Jugador || selected?.nombre || "Jugador",
+        data: playerSkillValues,
+        color: "#3b82f6",
+        fillOpacity: 0.22,
+      },
+      {
+        name: "Referencia",
+        data: referenceSkillValues,
+        color: "#ef4444",
+        strokeDasharray: "4 3",
+        fillOpacity: 0.12,
+      },
+    ],
+    [
+      playerSkillValues,
+      selected?.Jugador,
+      selected?.nombre,
+      referenceSkillValues,
+    ]
+  );
 
   // Keyboard navigation: ArrowUp / ArrowDown to move selection
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      const isTyping = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      const isTyping =
+        !!target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
       if (isTyping) return;
-      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       if (!list || list.length === 0) return;
       e.preventDefault();
       const currentId = selectedPerson?.id;
-      const idx = currentId != null ? list.findIndex(p => p.id === currentId) : -1;
+      const idx =
+        currentId != null ? list.findIndex((p) => p.id === currentId) : -1;
       let next = idx;
-      if (e.key === 'ArrowDown') next = Math.min(list.length - 1, idx + 1);
-      if (e.key === 'ArrowUp') next = Math.max(0, idx - 1);
+      if (e.key === "ArrowDown") next = Math.min(list.length - 1, idx + 1);
+      if (e.key === "ArrowUp") next = Math.max(0, idx - 1);
       if (next >= 0 && next < list.length) {
         const np = list[next];
         setSelectedPerson(np);
         const container = listRef.current;
         if (container) {
-          const el = container.querySelector(`[data-player-id="${(np.id ?? (np as any).Documento_de_Identidad) as any}"]`);
+          const el = container.querySelector(
+            `[data-player-id="${
+              (np.id ?? (np as any).Documento_de_Identidad) as any
+            }"]`
+          );
           if (el && (el as HTMLElement).scrollIntoView) {
-            (el as HTMLElement).scrollIntoView({ block: 'nearest' });
+            (el as HTMLElement).scrollIntoView({ block: "nearest" });
           }
         }
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [list, selectedPerson?.id]);
 
   return (
     <main className="flex flex-col lg:flex-row gap-6 p-4">
       {loadingMetrics && (
         <div className="fixed left-0 right-0 top-0 z-40">
-          <Progress value={65} className="h-0.5 bg-zinc-800" />
+          <Progress value={65} className="h-0.5 bg-muted" />
         </div>
       )}
       <aside className="w-full lg:w-1/4">
-        <Card className="bg-zinc-900/50 border-zinc-800">
+        <Card className="bg-card border-border animate-fade-in">
           <CardHeader>
             <CardTitle>Active Players (our study)</CardTitle>
           </CardHeader>
@@ -630,35 +882,60 @@ export default function Page() {
                 type="text"
                 placeholder="Buscar jugador…"
                 value={filter}
-                onChange={(e)=>setFilter(e.target.value)}
-                className="w-full h-9 rounded-md bg-zinc-900/60 border border-zinc-800 px-3 text-sm"
+                onChange={(e) => setFilter(e.target.value)}
+                className="w-full h-9 rounded-md bg-background border border-input px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
             <div className="h-[70vh] overflow-y-auto pr-1" ref={listRef}>
               <ul className="space-y-2">
                 {list.map((person) => (
-                  <li key={(person.Documento_de_Identidad ?? person.id ?? Math.random()).toString()}>
+                  <li
+                    key={(
+                      person.Documento_de_Identidad ??
+                      person.id ??
+                      Math.random()
+                    ).toString()}
+                  >
                     <Button
-                      variant={selectedPerson?.id === person.id ? "secondary" : "ghost"}
+                      variant={
+                        selectedPerson?.id === person.id ? "secondary" : "ghost"
+                      }
                       size="sm"
-                      className="w-full justify-start gap-2 h-auto py-2 border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/60"
+                      className="w-full justify-start gap-2 h-auto py-2 border border-border bg-muted hover:bg-accent"
                       onClick={() => setSelectedPerson(person)}
-                      data-player-id={(person.id ?? person.Documento_de_Identidad) as any}
+                      data-player-id={
+                        (person.id ?? person.Documento_de_Identidad) as any
+                      }
                     >
                       <Avatar className="h-4 w-4">
-                        <AvatarImage alt={person.Jugador ?? undefined} src={(() => {
-                          const pid = (typeof person.id === 'number' ? person.id : undefined) ?? (typeof person.Documento_de_Identidad === 'number' ? person.Documento_de_Identidad : undefined);
-                          const custom = getCustomUrl(pid);
-                          if (custom) return custom;
-                          const path = person.path_foto || undefined;
-                          if (isBlocked(pid, path)) return undefined;
-                          return path;
-                        })()} />
-                        <AvatarFallback>{(person.Jugador || person.nombre || "?").slice(0,1)}</AvatarFallback>
+                        <AvatarImage
+                          alt={person.Jugador ?? undefined}
+                          src={(() => {
+                            const pid =
+                              (typeof person.id === "number"
+                                ? person.id
+                                : undefined) ??
+                              (typeof person.Documento_de_Identidad === "number"
+                                ? person.Documento_de_Identidad
+                                : undefined);
+                            const custom = getCustomUrl(pid);
+                            if (custom) return custom;
+                            const path = person.path_foto || undefined;
+                            if (isBlocked(pid, path)) return undefined;
+                            return path;
+                          })()}
+                        />
+                        <AvatarFallback>
+                          {(person.Jugador || person.nombre || "?").slice(0, 1)}
+                        </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 text-left">
-                        <div className="text-sm truncate">{person.Jugador || person.nombre}</div>
-                        <div className="text-[11px] text-zinc-400 truncate">{person.Posicion || "—"}</div>
+                        <div className="text-sm truncate">
+                          {person.Jugador || person.nombre}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {person.Posicion || "—"}
+                        </div>
                       </div>
                     </Button>
                   </li>
@@ -671,99 +948,250 @@ export default function Page() {
 
       <section className="w-full lg:w-3/4">
         {!selected ? (
-          <Card className="bg-zinc-900/50 border-zinc-800"><CardHeader><CardTitle>Selecciona un jugador</CardTitle></CardHeader></Card>
+          <Card className="bg-card border-border animate-fade-in">
+            <CardHeader>
+              <CardTitle>Selecciona un jugador</CardTitle>
+            </CardHeader>
+          </Card>
         ) : (
-          <Card className="bg-zinc-900/50 border-zinc-800">
+          <Card className="bg-card border-border animate-fade-in">
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 <User className="w-5 h-5" />
-                <span className="truncate">{selected.Jugador || selected.nombre}</span>
+                <span className="truncate">
+                  {selected.Jugador || selected.nombre}
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col md:flex-row gap-6">
               <div className="md:w-1/5">
                 <Avatar className="h-auto w-full rounded-md overflow-hidden mx-auto">
-                  <AvatarImage alt={selected.Jugador ?? undefined} src={(() => {
-                    const pid = (typeof selected.id === 'number' ? selected.id : undefined) ?? (typeof selected.Documento_de_Identidad === 'number' ? selected.Documento_de_Identidad : undefined);
-                    const custom = getCustomUrl(pid);
-                    if (custom) return custom;
-                    const path = selected.path_foto || undefined;
-                    if (isBlocked(pid, path)) return undefined;
-                    return path;
-                  })()} className="aspect-auto w-full h-auto object-contain bg-zinc-900" />
-                  <AvatarFallback className="h-44 text-2xl">{(selected.Jugador || selected.nombre || "?").slice(0,1)}</AvatarFallback>
+                  <AvatarImage
+                    alt={selected.Jugador ?? undefined}
+                    src={(() => {
+                      const pid =
+                        (typeof selected.id === "number"
+                          ? selected.id
+                          : undefined) ??
+                        (typeof selected.Documento_de_Identidad === "number"
+                          ? selected.Documento_de_Identidad
+                          : undefined);
+                      const custom = getCustomUrl(pid);
+                      if (custom) return custom;
+                      const path = selected.path_foto || undefined;
+                      if (isBlocked(pid, path)) return undefined;
+                      return path;
+                    })()}
+                    className="aspect-auto w-full h-auto object-contain bg-muted"
+                  />
+                  <AvatarFallback className="h-44 text-2xl">
+                    {(selected.Jugador || selected.nombre || "?").slice(0, 1)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="mt-2 flex gap-2">
                   {(() => {
-                    const pid = ((typeof selected.id === 'number' ? selected.id : undefined) ?? (typeof selected.Documento_de_Identidad === 'number' ? selected.Documento_de_Identidad : undefined));
+                    const pid =
+                      (typeof selected.id === "number"
+                        ? selected.id
+                        : undefined) ??
+                      (typeof selected.Documento_de_Identidad === "number"
+                        ? selected.Documento_de_Identidad
+                        : undefined);
                     const path = selected.path_foto || undefined;
                     const blocked = isBlocked(pid, path);
                     return !blocked ? (
-                      <Button size="sm" variant="destructive" className="h-7" onClick={() => block(pid, path)}>Quitar foto</Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-7"
+                        onClick={() => block(pid, path)}
+                      >
+                        Quitar foto
+                      </Button>
                     ) : (
-                      <Button size="sm" variant="default" className="h-7" onClick={() => unblock(pid, path)}>Restaurar foto</Button>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7"
+                        onClick={() => unblock(pid, path)}
+                      >
+                        Restaurar foto
+                      </Button>
                     );
                   })()}
                   {(() => {
-                    const pid = ((typeof selected.id === 'number' ? selected.id : undefined) ?? (typeof selected.Documento_de_Identidad === 'number' ? selected.Documento_de_Identidad : undefined));
+                    const pid =
+                      (typeof selected.id === "number"
+                        ? selected.id
+                        : undefined) ??
+                      (typeof selected.Documento_de_Identidad === "number"
+                        ? selected.Documento_de_Identidad
+                        : undefined);
                     const custom = getCustomUrl(pid);
                     if (!custom) {
                       return (
-                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs px-2 py-1 border border-zinc-700 rounded hover:bg-zinc-800/50">
-                          <input type="file" accept="image/*" className="hidden" onChange={async (e)=>{
-                            const inputEl = e.currentTarget;
-                            const file = inputEl.files?.[0];
-                            if (file && pid != null) await uploadCustom(pid, file);
-                            inputEl.value = "";
-                          }} />
+                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs px-2 py-1 border border-border rounded hover:bg-accent">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const inputEl = e.currentTarget;
+                              const file = inputEl.files?.[0];
+                              if (file && pid != null)
+                                await uploadCustom(pid, file);
+                              inputEl.value = "";
+                            }}
+                          />
                           Subir foto
                         </label>
                       );
                     }
                     return (
-                      <Button size="sm" variant="destructive" className="h-7" onClick={async ()=>{ if (pid != null) await deleteCustom(pid); }}>Eliminar foto</Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-7"
+                        onClick={async () => {
+                          if (pid != null) await deleteCustom(pid);
+                        }}
+                      >
+                        Eliminar foto
+                      </Button>
                     );
                   })()}
                 </div>
               </div>
               <div className="md:flex-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                  <div className="flex items-center gap-2"><User className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Alias:</span> {selected.nombre || "—"}</div>
-                  <div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Edad:</span> {calcAge(selected.Fecha_Nacimiento) ?? "—"}</div>
-                  <div className="flex items-center gap-2"><Tag className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Posición:</span> {selected.Posicion || "—"}</div>
-                  <div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Fecha Nac.:</span> {selected.Fecha_Nacimiento || "—"}</div>
-                  <div className="flex items-center gap-2"><FileText className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Documento:</span> {selected.Documento_de_Identidad ?? "—"}</div>
-                  <div className="flex items-center gap-2"><Stamp className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Pasaporte:</span> {selected.Pasaporte || "—"}</div>
-                  <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Teléfono:</span> {selected.Telefono || "—"}</div>
-                  <div className="flex items-center gap-2"><Smartphone className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Celular:</span> {selected.Celular || "—"}</div>
-                  <div className="sm:col-span-2 flex items-center gap-2"><Mail className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Email:</span> {selected.Email || "—"}</div>
-                  <div className="sm:col-span-2 flex items-center gap-2"><HeartPulse className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Cobertura Médica:</span> {selected.Cobertura_Medica || "—"}</div>
-                  <div className="sm:col-span-2 flex items-center gap-2"><GraduationCap className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Estudios:</span> {selected.Estudios || "—"}</div>
-                  <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Oriundo:</span> {selected.Oriundo || "—"}</div>
-                  <div className="flex items-center gap-2"><Building2 className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Club de Origen:</span> {selected.Club_de_Origen || "—"}</div>
-                  <div className="flex items-center gap-2"><Percent className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">% Origen:</span> {selected.Club_de_Origen_Porcentaje || "—"}</div>
-                  <div className="sm:col-span-2 flex items-center gap-2"><ListIcon className="h-4 w-4 text-zinc-400"/><span className="text-zinc-400">Medidas personales:</span> {selected.personalMetrics || "—"}</div>
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Alias:</span>{" "}
+                    {selected.nombre || "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Edad:</span>{" "}
+                    {calcAge(selected.Fecha_Nacimiento) ?? "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Posición:
+                    </span>{" "}
+                    {selected.Posicion || "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Fecha Nac.:
+                    </span>{" "}
+                    {selected.Fecha_Nacimiento || "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Documento:
+                    </span>{" "}
+                    {selected.Documento_de_Identidad ?? "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Stamp className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Pasaporte:
+                    </span>{" "}
+                    {selected.Pasaporte || "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Teléfono:
+                    </span>{" "}
+                    {selected.Telefono || "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Celular:</span>{" "}
+                    {selected.Celular || "—"}
+                  </div>
+                  <div className="sm:col-span-2 flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Email:</span>{" "}
+                    {selected.Email || "—"}
+                  </div>
+                  <div className="sm:col-span-2 flex items-center gap-2">
+                    <HeartPulse className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Cobertura Médica:
+                    </span>{" "}
+                    {selected.Cobertura_Medica || "—"}
+                  </div>
+                  <div className="sm:col-span-2 flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Estudios:
+                    </span>{" "}
+                    {selected.Estudios || "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Oriundo:</span>{" "}
+                    {selected.Oriundo || "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Club de Origen:
+                    </span>{" "}
+                    {selected.Club_de_Origen || "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Percent className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      % Origen:
+                    </span>{" "}
+                    {selected.Club_de_Origen_Porcentaje || "—"}
+                  </div>
+                  <div className="sm:col-span-2 flex items-center gap-2">
+                    <ListIcon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      Medidas personales:
+                    </span>{" "}
+                    {selected.personalMetrics || "—"}
+                  </div>
                 </div>
 
-                <Separator className="my-4 bg-zinc-800" />
+                <Separator className="my-4 bg-border" />
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <Card className="bg-zinc-900/60 border-zinc-800">
+                  <Card className="bg-card border-border">
                     <CardContent className="pt-4">
-                      <div className="text-xs text-zinc-400">Masa F0</div>
-                      <div className="text-2xl font-semibold">{selected?.masaF0 || "—"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Masa F0
+                      </div>
+                      <div className="text-2xl font-semibold">
+                        {selected?.masaF0 || "—"}
+                      </div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-zinc-900/60 border-zinc-800">
+                  <Card className="bg-card border-border">
                     <CardContent className="pt-4">
-                      <div className="text-xs text-zinc-400">Sumatoria 6 Pliegues</div>
-                      <div className="text-2xl font-semibold">{selected?.sumatoriaPliegues || "—"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Sumatoria 6 Pliegues
+                      </div>
+                      <div className="text-2xl font-semibold">
+                        {selected?.sumatoriaPliegues || "—"}
+                      </div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-zinc-900/60 border-zinc-800">
+                  <Card className="bg-card border-border">
                     <CardContent className="pt-4">
-                      <div className="text-xs text-zinc-400">Relación Músculo-Hueso</div>
-                      <div className="text-2xl font-semibold">{selected?.relacionMusculoHueso || "—"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Relación Músculo-Hueso
+                      </div>
+                      <div className="text-2xl font-semibold">
+                        {selected?.relacionMusculoHueso || "—"}
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
@@ -772,14 +1200,30 @@ export default function Page() {
 
             <CardContent className="w-full mt-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-zinc-900/50 border-zinc-800">
-                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><Ruler className="h-4 w-4"/>Medición del salto (curva y=x²)</CardTitle></CardHeader>
+                <Card className="bg-card border-border animate-fade-in">
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Ruler className="h-4 w-4" />
+                      Medición del salto (curva y=x²)
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent>
                     <div className="h-[260px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={[{name:'0', uv:0},{name:'1', uv:1},{name:'2', uv:4},{name:'3', uv:9}] }>
-                          <Line type="monotone" dataKey="uv" stroke="#60a5fa" />
-                          <CartesianGrid stroke="#27272a" />
+                        <LineChart
+                          data={[
+                            { name: "0", uv: 0 },
+                            { name: "1", uv: 1 },
+                            { name: "2", uv: 4 },
+                            { name: "3", uv: 9 },
+                          ]}
+                        >
+                          <Line
+                            type="monotone"
+                            dataKey="uv"
+                            stroke="hsl(var(--primary))"
+                          />
+                          <CartesianGrid stroke="hsl(var(--border))" />
                           <XAxis dataKey="name" />
                           <YAxis />
                           <Tooltip />
@@ -788,8 +1232,13 @@ export default function Page() {
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="bg-zinc-900/50 border-zinc-800">
-                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4"/>Rendimiento</CardTitle></CardHeader>
+                <Card className="bg-card border-border animate-fade-in">
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Activity className="h-4 w-4" />
+                      Rendimiento
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent>
                     <div className="h-[260px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -799,17 +1248,34 @@ export default function Page() {
                           <YAxis />
                           <Tooltip />
                           <Legend />
-                          <Bar dataKey="hsr" fill="#2563eb" name="HSR" />
-                          <Bar dataKey="distancia" fill="#16a34a" name="Distancia" />
+                          <Bar
+                            dataKey="hsr"
+                            fill="hsl(var(--chart-1))"
+                            name="HSR"
+                          />
+                          <Bar
+                            dataKey="distancia"
+                            fill="hsl(var(--chart-2))"
+                            name="Distancia"
+                          />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="bg-zinc-900/50 border-zinc-800">
-                  <CardHeader><CardTitle className="text-base">Skillset Reference</CardTitle></CardHeader>
+                <Card className="bg-card border-border animate-fade-in">
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      Skillset Reference
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent>
-                    <SkillsetComparator categories={skillCategories} series={skillSeries} max={10} height={320} />
+                    <SkillsetComparator
+                      categories={skillCategories}
+                      series={skillSeries}
+                      max={10}
+                      height={320}
+                    />
                   </CardContent>
                 </Card>
               </div>
@@ -818,38 +1284,67 @@ export default function Page() {
             <CardContent className="w-full mt-2">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 {kpis.map((kpi) => (
-                  <Card key={kpi.title} className="bg-zinc-900/60 border-zinc-800">
+                  <Card key={kpi.title} className="bg-card border-border">
                     <CardContent className="py-3">
-                      <div className="text-sm text-zinc-300">{kpi.title}</div>
+                      <div className="text-sm text-foreground">{kpi.title}</div>
                       <div className="text-xl font-semibold">
-                        {(loadingMetrics && (kpi.title === "Velocidad Max." || kpi.title === "Max. Dist" || kpi.title === "HSR Max" || kpi.title.startsWith("HMLD") || kpi.title === "z6")) ? (
-                          <Loader2 className="inline-block h-4 w-4 animate-spin text-zinc-400" />
+                        {loadingMetrics &&
+                        (kpi.title === "Velocidad Max." ||
+                          kpi.title === "Max. Dist" ||
+                          kpi.title === "HSR Max" ||
+                          kpi.title.startsWith("HMLD") ||
+                          kpi.title === "z6") ? (
+                          <Loader2 className="inline-block h-4 w-4 animate-spin text-muted-foreground" />
                         ) : (
                           kpi.value
                         )}
                       </div>
-                      {kpi.title.startsWith("HMLD") && maxMetrics?.hmld_detail ? (
-                        <a href={hmld25Href} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
-                          {hmld25MatchLabel || 'ver match'}
+                      {kpi.title.startsWith("HMLD") &&
+                      maxMetrics?.hmld_detail ? (
+                        <a
+                          href={hmld25Href}
+                          className="text-[11px] text-muted-foreground mt-1 inline-block hover:underline"
+                        >
+                          {hmld25MatchLabel || "ver match"}
                         </a>
                       ) : null}
                       {kpi.title === "z6" && maxMetrics?.z6_detail ? (
-                        <a href={z6Href} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
-                          {z6MatchLabel || 'ver match'}
+                        <a
+                          href={z6Href}
+                          className="text-[11px] text-muted-foreground mt-1 inline-block hover:underline"
+                        >
+                          {z6MatchLabel || "ver match"}
                         </a>
                       ) : null}
-                      {kpi.title === "Max. Dist" && maxMetrics?.max_distance_detail ? (
-                        <a href={maxDistanceHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
-                          {maxDistanceMatchLabel || 'ver match'}
+                      {kpi.title === "Max. Dist" &&
+                      maxMetrics?.max_distance_detail ? (
+                        <a
+                          href={maxDistanceHref}
+                          className="text-[11px] text-muted-foreground mt-1 inline-block hover:underline"
+                        >
+                          {maxDistanceMatchLabel || "ver match"}
                         </a>
                       ) : null}
                       {kpi.title === "HSR Max" && maxMetrics?.hsr_max_detail ? (
-                        <a href={hsrHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline">
-                          {hsrMatchLabel || 'ver match'}
+                        <a
+                          href={hsrHref}
+                          className="text-[11px] text-muted-foreground mt-1 inline-block hover:underline"
+                        >
+                          {hsrMatchLabel || "ver match"}
                         </a>
                       ) : null}
-                      {kpi.title === "Velocidad Max." && maxMetrics?.max_speed_detail ? (
-                        <a href={matchHref} className="text-[11px] text-zinc-400 mt-1 inline-block hover:underline" title={`tiempo real: ${maxMetrics.max_speed_detail.time ?? '—'} | inicio PT manual: ${maxMetrics.max_speed_detail.manual_first_half_start ?? '—'}s`}>
+                      {kpi.title === "Velocidad Max." &&
+                      maxMetrics?.max_speed_detail ? (
+                        <a
+                          href={matchHref}
+                          className="text-[11px] text-muted-foreground mt-1 inline-block hover:underline"
+                          title={`tiempo real: ${
+                            maxMetrics.max_speed_detail.time ?? "—"
+                          } | inicio PT manual: ${
+                            maxMetrics.max_speed_detail
+                              .manual_first_half_start ?? "—"
+                          }s`}
+                        >
                           {maxSpeedMatchLabel || `ver match`}
                         </a>
                       ) : null}
@@ -860,23 +1355,48 @@ export default function Page() {
             </CardContent>
 
             <CardContent className="w-full mt-2">
-              <Card className="bg-zinc-900/50 border-zinc-800">
+              <Card className="bg-card border-border animate-fade-in">
                 <CardHeader>
-                  <CardTitle className="text-base">Bloque de Adquisición del jugador</CardTitle>
+                  <CardTitle className="text-base">
+                    Bloque de Adquisición del jugador
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[420px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={databloque}>
                         <XAxis dataKey="day" />
-                        <YAxis yAxisId={1} orientation="right" label={{ value: "Distancia Total", angle: -90 }} />
+                        <YAxis
+                          yAxisId={1}
+                          orientation="right"
+                          label={{ value: "Distancia Total", angle: -90 }}
+                        />
                         <Tooltip />
                         <Legend />
-                        <CartesianGrid stroke="#27272a" />
-                        <Bar yAxisId={1} dataKey="distanciaTotal" barSize={28} fill="#4f46e5" />
-                        <Bar yAxisId={1} dataKey="distanciaHML" barSize={28} fill="#06b6d4" />
-                        <YAxis yAxisId={2} label={{ value: "Promedio HSR", angle: -90 }} />
-                        <Line yAxisId={2} type="monotone" dataKey="promedioHSR" stroke="#fff" dot />
+                        <CartesianGrid stroke="hsl(var(--border))" />
+                        <Bar
+                          yAxisId={1}
+                          dataKey="distanciaTotal"
+                          barSize={28}
+                          fill="hsl(var(--chart-1))"
+                        />
+                        <Bar
+                          yAxisId={1}
+                          dataKey="distanciaHML"
+                          barSize={28}
+                          fill="hsl(var(--chart-2))"
+                        />
+                        <YAxis
+                          yAxisId={2}
+                          label={{ value: "Promedio HSR", angle: -90 }}
+                        />
+                        <Line
+                          yAxisId={2}
+                          type="monotone"
+                          dataKey="promedioHSR"
+                          stroke="hsl(var(--foreground))"
+                          dot
+                        />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>

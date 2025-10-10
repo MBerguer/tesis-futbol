@@ -2,16 +2,28 @@
 
 import React from "react";
 
-function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Card({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/50 shadow-sm">
-      <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+    <div className="mt-4 rounded-lg border border-border bg-card shadow-sm">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold text-zinc-200">{title}</div>
-          {subtitle && <div className="text-xs text-zinc-400 mt-0.5">{subtitle}</div>}
+          <div className="text-sm font-semibold text-foreground">{title}</div>
+          {subtitle && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {subtitle}
+            </div>
+          )}
         </div>
       </div>
-      <div className="p-4 text-sm text-zinc-300">{children}</div>
+      <div className="p-4 text-sm text-foreground">{children}</div>
     </div>
   );
 }
@@ -29,22 +41,28 @@ const REQUIRED_HEADERS = [
 
 export default function UploadPage() {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  const [provider, setProvider] = React.useState<'openai' | 'gemini'>('gemini');
+  const [provider, setProvider] = React.useState<"openai" | "gemini">("gemini");
   const UPLOAD_TIMEOUT_MS = 30000; // 30s
-  const STATUS_TIMEOUT_MS = 8000;  // 8s per poll
+  const STATUS_TIMEOUT_MS = 8000; // 8s per poll
   const [pdfFile, setPdfFile] = React.useState<File | null>(null);
   const [csvFile, setCsvFile] = React.useState<File | null>(null);
   const [csvError, setCsvError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = React.useState<number | null>(null);
+  const [uploadProgress, setUploadProgress] = React.useState<number | null>(
+    null
+  );
   const [result, setResult] = React.useState<any>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [jobStatus, setJobStatus] = React.useState<any>(null);
   const [polling, setPolling] = React.useState<boolean>(false);
   const [sentPdf, setSentPdf] = React.useState<boolean>(false);
   const [sentCsv, setSentCsv] = React.useState<boolean>(false);
-  const [pdfState, setPdfState] = React.useState<'idle' | 'uploading' | 'confirmed' | 'analyzing' | 'completed' | 'error'>("idle");
-  const [csvState, setCsvState] = React.useState<'idle' | 'uploading' | 'uploaded'>("idle");
+  const [pdfState, setPdfState] = React.useState<
+    "idle" | "uploading" | "confirmed" | "analyzing" | "completed" | "error"
+  >("idle");
+  const [csvState, setCsvState] = React.useState<
+    "idle" | "uploading" | "uploaded"
+  >("idle");
   const [runSqlLoading, setRunSqlLoading] = React.useState<boolean>(false);
   const [runSqlResult, setRunSqlResult] = React.useState<any>(null);
   const [runSqlError, setRunSqlError] = React.useState<string | null>(null);
@@ -54,7 +72,7 @@ export default function UploadPage() {
 
   // Initialize edited SQL when a completed job arrives
   React.useEffect(() => {
-    if (jobStatus && jobStatus.status === 'completed' && jobStatus.summary) {
+    if (jobStatus && jobStatus.status === "completed" && jobStatus.summary) {
       const sql = extractSql(jobStatus.summary);
       setSqlEdited(sql || null);
       setSqlEditMode(false);
@@ -80,24 +98,58 @@ export default function UploadPage() {
   const highlightSql = (sql: string): string => {
     // Basic HTML escape
     let h = sql
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
     // Comments
-    h = h.replace(/(^|\n)\s*--.*(?=\n|$)/g, (m) => `<span class="com">${m}</span>`);
+    h = h.replace(
+      /(^|\n)\s*--.*(?=\n|$)/g,
+      (m) => `<span class="com">${m}</span>`
+    );
     // Strings
     h = h.replace(/'(?:''|[^'])*'/g, (m) => `<span class="str">${m}</span>`);
     // Numbers
     h = h.replace(/\b\d+(?:\.\d+)?\b/g, (m) => `<span class="num">${m}</span>`);
     // Functions (common ones we use)
-    h = h.replace(/\b(jsonb?_build_object|gen_random_uuid|to_timestamp)\b/gi, (m) => `<span class="fn">${m}</span>`);
+    h = h.replace(
+      /\b(jsonb?_build_object|gen_random_uuid|to_timestamp)\b/gi,
+      (m) => `<span class="fn">${m}</span>`
+    );
     // Types
     h = h.replace(/\b(event_type)\b/gi, (m) => `<span class="ty">${m}</span>`);
     // Keywords
     const kw = [
-      'select','insert','into','values','on','conflict','do','nothing','update','set','where','from','join','left','right','inner','outer','with','as','and','or','null','distinct','returning','order','by','group','limit','offset'
+      "select",
+      "insert",
+      "into",
+      "values",
+      "on",
+      "conflict",
+      "do",
+      "nothing",
+      "update",
+      "set",
+      "where",
+      "from",
+      "join",
+      "left",
+      "right",
+      "inner",
+      "outer",
+      "with",
+      "as",
+      "and",
+      "or",
+      "null",
+      "distinct",
+      "returning",
+      "order",
+      "by",
+      "group",
+      "limit",
+      "offset",
     ];
-    const kwRe = new RegExp(`\\b(${kw.join('|')})\\b`, 'gi');
+    const kwRe = new RegExp(`\\b(${kw.join("|")})\\b`, "gi");
     h = h.replace(kwRe, (m) => `<span class="kw">${m.toUpperCase()}</span>`);
     return h;
   };
@@ -105,7 +157,8 @@ export default function UploadPage() {
   const validateCsvHeaders = async (file: File): Promise<string | null> => {
     try {
       const text = await file.text();
-      const firstLine = text.split(/\r?\n/).find((l) => l.trim().length > 0) || "";
+      const firstLine =
+        text.split(/\r?\n/).find((l) => l.trim().length > 0) || "";
       // naive CSV split that handles quoted commas minimally
       const headers = firstLine
         .split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/)
@@ -128,8 +181,8 @@ export default function UploadPage() {
     setRunSqlResult(null);
     setRunSqlError(null);
     setUploadProgress(null);
-    setPdfState('idle');
-    setCsvState('idle');
+    setPdfState("idle");
+    setCsvState("idle");
     setSqlEdited(null);
     setSqlEditMode(false);
     if (!f) {
@@ -148,8 +201,8 @@ export default function UploadPage() {
     setRunSqlResult(null);
     setRunSqlError(null);
     setUploadProgress(null);
-    setPdfState('idle');
-    setCsvState('idle');
+    setPdfState("idle");
+    setCsvState("idle");
     setSqlEdited(null);
     setSqlEditMode(false);
   };
@@ -172,8 +225,8 @@ export default function UploadPage() {
     setUploadProgress(0);
     setSentPdf(!!pdfFile);
     setSentCsv(!!csvFile);
-    setPdfState(pdfFile ? 'uploading' : 'idle');
-    setCsvState(csvFile ? 'uploading' : 'idle');
+    setPdfState(pdfFile ? "uploading" : "idle");
+    setCsvState(csvFile ? "uploading" : "idle");
     try {
       const form = new FormData();
       if (pdfFile) form.append("pdf", pdfFile);
@@ -209,38 +262,48 @@ export default function UploadPage() {
       });
 
       setResult(data);
-      if (pdfFile) setPdfState('confirmed');
-      if (csvFile) setCsvState('uploaded');
+      if (pdfFile) setPdfState("confirmed");
+      if (csvFile) setCsvState("uploaded");
       // If backend started an OpenAI PDF job, poll status
       if (data && data.upload_id && data.pdf) {
         setPolling(true);
-        setPdfState('analyzing');
+        setPdfState("analyzing");
         const id = data.upload_id as string;
         let tries = 0;
         const timer = setInterval(async () => {
           tries += 1;
           try {
-            const res = await fetch(`${API_BASE}/api/uploads/${id}/status`, { signal: (AbortSignal as any).timeout ? (AbortSignal as any).timeout(STATUS_TIMEOUT_MS) : undefined });
+            const res = await fetch(`${API_BASE}/api/uploads/${id}/status`, {
+              signal: (AbortSignal as any).timeout
+                ? (AbortSignal as any).timeout(STATUS_TIMEOUT_MS)
+                : undefined,
+            });
             if (!res.ok) throw new Error("status fetch failed");
             const js = await res.json();
             setJobStatus(js);
-            if (js && (js.status === 'completed' || js.status === 'error' || js.status === 'not_found')) {
+            if (
+              js &&
+              (js.status === "completed" ||
+                js.status === "error" ||
+                js.status === "not_found")
+            ) {
               clearInterval(timer);
               setPolling(false);
-              if (js.status === 'completed') setPdfState('completed');
-              else setPdfState('error');
+              if (js.status === "completed") setPdfState("completed");
+              else setPdfState("error");
             }
           } catch {}
-          if (tries > 120) { // ~10 minutes at 5s interval
+          if (tries > 120) {
+            // ~10 minutes at 5s interval
             clearInterval(timer);
             setPolling(false);
-            setPdfState('error');
+            setPdfState("error");
           }
         }, 5000);
       }
     } catch (e: any) {
       setError(e?.message || "Upload failed");
-      if (pdfFile) setPdfState('error');
+      if (pdfFile) setPdfState("error");
     } finally {
       setSubmitting(false);
       setTimeout(() => setUploadProgress(null), 500);
@@ -252,114 +315,212 @@ export default function UploadPage() {
       <h1 className="text-xl font-semibold mb-4">Upload PDF + CSV</h1>
       <form onSubmit={onSubmit} className="space-y-4 max-w-xl">
         <div className="space-y-1">
-          <label className="text-sm text-zinc-300">Provider</label>
+          <label className="text-sm text-foreground">Provider</label>
           <select
             value={provider}
-            onChange={(e)=>setProvider((e.target.value as 'openai' | 'gemini'))}
+            onChange={(e) => setProvider(e.target.value as "openai" | "gemini")}
             disabled={submitting}
-            className={`w-full h-9 rounded-md px-2 text-sm ${submitting ? 'bg-zinc-900/30 border-zinc-900 text-zinc-500' : 'bg-zinc-900/50 border border-zinc-800 text-zinc-200'}`}
+            className={`w-full h-9 rounded-md px-2 text-sm ${
+              submitting
+                ? "bg-muted border-border text-muted-foreground"
+                : "bg-background border border-input text-foreground"
+            }`}
           >
             <option value="openai">OpenAI</option>
             <option value="gemini">Gemini</option>
           </select>
-          <div className="text-xs text-zinc-500">Controls which model processes the PDF.</div>
+          <div className="text-xs text-muted-foreground">
+            Controls which model processes the PDF.
+          </div>
         </div>
         <div className="space-y-1">
-          <label className="text-sm text-zinc-300">PDF file</label>
+          <label className="text-sm text-foreground">PDF file</label>
           <input
             type="file"
             accept="application/pdf,.pdf"
             disabled={submitting}
             onChange={(e) => onPdfChange(e.target.files?.[0] || null)}
-            className={`block w-full text-sm ${submitting ? 'text-zinc-500' : 'text-zinc-200'} file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold ${submitting ? 'file:bg-zinc-800/40 file:text-zinc-500' : 'file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700'}`}
+            className={`block w-full text-sm ${
+              submitting ? "text-muted-foreground" : "text-foreground"
+            } file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold ${
+              submitting
+                ? "file:bg-muted file:text-muted-foreground"
+                : "file:bg-secondary file:text-secondary-foreground hover:file:bg-accent"
+            }`}
           />
-          {pdfFile && <div className="text-xs text-zinc-400">Selected: {pdfFile.name}</div>}
+          {pdfFile && (
+            <div className="text-xs text-muted-foreground">
+              Selected: {pdfFile.name}
+            </div>
+          )}
         </div>
 
         <div className="space-y-1">
-          <label className="text-sm text-zinc-300">CSV file</label>
+          <label className="text-sm text-foreground">CSV file</label>
           <input
             type="file"
             accept="text/csv,.csv"
             onChange={(e) => onCsvChange(e.target.files?.[0] || null)}
             disabled={submitting}
-            className={`block w-full text-sm ${submitting ? 'text-zinc-500' : 'text-zinc-200'} file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold ${submitting ? 'file:bg-zinc-800/40 file:text-zinc-500' : 'file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700'}`}
+            className={`block w-full text-sm ${
+              submitting ? "text-muted-foreground" : "text-foreground"
+            } file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold ${
+              submitting
+                ? "file:bg-muted file:text-muted-foreground"
+                : "file:bg-secondary file:text-secondary-foreground hover:file:bg-accent"
+            }`}
           />
           {csvFile && (
-            <Card title="CSV details" subtitle={csvError ? 'Validation error' : 'Ready to upload'}>
-              <div className="text-zinc-200 text-sm break-all mb-1">{csvFile.name}</div>
-              <div className="text-xs text-zinc-400 mb-2">{csvFile.size} bytes</div>
+            <Card
+              title="CSV details"
+              subtitle={csvError ? "Validation error" : "Ready to upload"}
+            >
+              <div className="text-foreground text-sm break-all mb-1">
+                {csvFile.name}
+              </div>
+              <div className="text-xs text-muted-foreground mb-2">
+                {csvFile.size} bytes
+              </div>
               {csvError ? (
                 <div className="text-xs text-red-400">{csvError}</div>
               ) : (
                 <>
-                  <div className="text-xs text-emerald-400 mb-2">CSV headers look good.</div>
-                  <div className="text-xs text-zinc-400">Required columns:</div>
-                  <ul className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-zinc-300">
-                    {REQUIRED_HEADERS.map((h)=> (
-                      <li key={h} className="rounded border border-zinc-800 bg-zinc-900/30 px-2 py-1">{h}</li>
+                  <div className="text-xs text-emerald-400 mb-2">
+                    CSV headers look good.
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Required columns:
+                  </div>
+                  <ul className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-foreground">
+                    {REQUIRED_HEADERS.map((h) => (
+                      <li
+                        key={h}
+                        className="rounded border border-border bg-muted px-2 py-1"
+                      >
+                        {h}
+                      </li>
                     ))}
                   </ul>
                 </>
               )}
             </Card>
           )}
-          <div className="text-xs text-zinc-500 mt-1">
+          <div className="text-xs text-muted-foreground mt-1">
             Required columns: {REQUIRED_HEADERS.join(", ")}
           </div>
-          <div className="text-xs text-zinc-500 mt-1">You can upload just one file or both.</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            You can upload just one file or both.
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             type="submit"
-            disabled={submitting || (!pdfFile && !csvFile) || (!!csvFile && !!csvError)}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border ${submitting ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : 'bg-zinc-900/50 border-zinc-800 text-zinc-200 hover:bg-zinc-900 hover:border-zinc-700'}`}
+            disabled={
+              submitting || (!pdfFile && !csvFile) || (!!csvFile && !!csvError)
+            }
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border ${
+              submitting
+                ? "bg-muted border-border text-muted-foreground"
+                : "bg-card border-border text-foreground hover:bg-accent hover:border-ring"
+            }`}
           >
             {submitting && (
               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                ></path>
               </svg>
             )}
-            <span>{submitting ? 'Uploading…' : 'Upload'}</span>
+            <span>{submitting ? "Uploading…" : "Upload"}</span>
           </button>
           {error && <span className="text-sm text-red-400">{error}</span>}
-          {result && <span className="text-sm text-emerald-400">Upload confirmed</span>}
+          {result && (
+            <span className="text-sm text-emerald-400">Upload confirmed</span>
+          )}
         </div>
 
         {(sentPdf || sentCsv) && (
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
             {sentPdf && (
-              <div className={`inline-flex items-center gap-1 px-2 py-1 rounded border ${pdfState === 'error' ? 'border-red-500/40 bg-red-900/20 text-red-300' : pdfState === 'completed' ? 'border-emerald-500/40 bg-emerald-900/20 text-emerald-300' : 'border-zinc-700 bg-zinc-900/40 text-zinc-300'}`}>
-                {(pdfState === 'uploading' || pdfState === 'analyzing') && (
+              <div
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded border ${
+                  pdfState === "error"
+                    ? "border-red-500/40 bg-red-900/20 text-red-300"
+                    : pdfState === "completed"
+                    ? "border-emerald-500/40 bg-emerald-900/20 text-emerald-300"
+                    : "border-border bg-card text-foreground"
+                }`}
+              >
+                {(pdfState === "uploading" || pdfState === "analyzing") && (
                   <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    ></path>
                   </svg>
                 )}
                 <span className="font-medium">PDF:</span>
                 <span>
-                  {pdfState === 'uploading' && 'Uploading…'}
-                  {pdfState === 'confirmed' && 'Uploaded'}
-                  {pdfState === 'analyzing' && (provider === 'gemini' ? 'Analyzing with Gemini…' : 'Analyzing with OpenAI…')}
-                  {pdfState === 'completed' && 'Analysis complete'}
-                  {pdfState === 'error' && 'Error'}
+                  {pdfState === "uploading" && "Uploading…"}
+                  {pdfState === "confirmed" && "Uploaded"}
+                  {pdfState === "analyzing" &&
+                    (provider === "gemini"
+                      ? "Analyzing with Gemini…"
+                      : "Analyzing with OpenAI…")}
+                  {pdfState === "completed" && "Analysis complete"}
+                  {pdfState === "error" && "Error"}
                 </span>
               </div>
             )}
             {sentCsv && (
-              <div className={`inline-flex items-center gap-1 px-2 py-1 rounded border ${csvState === 'uploaded' ? 'border-emerald-500/40 bg-emerald-900/20 text-emerald-300' : 'border-zinc-700 bg-zinc-900/40 text-zinc-300'}`}>
-                {csvState === 'uploading' && (
+              <div
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded border ${
+                  csvState === "uploaded"
+                    ? "border-emerald-500/40 bg-emerald-900/20 text-emerald-300"
+                    : "border-border bg-card text-foreground"
+                }`}
+              >
+                {csvState === "uploading" && (
                   <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    ></path>
                   </svg>
                 )}
                 <span className="font-medium">CSV:</span>
                 <span>
-                  {csvState === 'uploading' && 'Uploading…'}
-                  {csvState === 'uploaded' && 'Uploaded'}
+                  {csvState === "uploading" && "Uploading…"}
+                  {csvState === "uploaded" && "Uploaded"}
                 </span>
               </div>
             )}
@@ -368,191 +529,327 @@ export default function UploadPage() {
 
         {uploadProgress !== null && (
           <div className="mt-2">
-            <div className="h-2 w-full bg-zinc-800 rounded">
+            <div className="h-2 w-full bg-muted rounded">
               <div
                 className="h-2 bg-emerald-500 rounded"
-                style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%` }}
+                style={{
+                  width: `${Math.max(0, Math.min(100, uploadProgress))}%`,
+                }}
               />
             </div>
-            <div className="text-xs text-zinc-400 mt-1">{uploadProgress}%</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {uploadProgress}%
+            </div>
           </div>
         )}
       </form>
 
       {result && (
-        <Card title="Upload confirmation" subtitle="Initial response from server">
+        <Card
+          title="Upload confirmation"
+          subtitle="Initial response from server"
+        >
           <div className="flex items-center gap-2 mb-3">
-            <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs border ${result.status === 'ok' ? 'border-emerald-500/40 bg-emerald-900/20 text-emerald-300' : 'border-red-500/40 bg-red-900/20 text-red-300'}`}>{String(result.status || 'unknown')}</span>
-            {uploadProgress !== null && <span className="text-xs text-zinc-400">Upload {uploadProgress}%</span>}
+            <span
+              className={`inline-flex items-center rounded px-2 py-0.5 text-xs border ${
+                result.status === "ok"
+                  ? "border-emerald-500/40 bg-emerald-900/20 text-emerald-300"
+                  : "border-red-500/40 bg-red-900/20 text-red-300"
+              }`}
+            >
+              {String(result.status || "unknown")}
+            </span>
+            {uploadProgress !== null && (
+              <span className="text-xs text-muted-foreground">
+                Upload {uploadProgress}%
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {result.pdf && (
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
-                <div className="text-xs uppercase text-zinc-400 mb-1">PDF</div>
-                <div className="text-zinc-200 break-all">{result.pdf.filename || '—'}</div>
-                {typeof result.pdf.size === 'number' && (
-                  <div className="text-xs text-zinc-400 mt-0.5">{result.pdf.size} bytes</div>
+              <div className="rounded-md border border-border bg-card p-3">
+                <div className="text-xs uppercase text-muted-foreground mb-1">
+                  PDF
+                </div>
+                <div className="text-foreground break-all">
+                  {result.pdf.filename || "—"}
+                </div>
+                {typeof result.pdf.size === "number" && (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {result.pdf.size} bytes
+                  </div>
                 )}
               </div>
             )}
             {result.csv && (
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
-                <div className="text-xs uppercase text-zinc-400 mb-1">CSV</div>
-                <div className="text-zinc-200 break-all">{result.csv.filename || '—'}</div>
-                {typeof result.csv.size === 'number' && (
-                  <div className="text-xs text-zinc-400 mt-0.5">{result.csv.size} bytes</div>
+              <div className="rounded-md border border-border bg-card p-3">
+                <div className="text-xs uppercase text-muted-foreground mb-1">
+                  CSV
+                </div>
+                <div className="text-foreground break-all">
+                  {result.csv.filename || "—"}
+                </div>
+                {typeof result.csv.size === "number" && (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {result.csv.size} bytes
+                  </div>
                 )}
               </div>
             )}
           </div>
           {result.upload_id && (
             <div className="mt-3 flex items-center gap-2">
-              <span className="text-xs text-zinc-400">Upload ID:</span>
-              <code className="text-xs bg-zinc-950/60 border border-zinc-800 rounded px-2 py-1 break-all">{String(result.upload_id)}</code>
+              <span className="text-xs text-muted-foreground">Upload ID:</span>
+              <code className="text-xs bg-muted border border-border rounded px-2 py-1 break-all">
+                {String(result.upload_id)}
+              </code>
               <button
                 type="button"
-                onClick={async () => { try { await navigator.clipboard.writeText(String(result.upload_id)); setCopiedId(true); setTimeout(()=>setCopiedId(false), 1200); } catch {} }}
-                className="text-xs px-2 py-1 rounded border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900 text-zinc-200"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(
+                      String(result.upload_id)
+                    );
+                    setCopiedId(true);
+                    setTimeout(() => setCopiedId(false), 1200);
+                  } catch {}
+                }}
+                className="text-xs px-2 py-1 rounded border border-border bg-card hover:bg-accent text-foreground"
               >
-                {copiedId ? 'Copied' : 'Copy'}
+                {copiedId ? "Copied" : "Copy"}
               </button>
             </div>
           )}
           <details className="mt-3">
-            <summary className="cursor-pointer text-xs text-zinc-400">Show raw JSON</summary>
-            <div className="mt-2 font-mono whitespace-pre-wrap break-all">{JSON.stringify(result, null, 2)}</div>
+            <summary className="cursor-pointer text-xs text-muted-foreground">
+              Show raw JSON
+            </summary>
+            <div className="mt-2 font-mono whitespace-pre-wrap break-all">
+              {JSON.stringify(result, null, 2)}
+            </div>
           </details>
         </Card>
       )}
 
       {jobStatus && (
         <Card
-          title={`${String(jobStatus.provider || (provider === 'gemini' ? 'gemini' : 'openai'))} processing`}
+          title={`${String(
+            jobStatus.provider || (provider === "gemini" ? "gemini" : "openai")
+          )} processing`}
           subtitle={`Status: ${String(jobStatus.status)}`}
         >
           {/* Pretty header info for partial/progress */}
-          {jobStatus.status !== 'completed' && jobStatus.status !== 'error' && (
+          {jobStatus.status !== "completed" && jobStatus.status !== "error" && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {jobStatus.pdf && (
-                <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
-                  <div className="text-xs uppercase text-zinc-400 mb-1">PDF</div>
-                  <div className="text-zinc-200 break-all">{jobStatus.pdf.filename || '—'}</div>
-                  {typeof jobStatus.pdf.size === 'number' && (
-                    <div className="text-xs text-zinc-400 mt-0.5">{jobStatus.pdf.size} bytes</div>
+                <div className="rounded-md border border-border bg-card p-3">
+                  <div className="text-xs uppercase text-muted-foreground mb-1">
+                    PDF
+                  </div>
+                  <div className="text-foreground break-all">
+                    {jobStatus.pdf.filename || "—"}
+                  </div>
+                  {typeof jobStatus.pdf.size === "number" && (
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {jobStatus.pdf.size} bytes
+                    </div>
                   )}
                 </div>
               )}
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/30 p-3 flex items-center gap-2">
-                <svg className="animate-spin h-4 w-4 text-zinc-300" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+              <div className="rounded-md border border-border bg-card p-3 flex items-center gap-2">
+                <svg
+                  className="animate-spin h-4 w-4 text-muted-foreground"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  ></path>
                 </svg>
                 <div>
-                  <div className="text-zinc-200">Analyzing…</div>
-                  <div className="text-xs text-zinc-400">This may take up to a minute</div>
+                  <div className="text-foreground">Analyzing…</div>
+                  <div className="text-xs text-muted-foreground">
+                    This may take up to a minute
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
           {/* Completed/error pretty blocks */}
-          {jobStatus.status === 'completed' && jobStatus.summary && (() => {
-            const sql = extractSql(jobStatus.summary);
-            if (sql) {
+          {jobStatus.status === "completed" &&
+            jobStatus.summary &&
+            (() => {
+              const sql = extractSql(jobStatus.summary);
+              if (sql) {
+                return (
+                  <div className="mt-3">
+                    <div className="text-xs uppercase text-muted-foreground mb-1">
+                      SQL
+                    </div>
+                    {!sqlEditMode ? (
+                      <pre
+                        className="font-mono bg-muted rounded p-3 border border-border max-h-96 overflow-auto sql"
+                        dangerouslySetInnerHTML={{
+                          __html: highlightSql(sqlEdited ?? sql),
+                        }}
+                      />
+                    ) : (
+                      <textarea
+                        className="w-full font-mono bg-muted rounded p-3 border border-border text-foreground min-h-[200px]"
+                        value={sqlEdited ?? sql}
+                        onChange={(e) => setSqlEdited(e.target.value)}
+                      />
+                    )}
+                    <style jsx global>{`
+                      .sql .kw {
+                        color: #7ee787;
+                        font-weight: 600;
+                      }
+                      .sql .fn {
+                        color: #7cd4ff;
+                      }
+                      .sql .str {
+                        color: #ffdf8a;
+                      }
+                      .sql .num {
+                        color: #d2a8ff;
+                      }
+                      .sql .com {
+                        color: #9ca3af;
+                        font-style: italic;
+                      }
+                      .sql .ty {
+                        color: #ffa657;
+                      }
+                    `}</style>
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={submitting || runSqlLoading}
+                        onClick={() => setSqlEditMode((v) => !v)}
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border ${
+                          runSqlLoading || submitting
+                            ? "bg-muted border-border text-muted-foreground"
+                            : "bg-card border-border text-foreground hover:bg-accent hover:border-ring"
+                        }`}
+                      >
+                        {sqlEditMode ? "View highlighted" : "Edit SQL"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={submitting || runSqlLoading}
+                        onClick={async () => {
+                          setRunSqlError(null);
+                          setRunSqlResult(null);
+                          setRunSqlLoading(true);
+                          try {
+                            const sqlToRun = sqlEditMode
+                              ? sqlEdited ?? sql
+                              : sql;
+                            const res = await fetch(
+                              `${API_BASE}/api/sql/execute`,
+                              {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ sql: sqlToRun }),
+                              }
+                            );
+                            if (!res.ok)
+                              throw new Error(`Execute failed (${res.status})`);
+                            const js = await res.json();
+                            setRunSqlResult(js);
+                          } catch (err: any) {
+                            setRunSqlError(
+                              err?.message || "Failed to execute SQL"
+                            );
+                          } finally {
+                            setRunSqlLoading(false);
+                          }
+                        }}
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border ${
+                          runSqlLoading || submitting
+                            ? "bg-muted border-border text-muted-foreground"
+                            : "bg-card border-border text-foreground hover:bg-accent hover:border-ring"
+                        }`}
+                      >
+                        {runSqlLoading && (
+                          <svg
+                            className="animate-spin h-4 w-4"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                            ></path>
+                          </svg>
+                        )}
+                        <span>Confirm & Store in DB</span>
+                      </button>
+                      {runSqlError && (
+                        <span className="text-xs text-red-400">
+                          {runSqlError}
+                        </span>
+                      )}
+                    </div>
+                    {runSqlResult && (
+                      <div className="mt-2 rounded-md border border-emerald-700/40 bg-emerald-950/20 p-2 text-xs text-emerald-300">
+                        {JSON.stringify(runSqlResult)}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
               return (
                 <div className="mt-3">
-                  <div className="text-xs uppercase text-zinc-400 mb-1">SQL</div>
-                  {!sqlEditMode ? (
-                    <pre className="font-mono bg-zinc-950/60 rounded p-3 border border-zinc-800 max-h-96 overflow-auto sql" dangerouslySetInnerHTML={{ __html: highlightSql(sqlEdited ?? sql) }} />
-                  ) : (
-                    <textarea
-                      className="w-full font-mono bg-zinc-950/60 rounded p-3 border border-zinc-800 text-zinc-200 min-h-[200px]"
-                      value={sqlEdited ?? sql}
-                      onChange={(e)=>setSqlEdited(e.target.value)}
-                    />
-                  )}
-                  <style jsx global>{`
-                    .sql .kw{ color:#7ee787; font-weight:600; }
-                    .sql .fn{ color:#7cd4ff; }
-                    .sql .str{ color:#ffdf8a; }
-                    .sql .num{ color:#d2a8ff; }
-                    .sql .com{ color:#9ca3af; font-style:italic; }
-                    .sql .ty{ color:#ffa657; }
-                  `}</style>
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={submitting || runSqlLoading}
-                      onClick={() => setSqlEditMode((v)=>!v)}
-                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border ${runSqlLoading || submitting ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : 'bg-zinc-900/50 border-zinc-800 text-zinc-200 hover:bg-zinc-900 hover:border-zinc-700'}`}
-                    >
-                      {sqlEditMode ? 'View highlighted' : 'Edit SQL'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={submitting || runSqlLoading}
-                      onClick={async () => {
-                        setRunSqlError(null);
-                        setRunSqlResult(null);
-                        setRunSqlLoading(true);
-                        try {
-                          const sqlToRun = (sqlEditMode ? (sqlEdited ?? sql) : sql);
-                          const res = await fetch(`${API_BASE}/api/sql/execute`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ sql: sqlToRun }),
-                          });
-                          if (!res.ok) throw new Error(`Execute failed (${res.status})`);
-                          const js = await res.json();
-                          setRunSqlResult(js);
-                        } catch (err: any) {
-                          setRunSqlError(err?.message || 'Failed to execute SQL');
-                        } finally {
-                          setRunSqlLoading(false);
-                        }
-                      }}
-                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border ${runSqlLoading || submitting ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : 'bg-zinc-900/50 border-zinc-800 text-zinc-200 hover:bg-zinc-900 hover:border-zinc-700'}`}
-                    >
-                      {runSqlLoading && (
-                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                        </svg>
-                      )}
-                      <span>Confirm & Store in DB</span>
-                    </button>
-                    {runSqlError && <span className="text-xs text-red-400">{runSqlError}</span>}
+                  <div className="text-xs uppercase text-muted-foreground mb-1">
+                    Summary
                   </div>
-                  {runSqlResult && (
-                    <div className="mt-2 rounded-md border border-emerald-700/40 bg-emerald-950/20 p-2 text-xs text-emerald-300">
-                      {JSON.stringify(runSqlResult)}
-                    </div>
-                  )}
+                  <pre className="font-mono whitespace-pre-wrap break-words text-foreground bg-muted rounded p-3 border border-border max-h-80 overflow-auto">
+                    {String(jobStatus.summary)}
+                  </pre>
                 </div>
               );
-            }
-            return (
-              <div className="mt-3">
-                <div className="text-xs uppercase text-zinc-400 mb-1">Summary</div>
-                <pre className="font-mono whitespace-pre-wrap break-words text-zinc-200 bg-zinc-900/60 rounded p-3 border border-zinc-800 max-h-80 overflow-auto">{String(jobStatus.summary)}</pre>
-              </div>
-            );
-          })()}
-          {jobStatus.status === 'error' && (
-            <div className="mt-3 rounded-md border border-red-900/50 bg-red-950/30 p-3 text-red-300">There was an error while processing.</div>
+            })()}
+          {jobStatus.status === "error" && (
+            <div className="mt-3 rounded-md border border-red-900/50 bg-red-950/30 p-3 text-red-300">
+              There was an error while processing.
+            </div>
           )}
 
           <details className="mt-3">
-            <summary className="cursor-pointer text-xs text-zinc-400">Show raw</summary>
-            <div className="mt-2 font-mono whitespace-pre-wrap break-all">{JSON.stringify(jobStatus, null, 2)}</div>
+            <summary className="cursor-pointer text-xs text-muted-foreground">
+              Show raw
+            </summary>
+            <div className="mt-2 font-mono whitespace-pre-wrap break-all">
+              {JSON.stringify(jobStatus, null, 2)}
+            </div>
           </details>
           {polling && (
-            <div className="mt-2 text-xs text-zinc-400">Updating every 5s…</div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              Updating every 5s…
+            </div>
           )}
         </Card>
       )}
     </div>
   );
 }
-
-

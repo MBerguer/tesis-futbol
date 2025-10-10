@@ -121,7 +121,13 @@ interface SharpAngleRow {
   angle_degrees: number;
   actual_dist_in: number;
   actual_dist_out: number;
-  trace?: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }>;
+  trace?: Array<{
+    seconds_since_midnight: number;
+    lat: number;
+    lon: number;
+    speed_kmh: number;
+    time: string;
+  }>;
 }
 
 interface SharpAngle2Row {
@@ -136,7 +142,7 @@ interface SharpAngle2Row {
   turning_angle_category: string;
 }
 
-  interface MatchDetails {
+interface MatchDetails {
   match_id: string;
   competition_id: string | null;
   competition_name?: string | null;
@@ -163,40 +169,69 @@ interface SharpAngle2Row {
 
 export default function Page() {
   const searchParams = useSearchParams();
-  const { reloadToken: globalReloadToken, selectedTable: selectedTableFromContext, setSelectedTable } = useMatchContext();
-  const selectedTable = selectedTableFromContext ?? searchParams.get('table');
-  const selectedMatchId = searchParams.get('match');
+  const {
+    reloadToken: globalReloadToken,
+    selectedTable: selectedTableFromContext,
+    setSelectedTable,
+  } = useMatchContext();
+  const selectedTable = selectedTableFromContext ?? searchParams.get("table");
+  const selectedMatchId = searchParams.get("match");
   const [matchDetails, setMatchDetails] = useState<MatchDetails | null>(null);
-  const [matchDetailsLoading, setMatchDetailsLoading] = useState<boolean>(false);
-  const [matchDetailsError, setMatchDetailsError] = useState<string | null>(null);
+  const [matchDetailsLoading, setMatchDetailsLoading] =
+    useState<boolean>(false);
+  const [matchDetailsError, setMatchDetailsError] = useState<string | null>(
+    null
+  );
   const [players, setPlayers] = useState<string[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
   const [entries, setEntries] = useState<MatchEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [periods, setPeriods] = useState<MatchPeriods | null>(null);
   const [kickoffSpike, setKickoffSpike] = useState<number | null>(null);
-  const [thresholds, setThresholds] = useState<{ match: number; halftime: number; kickoff: number } | null>(null);
+  const [thresholds, setThresholds] = useState<{
+    match: number;
+    halftime: number;
+    kickoff: number;
+  } | null>(null);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
   const [videoTimeSec, setVideoTimeSec] = useState<number>(0);
   const [youtubeLink, setYoutubeLink] = useState<string | null>(null);
-  const handleVideoSecondChange = React.useCallback((s: number)=> setVideoTimeSec(s-2), []);
+  const handleVideoSecondChange = React.useCallback(
+    (s: number) => setVideoTimeSec(s - 2),
+    []
+  );
   const [pendingSeek, setPendingSeek] = useState<number | undefined>(undefined);
   const [showPatchPanel, setShowPatchPanel] = useState<boolean>(false);
-  const [patchedFirstHalfStart, setPatchedFirstHalfStart] = useState<number | null>(null);
-  const [patchedSecondHalfStart, setPatchedSecondHalfStart] = useState<number | null>(null);
-  const [patchedFirstHalfDuration, setPatchedFirstHalfDuration] = useState<number | null>(null);
-  const [patchedSecondHalfDuration, setPatchedSecondHalfDuration] = useState<number | null>(null);
+  const [patchedFirstHalfStart, setPatchedFirstHalfStart] = useState<
+    number | null
+  >(null);
+  const [patchedSecondHalfStart, setPatchedSecondHalfStart] = useState<
+    number | null
+  >(null);
+  const [patchedFirstHalfDuration, setPatchedFirstHalfDuration] = useState<
+    number | null
+  >(null);
+  const [patchedSecondHalfDuration, setPatchedSecondHalfDuration] = useState<
+    number | null
+  >(null);
   const [fhDurInput, setFhDurInput] = useState<string>("");
   const [shDurInput, setShDurInput] = useState<string>("");
   const [fhDurError, setFhDurError] = useState<string | null>(null);
   const [shDurError, setShDurError] = useState<string | null>(null);
-  const [positionsResetKey, setPositionsResetKey] = useState<number | null>(null);
-  const [hasPendingDurationChanges, setHasPendingDurationChanges] = useState<boolean>(false);
+  const [positionsResetKey, setPositionsResetKey] = useState<number | null>(
+    null
+  );
+  const [hasPendingDurationChanges, setHasPendingDurationChanges] =
+    useState<boolean>(false);
   const [savingPeriods, setSavingPeriods] = useState<boolean>(false);
-  const [savingPeriodsError, setSavingPeriodsError] = useState<string | null>(null);
-  
+  const [savingPeriodsError, setSavingPeriodsError] = useState<string | null>(
+    null
+  );
+
   const [worstCases, setWorstCases] = useState<WorstCase[]>([]);
-  const [sprintsInWorstCases, setSprintsInWorstCases] = useState<SprintInWorstCase[]>([]);
+  const [sprintsInWorstCases, setSprintsInWorstCases] = useState<
+    SprintInWorstCase[]
+  >([]);
   const [loadingWorstCases, setLoadingWorstCases] = useState(false);
   const [loadingSprints, setLoadingSprints] = useState(false);
   const [showWorstCases, setShowWorstCases] = useState(false);
@@ -206,95 +241,166 @@ export default function Page() {
   const [loadingEvents, setLoadingEvents] = useState<boolean>(false);
   const [lineupMinutes, setLineupMinutes] = useState<any[]>([]);
   const [loadingLineup, setLoadingLineup] = useState<boolean>(false);
-  const [eventsTab, setEventsTab] = useState<'events'|'lineup'>('events');
+  const [eventsTab, setEventsTab] = useState<"events" | "lineup">("events");
   const [accelerations, setAccelerations] = useState<AccelerationRow[]>([]);
-  const [loadingAccelerations, setLoadingAccelerations] = useState<boolean>(false);
+  const [loadingAccelerations, setLoadingAccelerations] =
+    useState<boolean>(false);
   const [accelEvents, setAccelEvents] = useState<AccelEventRow[]>([]);
   const [loadingAccelEvents, setLoadingAccelEvents] = useState<boolean>(false);
-  const [accelSort, setAccelSort] = useState<{ key: keyof AccelEventRow; dir: 'asc' | 'desc' } | null>(null);
+  const [accelSort, setAccelSort] = useState<{
+    key: keyof AccelEventRow;
+    dir: "asc" | "desc";
+  } | null>(null);
   const [accelPage, setAccelPage] = useState<number>(1);
   const ACCEL_PAGE_SIZE = 10;
 
   const [sprintEvents, setSprintEvents] = useState<SprintEventRow[]>([]);
-  const [loadingSprintEvents, setLoadingSprintEvents] = useState<boolean>(false);
-  const [sprintSort, setSprintSort] = useState<{ key: keyof SprintEventRow; dir: 'asc' | 'desc' } | null>(null);
+  const [loadingSprintEvents, setLoadingSprintEvents] =
+    useState<boolean>(false);
+  const [sprintSort, setSprintSort] = useState<{
+    key: keyof SprintEventRow;
+    dir: "asc" | "desc";
+  } | null>(null);
   const [sprintPage, setSprintPage] = useState<number>(1);
   const SPRINT_PAGE_SIZE = 10;
 
   const [sharpAngles, setSharpAngles] = useState<SharpAngleRow[]>([]);
   const [loadingSharpAngles, setLoadingSharpAngles] = useState<boolean>(false);
-  const [sharpSort, setSharpSort] = useState<{ key: keyof SharpAngleRow; dir: 'asc' | 'desc' } | null>(null);
+  const [sharpSort, setSharpSort] = useState<{
+    key: keyof SharpAngleRow;
+    dir: "asc" | "desc";
+  } | null>(null);
   const [sharpPage, setSharpPage] = useState<number>(1);
   const SHARP_PAGE_SIZE = 10;
-  const [sharpTraces, setSharpTraces] = useState<Array<{ player: string; points: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }> }>>([]);
-  
+  const [sharpTraces, setSharpTraces] = useState<
+    Array<{
+      player: string;
+      points: Array<{
+        seconds_since_midnight: number;
+        lat: number;
+        lon: number;
+        speed_kmh: number;
+        time: string;
+      }>;
+    }>
+  >([]);
+
   const [sharpAngles2, setSharpAngles2] = useState<SharpAngle2Row[]>([]);
-  const [loadingSharpAngles2, setLoadingSharpAngles2] = useState<boolean>(false);
-  const [sharpSort2, setSharpSort2] = useState<{ key: keyof SharpAngle2Row; dir: 'asc' | 'desc' } | null>(null);
+  const [loadingSharpAngles2, setLoadingSharpAngles2] =
+    useState<boolean>(false);
+  const [sharpSort2, setSharpSort2] = useState<{
+    key: keyof SharpAngle2Row;
+    dir: "asc" | "desc";
+  } | null>(null);
   const [sharpPage2, setSharpPage2] = useState<number>(1);
   const SHARP_PAGE_SIZE_2 = 10;
-  const [sharpTraces2, setSharpTraces2] = useState<Array<{ player: string; points: Array<{ seconds_since_midnight: number; lat: number; lon: number; speed_kmh: number; time: string }> }>>([]);
-  
+  const [sharpTraces2, setSharpTraces2] = useState<
+    Array<{
+      player: string;
+      points: Array<{
+        seconds_since_midnight: number;
+        lat: number;
+        lon: number;
+        speed_kmh: number;
+        time: string;
+      }>;
+    }>
+  >([]);
+
   const [forecastHorizon, setForecastHorizon] = useState<number>(5.0);
   const [forecastData, setForecastData] = useState<any | null>(null);
   const [forecastError, setForecastError] = useState<string | null>(null);
   const [loadingForecast, setLoadingForecast] = useState<boolean>(false);
   const [forecastAuto, setForecastAuto] = useState<boolean>(false);
   const [forecastOpen, setForecastOpen] = useState<boolean>(false);
-  const accelColumns = React.useMemo(() => (
-    [
-      'Total Accels',
-      'Accel Low',
-      'Accel Med',
-      'Accel High',
-      'Total Decels',
-      'Decel Low',
-      'Decel Med',
-      'Decel High',
-      'Distance (m)',
-      'Time (s)'
-    ]
-  ), []);
+  const accelColumns = React.useMemo(
+    () => [
+      "Total Accels",
+      "Accel Low",
+      "Accel Med",
+      "Accel High",
+      "Total Decels",
+      "Decel Low",
+      "Decel Med",
+      "Decel High",
+      "Distance (m)",
+      "Time (s)",
+    ],
+    []
+  );
   const formatAccelValue = React.useCallback((v: number, idx: number) => {
-    if (typeof v !== 'number') return String(v);
+    if (typeof v !== "number") return String(v);
     return idx < 8 ? Math.round(v) : v.toFixed(3);
   }, []);
-  let playerHighlights = React.useMemo(()=>{
-    const norm = (s: string) => (s||'').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g,'')
-      .replace(/\s+/g,' ')
-      .toLowerCase();
+  let playerHighlights = React.useMemo(() => {
+    const norm = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
     const parseTimeToSec = (t?: string | null) => {
       if (!t) return 0;
       const m = t.match(/^(\d{2}):(\d{2}):(\d{2})(?:[\.,](\d+))?/);
       if (!m) return 0;
-      const h = parseInt(m[1]||'0',10); const mi = parseInt(m[2]||'0',10); const s = parseInt(m[3]||'0',10);
-      return h*3600 + mi*60 + s;
+      const h = parseInt(m[1] || "0", 10);
+      const mi = parseInt(m[2] || "0", 10);
+      const s = parseInt(m[3] || "0", 10);
+      return h * 3600 + mi * 60 + s;
     };
-    
-    const halftimeStart = (periods?.detected_first_half_end?? periods?.detected_halftime_start) ?? null;
-    const halftimeEnd = (periods?.detected_second_half_start ?? periods?.detected_halftime_end) ?? null;
-    const halftimeDuration = (halftimeStart !== null && halftimeEnd !== null) ? Math.max(0, halftimeEnd - halftimeStart) : 0;
 
-    const map: Record<string, Array<{start:number; end:number; distance?: number, start_adj: number, end_adj: number, start_abs: number, end_abs: number}>> = {};
+    const halftimeStart =
+      periods?.detected_first_half_end ??
+      periods?.detected_halftime_start ??
+      null;
+    const halftimeEnd =
+      periods?.detected_second_half_start ??
+      periods?.detected_halftime_end ??
+      null;
+    const halftimeDuration =
+      halftimeStart !== null && halftimeEnd !== null
+        ? Math.max(0, halftimeEnd - halftimeStart)
+        : 0;
+
+    const map: Record<
+      string,
+      Array<{
+        start: number;
+        end: number;
+        distance?: number;
+        start_adj: number;
+        end_adj: number;
+        start_abs: number;
+        end_abs: number;
+      }>
+    > = {};
     for (const wc of worstCases) {
-      const key = norm(wc.player_display_name || '');
-      const start = (wc.start_second || 0);
-      const end = (wc.end_second || 0);
+      const key = norm(wc.player_display_name || "");
+      const start = wc.start_second || 0;
+      const end = wc.end_second || 0;
       const startAbs = wc.start_second || 0;
       const endAbs = wc.end_second || 0;
-      const halftimeAdj = (halftimeEnd !== null && startAbs >= halftimeEnd) ? halftimeDuration : 0;
-      const start_adj = (startAbs) - halftimeAdj;
-      const end_adj = (endAbs) - halftimeAdj;
-      (map[key] ||= []).push({ start, end, distance: wc.distance_covered, start_adj, end_adj, start_abs: startAbs, end_abs: endAbs });
+      const halftimeAdj =
+        halftimeEnd !== null && startAbs >= halftimeEnd ? halftimeDuration : 0;
+      const start_adj = startAbs - halftimeAdj;
+      const end_adj = endAbs - halftimeAdj;
+      (map[key] ||= []).push({
+        start,
+        end,
+        distance: wc.distance_covered,
+        start_adj,
+        end_adj,
+        start_abs: startAbs,
+        end_abs: endAbs,
+      });
     }
     return map;
   }, [worstCases, entries, periods]);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const [reloadToken, setReloadToken] = useState<number>(0);
-  
+
   // Resolve table from match id if needed (prefer backend-provided gps_table_name)
   useEffect(() => {
     if (selectedTable) return; // already set via query or context
@@ -307,25 +413,38 @@ export default function Page() {
         const resMatch = await fetch(`${API_BASE}/api/matches/${matchId}`);
         if (resMatch.ok) {
           const md: MatchDetails = await resMatch.json();
-          const t = (md?.gps_table_name || null);
-          if (!cancelled && t) { setSelectedTable?.(t); return; }
+          const t = md?.gps_table_name || null;
+          if (!cancelled && t) {
+            setSelectedTable?.(t);
+            return;
+          }
         }
         // 2) Fallback to resolver endpoint
         const res = await fetch(`${API_BASE}/match/by-id/${matchId}/table`);
         if (res.ok) {
           const data = await res.json();
           const table = data?.table as string | null;
-          if (!cancelled && table) { setSelectedTable?.(table); }
+          if (!cancelled && table) {
+            setSelectedTable?.(table);
+          }
         }
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, selectedMatchId, selectedTable, setSelectedTable]);
 
   // Fetch match details (incl. youtube link) when match id is present
   useEffect(() => {
     const matchId = selectedMatchId;
-    if (!matchId) { setYoutubeLink(null); setMatchDetails(null); setMatchDetailsError(null); setMatchDetailsLoading(false); return; }
+    if (!matchId) {
+      setYoutubeLink(null);
+      setMatchDetails(null);
+      setMatchDetailsError(null);
+      setMatchDetailsLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -333,14 +452,16 @@ export default function Page() {
         setMatchDetailsError(null);
         const res = await fetch(`${API_BASE}/api/matches/${matchId}`);
         if (!res.ok) {
-          const txt = await res.text().catch(()=>"error");
-          console.error('Failed to fetch match details', res.status, txt);
+          const txt = await res.text().catch(() => "error");
+          console.error("Failed to fetch match details", res.status, txt);
           // Fallback: fetch list and pick the item by id
           try {
             const resList = await fetch(`${API_BASE}/api/matches`);
             if (resList.ok) {
               const arr: MatchDetails[] = await resList.json();
-              const found = Array.isArray(arr) ? arr.find(m => m.match_id === matchId) : null;
+              const found = Array.isArray(arr)
+                ? arr.find((m) => m.match_id === matchId)
+                : null;
               if (!cancelled && found) {
                 setMatchDetails(found);
                 setYoutubeLink(found.youtube_link || null);
@@ -349,7 +470,7 @@ export default function Page() {
               }
             }
           } catch (e2) {
-            console.error('Fallback list fetch failed', e2);
+            console.error("Fallback list fetch failed", e2);
           }
           if (!cancelled) setMatchDetailsError(`HTTP ${res.status}: ${txt}`);
           return;
@@ -358,47 +479,59 @@ export default function Page() {
         if (!cancelled) {
           setMatchDetails(data);
           setYoutubeLink(data?.youtube_link || null);
-          if (typeof data?.venue_orientation === 'number') {
+          if (typeof data?.venue_orientation === "number") {
             setMapBearing(data.venue_orientation);
           }
         }
-      } catch (e) { 
-        console.error('Error fetching match details', e);
-        if (!cancelled) { setYoutubeLink(null); setMatchDetailsError('Network error'); }
+      } catch (e) {
+        console.error("Error fetching match details", e);
+        if (!cancelled) {
+          setYoutubeLink(null);
+          setMatchDetailsError("Network error");
+        }
       } finally {
         if (!cancelled) setMatchDetailsLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, selectedMatchId]);
 
-  const persistVenueOrientation = React.useCallback(async (bearing: number) => {
-    const vId = matchDetails?.venue_id;
-    if (!vId) return;
-    setSavingOrientation(true);
-    setSaveOrientationError(null);
-    try {
-      const clamped = Math.max(-180, Math.min(180, Math.round(bearing)));
-      const res = await fetch(`${API_BASE}/api/venues/${vId}/orientation`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orientation: clamped })
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`HTTP ${res.status} ${txt}`);
+  const persistVenueOrientation = React.useCallback(
+    async (bearing: number) => {
+      const vId = matchDetails?.venue_id;
+      if (!vId) return;
+      setSavingOrientation(true);
+      setSaveOrientationError(null);
+      try {
+        const clamped = Math.max(-180, Math.min(180, Math.round(bearing)));
+        const res = await fetch(`${API_BASE}/api/venues/${vId}/orientation`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orientation: clamped }),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(`HTTP ${res.status} ${txt}`);
+        }
+        setOrientationSavedAt(Date.now());
+      } catch (e: any) {
+        setSaveOrientationError("Failed to save orientation");
+      } finally {
+        setSavingOrientation(false);
       }
-      setOrientationSavedAt(Date.now());
-    } catch (e: any) {
-      setSaveOrientationError('Failed to save orientation');
-    } finally {
-      setSavingOrientation(false);
-    }
-  }, [API_BASE, matchDetails?.venue_id]);
+    },
+    [API_BASE, matchDetails?.venue_id]
+  );
 
   useEffect(() => {
     const id = selectedMatchId;
-    if (!id) { setMatchEvents([]); setLineupMinutes([]); return; }
+    if (!id) {
+      setMatchEvents([]);
+      setLineupMinutes([]);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -406,9 +539,14 @@ export default function Page() {
         const res = await fetch(`${API_BASE}/api/matches/${id}/events`);
         if (res.ok) {
           const data = await res.json();
-          if (!cancelled) setMatchEvents(Array.isArray(data?.events) ? data.events : []);
-        } else { if (!cancelled) setMatchEvents([]); }
-      } finally { if (!cancelled) setLoadingEvents(false); }
+          if (!cancelled)
+            setMatchEvents(Array.isArray(data?.events) ? data.events : []);
+        } else {
+          if (!cancelled) setMatchEvents([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingEvents(false);
+      }
     })();
     (async () => {
       try {
@@ -416,14 +554,25 @@ export default function Page() {
         const res = await fetch(`${API_BASE}/api/matches/${id}/lineup`);
         if (res.ok) {
           const data = await res.json();
-          if (!cancelled) setLineupMinutes(Array.isArray(data?.lineup) ? data.lineup : []);
-        } else { if (!cancelled) setLineupMinutes([]); }
-      } finally { if (!cancelled) setLoadingLineup(false); }
+          if (!cancelled)
+            setLineupMinutes(Array.isArray(data?.lineup) ? data.lineup : []);
+        } else {
+          if (!cancelled) setLineupMinutes([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingLineup(false);
+      }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, selectedMatchId]);
-  
-  const autoData = useMatchData(API_BASE, (selectedTable || null), reloadToken + globalReloadToken);
+
+  const autoData = useMatchData(
+    API_BASE,
+    selectedTable || null,
+    reloadToken + globalReloadToken
+  );
   const entriesAuto = autoData.entries;
   const periodsAuto = autoData.periods;
   const thresholdsAuto = autoData.thresholds;
@@ -438,12 +587,30 @@ export default function Page() {
     if (entriesAuto) setEntries(entriesAuto);
     if (periodsAuto) setPeriods(periodsAuto);
     if (thresholdsAuto) setThresholds(thresholdsAuto);
-    if (typeof kickoffSpikeAuto === 'number' || kickoffSpikeAuto === null) setKickoffSpike(kickoffSpikeAuto);
-    if (worstCasesAuto) { setWorstCases(worstCasesAuto); setShowWorstCases(worstCasesAuto.length > 0); }
-    if (sprintsAuto) { setSprintsInWorstCases(sprintsAuto); setShowSprints(sprintsAuto.length > 0); }
+    if (typeof kickoffSpikeAuto === "number" || kickoffSpikeAuto === null)
+      setKickoffSpike(kickoffSpikeAuto);
+    if (worstCasesAuto) {
+      setWorstCases(worstCasesAuto);
+      setShowWorstCases(worstCasesAuto.length > 0);
+    }
+    if (sprintsAuto) {
+      setSprintsInWorstCases(sprintsAuto);
+      setShowSprints(sprintsAuto.length > 0);
+    }
     setLoadingEntries(loadingEntriesAuto);
     setLoadingPeriods(loadingDetectAuto);
-  }, [entriesAuto, periodsAuto, thresholdsAuto, kickoffSpikeAuto, baseTimeAuto, worstCasesAuto, sprintsAuto, loadingEntriesAuto, loadingDetectAuto, autoData.error]);
+  }, [
+    entriesAuto,
+    periodsAuto,
+    thresholdsAuto,
+    kickoffSpikeAuto,
+    baseTimeAuto,
+    worstCasesAuto,
+    sprintsAuto,
+    loadingEntriesAuto,
+    loadingDetectAuto,
+    autoData.error,
+  ]);
 
   useEffect(() => {
     if (!selectedTable) return;
@@ -468,7 +635,10 @@ export default function Page() {
     (async () => {
       try {
         setLoadingPlayers(true);
-        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/players`, { signal });
+        const res = await fetch(
+          `${API_BASE}/match/table/${selectedTable}/players`,
+          { signal }
+        );
         if (res.ok) {
           const data: MatchPlayers = await res.json();
           setPlayers(data.players || []);
@@ -482,15 +652,22 @@ export default function Page() {
   }, [API_BASE, selectedTable]);
 
   useEffect(() => {
-    if (!selectedTable) { setAccelerations([]); return; }
+    if (!selectedTable) {
+      setAccelerations([]);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         setLoadingAccelerations(true);
-        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/accelerations`);
+        const res = await fetch(
+          `${API_BASE}/match/table/${selectedTable}/accelerations`
+        );
         if (res.ok) {
           const data = await res.json();
-          const rows = Array.isArray(data?.accelerations) ? data.accelerations as AccelerationRow[] : [];
+          const rows = Array.isArray(data?.accelerations)
+            ? (data.accelerations as AccelerationRow[])
+            : [];
           if (!cancelled) setAccelerations(rows);
         } else {
           if (!cancelled) setAccelerations([]);
@@ -501,20 +678,29 @@ export default function Page() {
         if (!cancelled) setLoadingAccelerations(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, selectedTable]);
 
   useEffect(() => {
-    if (!selectedTable) { setAccelEvents([]); return; }
+    if (!selectedTable) {
+      setAccelEvents([]);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         setLoadingAccelEvents(true);
         setAccelPage(1);
-        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/accelerations?mode=full`);
+        const res = await fetch(
+          `${API_BASE}/match/table/${selectedTable}/accelerations?mode=full`
+        );
         if (res.ok) {
           const data = await res.json();
-          const rows = Array.isArray(data?.events) ? data.events as AccelEventRow[] : [];
+          const rows = Array.isArray(data?.events)
+            ? (data.events as AccelEventRow[])
+            : [];
           if (!cancelled) setAccelEvents(rows);
         } else {
           if (!cancelled) setAccelEvents([]);
@@ -525,20 +711,29 @@ export default function Page() {
         if (!cancelled) setLoadingAccelEvents(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, selectedTable]);
 
   useEffect(() => {
-    if (!selectedTable) { setSprintEvents([]); return; }
+    if (!selectedTable) {
+      setSprintEvents([]);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         setLoadingSprintEvents(true);
         setSprintPage(1);
-        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/sprints`);
+        const res = await fetch(
+          `${API_BASE}/match/table/${selectedTable}/sprints`
+        );
         if (res.ok) {
           const data = await res.json();
-          const rows = Array.isArray(data?.sprints) ? data.sprints as SprintEventRow[] : [];
+          const rows = Array.isArray(data?.sprints)
+            ? (data.sprints as SprintEventRow[])
+            : [];
           if (!cancelled) setSprintEvents(rows);
         } else {
           if (!cancelled) setSprintEvents([]);
@@ -549,20 +744,29 @@ export default function Page() {
         if (!cancelled) setLoadingSprintEvents(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, selectedTable]);
 
   useEffect(() => {
-    if (!selectedTable) { setSharpAngles([]); return; }
+    if (!selectedTable) {
+      setSharpAngles([]);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         setLoadingSharpAngles(true);
         setSharpPage(1);
-        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/sharp-angles`);
+        const res = await fetch(
+          `${API_BASE}/match/table/${selectedTable}/sharp-angles`
+        );
         if (res.ok) {
           const data = await res.json();
-          const rows = Array.isArray(data?.sharp_angles) ? data.sharp_angles as SharpAngleRow[] : [];
+          const rows = Array.isArray(data?.sharp_angles)
+            ? (data.sharp_angles as SharpAngleRow[])
+            : [];
           if (!cancelled) setSharpAngles(rows);
         } else {
           if (!cancelled) setSharpAngles([]);
@@ -573,20 +777,29 @@ export default function Page() {
         if (!cancelled) setLoadingSharpAngles(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, selectedTable]);
 
   useEffect(() => {
-    if (!selectedTable) { setSharpAngles2([]); return; }
+    if (!selectedTable) {
+      setSharpAngles2([]);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         setLoadingSharpAngles2(true);
         setSharpPage2(1);
-        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/sharp-angles-2`);
+        const res = await fetch(
+          `${API_BASE}/match/table/${selectedTable}/sharp-angles-2`
+        );
         if (res.ok) {
           const data = await res.json();
-          const rows = Array.isArray(data?.sharp_angles_2) ? data.sharp_angles_2 as SharpAngle2Row[] : [];
+          const rows = Array.isArray(data?.sharp_angles_2)
+            ? (data.sharp_angles_2 as SharpAngle2Row[])
+            : [];
           if (!cancelled) setSharpAngles2(rows);
         } else {
           if (!cancelled) setSharpAngles2([]);
@@ -597,7 +810,9 @@ export default function Page() {
         if (!cancelled) setLoadingSharpAngles2(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [API_BASE, selectedTable]);
 
   const sortedAccelEvents = React.useMemo(() => {
@@ -607,10 +822,13 @@ export default function Page() {
       const k = accelSort.key;
       const av = a[k] as any;
       const bv = b[k] as any;
-      if (typeof av === 'number' && typeof bv === 'number') return accelSort.dir === 'asc' ? av - bv : bv - av;
-      const as = String(av || '');
-      const bs = String(bv || '');
-      return accelSort.dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+      if (typeof av === "number" && typeof bv === "number")
+        return accelSort.dir === "asc" ? av - bv : bv - av;
+      const as = String(av || "");
+      const bs = String(bv || "");
+      return accelSort.dir === "asc"
+        ? as.localeCompare(bs)
+        : bs.localeCompare(as);
     });
     return arr;
   }, [accelEvents, accelSort]);
@@ -622,22 +840,31 @@ export default function Page() {
       const k = sprintSort.key;
       const av = a[k] as any;
       const bv = b[k] as any;
-      if (typeof av === 'number' && typeof bv === 'number') return sprintSort.dir === 'asc' ? av - bv : bv - av;
-      const as = String(av || '');
-      const bs = String(bv || '');
-      return sprintSort.dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+      if (typeof av === "number" && typeof bv === "number")
+        return sprintSort.dir === "asc" ? av - bv : bv - av;
+      const as = String(av || "");
+      const bs = String(bv || "");
+      return sprintSort.dir === "asc"
+        ? as.localeCompare(bs)
+        : bs.localeCompare(as);
     });
     return arr;
   }, [sprintEvents, sprintSort]);
 
   // Clamp current page when data size changes
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE));
+    const totalPages = Math.max(
+      1,
+      Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE)
+    );
     if (accelPage > totalPages) setAccelPage(totalPages);
   }, [sortedAccelEvents.length]);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE));
+    const totalPages = Math.max(
+      1,
+      Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE)
+    );
     if (sprintPage > totalPages) setSprintPage(totalPages);
   }, [sortedSprintEvents.length]);
 
@@ -649,16 +876,22 @@ export default function Page() {
       const k = sharpSort.key;
       const av = a[k] as any;
       const bv = b[k] as any;
-      if (typeof av === 'number' && typeof bv === 'number') return sharpSort.dir === 'asc' ? av - bv : bv - av;
-      const as = String(av || '');
-      const bs = String(bv || '');
-      return sharpSort.dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+      if (typeof av === "number" && typeof bv === "number")
+        return sharpSort.dir === "asc" ? av - bv : bv - av;
+      const as = String(av || "");
+      const bs = String(bv || "");
+      return sharpSort.dir === "asc"
+        ? as.localeCompare(bs)
+        : bs.localeCompare(as);
     });
     return arr;
   }, [sharpAngles, sharpSort]);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(sortedSharpAngles.length / SHARP_PAGE_SIZE));
+    const totalPages = Math.max(
+      1,
+      Math.ceil(sortedSharpAngles.length / SHARP_PAGE_SIZE)
+    );
     if (sharpPage > totalPages) setSharpPage(totalPages);
   }, [sortedSharpAngles.length]);
 
@@ -669,84 +902,113 @@ export default function Page() {
       const k = sharpSort2.key;
       const av = a[k] as any;
       const bv = b[k] as any;
-      if (typeof av === 'number' && typeof bv === 'number') return sharpSort2.dir === 'asc' ? av - bv : bv - av;
-      const as = String(av || '');
-      const bs = String(bv || '');
-      return sharpSort2.dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+      if (typeof av === "number" && typeof bv === "number")
+        return sharpSort2.dir === "asc" ? av - bv : bv - av;
+      const as = String(av || "");
+      const bs = String(bv || "");
+      return sharpSort2.dir === "asc"
+        ? as.localeCompare(bs)
+        : bs.localeCompare(as);
     });
     return arr;
   }, [sharpAngles2, sharpSort2]);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(sortedSharpAngles2.length / SHARP_PAGE_SIZE_2));
+    const totalPages = Math.max(
+      1,
+      Math.ceil(sortedSharpAngles2.length / SHARP_PAGE_SIZE_2)
+    );
     if (sharpPage2 > totalPages) setSharpPage2(totalPages);
   }, [sortedSharpAngles2.length]);
 
   const toggleSort = (key: keyof AccelEventRow) => {
-    setAccelSort(prev => {
-      if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
-      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
+    setAccelSort((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" } as const;
+      return { key, dir: prev.dir === "asc" ? "desc" : "asc" } as const;
     });
     setAccelPage(1);
   };
 
   const toggleSprintSort = (key: keyof SprintEventRow) => {
-    setSprintSort(prev => {
-      if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
-      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
+    setSprintSort((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" } as const;
+      return { key, dir: prev.dir === "asc" ? "desc" : "asc" } as const;
     });
     setSprintPage(1);
   };
 
   const toggleSharpSort = (key: keyof SharpAngleRow) => {
-    setSharpSort(prev => {
-      if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
-      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
+    setSharpSort((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" } as const;
+      return { key, dir: prev.dir === "asc" ? "desc" : "asc" } as const;
     });
     setSharpPage(1);
   };
 
   const toggleSharpSort2 = (key: keyof SharpAngle2Row) => {
-    setSharpSort2(prev => {
-      if (!prev || prev.key !== key) return { key, dir: 'asc' } as const;
-      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } as const;
+    setSharpSort2((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" } as const;
+      return { key, dir: prev.dir === "asc" ? "desc" : "asc" } as const;
     });
     setSharpPage2(1);
   };
 
-  const absToVideoSec = React.useCallback((abs: number): number => {
-    const p = periods;
-    const kickoff = kickoffSpike ?? 0;
-    const fhStartPatched = (patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff) as number;
-    const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-    const fhDurPatched = patchedFirstHalfDuration ?? (p && typeof p.detected_first_half_end === 'number' ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
-    if (!p) return Math.max(0, abs - fhStartPatched);
-    if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
-      if (abs < shStartPatched) return Math.max(0, abs - fhStartPatched);
-      return fhDurPatched + Math.max(0, abs - shStartPatched);
-    }
-    return Math.max(0, abs - fhStartPatched);
-  }, [periods, kickoffSpike, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration]);
+  const absToVideoSec = React.useCallback(
+    (abs: number): number => {
+      const p = periods;
+      const kickoff = kickoffSpike ?? 0;
+      const fhStartPatched = (patchedFirstHalfStart ??
+        p?.detected_first_half_start ??
+        kickoff) as number;
+      const shStartPatched =
+        patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+      const fhDurPatched =
+        patchedFirstHalfDuration ??
+        (p && typeof p.detected_first_half_end === "number"
+          ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched)
+          : undefined);
+      if (!p) return Math.max(0, abs - fhStartPatched);
+      if (
+        typeof shStartPatched === "number" &&
+        typeof fhDurPatched === "number"
+      ) {
+        if (abs < shStartPatched) return Math.max(0, abs - fhStartPatched);
+        return fhDurPatched + Math.max(0, abs - shStartPatched);
+      }
+      return Math.max(0, abs - fhStartPatched);
+    },
+    [
+      periods,
+      kickoffSpike,
+      patchedFirstHalfStart,
+      patchedSecondHalfStart,
+      patchedFirstHalfDuration,
+    ]
+  );
 
   // For minute-binning: use a fixed 45' split between halves when SH start exists
-  const minuteIndexFromAbs = React.useCallback((abs: number): number => {
-    const p = periods;
-    const kickoff = kickoffSpike ?? 0;
-    const fhStart = (patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff) as number;
-    const shStart = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-    if (typeof shStart === 'number') {
-      if (abs < shStart) return Math.max(0, Math.floor((abs - fhStart) / 60));
-      return Math.max(0, Math.floor(45 + (abs - shStart) / 60));
-    }
-    return Math.max(0, Math.floor((abs - fhStart) / 60));
-  }, [periods, kickoffSpike, patchedFirstHalfStart, patchedSecondHalfStart]);
-
-  
+  const minuteIndexFromAbs = React.useCallback(
+    (abs: number): number => {
+      const p = periods;
+      const kickoff = kickoffSpike ?? 0;
+      const fhStart = (patchedFirstHalfStart ??
+        p?.detected_first_half_start ??
+        kickoff) as number;
+      const shStart =
+        patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+      if (typeof shStart === "number") {
+        if (abs < shStart) return Math.max(0, Math.floor((abs - fhStart) / 60));
+        return Math.max(0, Math.floor(45 + (abs - shStart) / 60));
+      }
+      return Math.max(0, Math.floor((abs - fhStart) / 60));
+    },
+    [periods, kickoffSpike, patchedFirstHalfStart, patchedSecondHalfStart]
+  );
 
   const derivedBaseTime = React.useMemo(() => {
     if (!entries || entries.length === 0) return null as string | null;
     const t = entries
-      .map(e => e.time)
+      .map((e) => e.time)
       .filter(Boolean)
       .sort()[0];
     return t || null;
@@ -756,17 +1018,33 @@ export default function Page() {
     const p = periods;
     const kickoff = kickoffSpike ?? 0;
     const t = videoTimeSec;
-    const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
-    const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-    const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
+    const fhStartPatched =
+      patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
+    const shStartPatched =
+      patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+    const fhDurPatched =
+      patchedFirstHalfDuration ??
+      (p && p.detected_first_half_end !== undefined
+        ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched)
+        : undefined);
     if (!p) return kickoff + t;
-    if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+    if (
+      typeof shStartPatched === "number" &&
+      typeof fhDurPatched === "number"
+    ) {
       const firstHalfDuration = Math.max(0, fhDurPatched);
       if (t <= firstHalfDuration) return fhStartPatched + t;
       return shStartPatched + (t - firstHalfDuration);
     }
     return fhStartPatched + t;
-  }, [periods, kickoffSpike, videoTimeSec, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration]);
+  }, [
+    periods,
+    kickoffSpike,
+    videoTimeSec,
+    patchedFirstHalfStart,
+    patchedSecondHalfStart,
+    patchedFirstHalfDuration,
+  ]);
 
   const fetchForecast = React.useCallback(async () => {
     if (!selectedTable) return;
@@ -775,70 +1053,90 @@ export default function Page() {
     try {
       const center = gpsCursorSecond;
       const horizon = forecastHorizon;
-      const qs = new URLSearchParams({ center_sec: String(center.toFixed(3)), horizon_s: String(horizon) });
-      const res = await fetch(`${API_BASE}/match/table/${selectedTable}/forecast?` + qs.toString(), { method: 'POST' });
+      const qs = new URLSearchParams({
+        center_sec: String(center.toFixed(3)),
+        horizon_s: String(horizon),
+      });
+      const res = await fetch(
+        `${API_BASE}/match/table/${selectedTable}/forecast?` + qs.toString(),
+        { method: "POST" }
+      );
       if (!res.ok) {
-        const txt = await res.text().catch(() => '');
+        const txt = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status} ${txt}`);
       }
       const data = await res.json();
       setForecastData(data);
     } catch (_) {
-      setForecastError('Failed to fetch forecast.');
+      setForecastError("Failed to fetch forecast.");
       setForecastData(null);
     } finally {
       setLoadingForecast(false);
     }
   }, [API_BASE, selectedTable, gpsCursorSecond, forecastHorizon]);
 
-  const { snapshot: livePositions, loading: loadingPositions } = usePositionsWindow(
-    API_BASE,
-    selectedTable || null,
-    gpsCursorSecond,
-    15,
-    positionsResetKey
-  );
+  const { snapshot: livePositions, loading: loadingPositions } =
+    usePositionsWindow(
+      API_BASE,
+      selectedTable || null,
+      gpsCursorSecond,
+      15,
+      positionsResetKey
+    );
 
-  const googleRasterStyle = React.useMemo(() => ({
-    version: 8,
-    sources: {
-      google: {
-        type: 'raster',
-        tiles: [
-          `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
-        ],
-        tileSize: 256,
-        attribution: '© Google'
-      }
-    },
-    layers: [
-      { id: 'google', type: 'raster', source: 'google' }
-    ]
-  }), []);
+  const googleRasterStyle = React.useMemo(
+    () => ({
+      version: 8,
+      sources: {
+        google: {
+          type: "raster",
+          tiles: [`https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`],
+          tileSize: 256,
+          attribution: "© Google",
+        },
+      },
+      layers: [{ id: "google", type: "raster", source: "google" }],
+    }),
+    []
+  );
 
   const playersGrouped = React.useMemo(() => {
     const byPlayer: Record<string, typeof entries> = {} as any;
-    entries.forEach(e => { (byPlayer[e.player_display_name] ||= []).push(e); });
-    Object.keys(byPlayer).forEach(k => byPlayer[k].sort((a,b)=>a.seconds_since_midnight-b.seconds_since_midnight));
+    entries.forEach((e) => {
+      (byPlayer[e.player_display_name] ||= []).push(e);
+    });
+    Object.keys(byPlayer).forEach((k) =>
+      byPlayer[k].sort(
+        (a, b) => a.seconds_since_midnight - b.seconds_since_midnight
+      )
+    );
     return byPlayer;
   }, [entries]);
 
   const sprintsGrouped = React.useMemo(() => {
-    const sprintByPlayer: Record<string, typeof sprintsInWorstCases> = {} as any;
-    sprintsInWorstCases.forEach(s => { (sprintByPlayer[s.player_display_name] ||= []).push(s); });
+    const sprintByPlayer: Record<string, typeof sprintsInWorstCases> =
+      {} as any;
+    sprintsInWorstCases.forEach((s) => {
+      (sprintByPlayer[s.player_display_name] ||= []).push(s);
+    });
     return sprintByPlayer;
   }, [sprintsInWorstCases]);
 
   // WCS window per player (pick the one with max distance_covered)
   const wcsWindowByPlayer = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
-    const map: Record<string, { start: number; end: number; distance: number; name: string }> = {};
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+    const map: Record<
+      string,
+      { start: number; end: number; distance: number; name: string }
+    > = {};
     for (const wc of worstCases) {
-      const key = normalize(wc.player_display_name || '');
+      const key = normalize(wc.player_display_name || "");
       const distance = Number(wc.distance_covered || 0);
       const start = Number(wc.start_second || 0);
       const end = Number(wc.end_second || 0);
@@ -851,12 +1149,15 @@ export default function Page() {
 
   // Time bounds (first/last seconds) per player based on entries
   const timeBoundsByPlayer = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
-    const map: Record<string, { first: number; last: number; name: string }> = {};
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+    const map: Record<string, { first: number; last: number; name: string }> =
+      {};
     for (const [name, arr] of Object.entries(playersGrouped)) {
       if (!arr || arr.length === 0) continue;
       const first = Number(arr[0].seconds_since_midnight || 0);
@@ -868,21 +1169,25 @@ export default function Page() {
 
   // Events grouped by player
   const accelTimesByPlayer = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
     const map: Record<string, { acc: number[]; dec: number[] }> = {};
     for (const ev of accelEvents) {
-      const key = normalize(ev.player_display_name || '');
+      const key = normalize(ev.player_display_name || "");
       const when = Number(ev.seconds_since_midnight || 0);
-      const kind = String(ev.accel_or_decel || '').trim().toLowerCase();
+      const kind = String(ev.accel_or_decel || "")
+        .trim()
+        .toLowerCase();
       const bucket = (map[key] ||= { acc: [], dec: [] });
-      if (kind.includes('decel')) bucket.dec.push(when);
+      if (kind.includes("decel")) bucket.dec.push(when);
       else bucket.acc.push(when);
     }
-    Object.values(map).forEach(obj => {
+    Object.values(map).forEach((obj) => {
       obj.acc.sort((a, b) => a - b);
       obj.dec.sort((a, b) => a - b);
     });
@@ -890,37 +1195,44 @@ export default function Page() {
   }, [accelEvents]);
 
   const sprintTimesByPlayer = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
     const map: Record<string, number[]> = {};
     for (const ev of sprintEvents) {
-      const key = normalize(ev.player_display_name || '');
+      const key = normalize(ev.player_display_name || "");
       (map[key] ||= []).push(Number(ev.seconds_since_midnight || 0));
     }
-    Object.values(map).forEach(arr => arr.sort((a, b) => a - b));
+    Object.values(map).forEach((arr) => arr.sort((a, b) => a - b));
     return map;
   }, [sprintEvents]);
 
   const lineupSorted = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
     const positionOrder = (pos?: string | null): number => {
-      const p = normalize(String(pos || ''));
+      const p = normalize(String(pos || ""));
       if (!p) return 999;
-      if (p.includes('arquero')) return 1;
-      if (p.includes('defensa central')) return 2;
-      if (p.includes('lateral izquierdo')) return 3;
-      if (p.includes('lateral derecho')) return 4;
-      if (p.includes('volante central')) return 5;
-      if (p.includes('volante interior izquierdo')) return 6;
-      if (p.includes('volante interior derecho')) return 7;
-      if (p.includes('volante exterior izquierdo')) return 8;
-      if (p.includes('volante exterior derecho')) return 9;
-      if (p.includes('volante creativo')) return 10;
-      if (p.includes('mediapunta')) return 11;
-      if (p.includes('delantero')) return 12;
+      if (p.includes("arquero")) return 1;
+      if (p.includes("defensa central")) return 2;
+      if (p.includes("lateral izquierdo")) return 3;
+      if (p.includes("lateral derecho")) return 4;
+      if (p.includes("volante central")) return 5;
+      if (p.includes("volante interior izquierdo")) return 6;
+      if (p.includes("volante interior derecho")) return 7;
+      if (p.includes("volante exterior izquierdo")) return 8;
+      if (p.includes("volante exterior derecho")) return 9;
+      if (p.includes("volante creativo")) return 10;
+      if (p.includes("mediapunta")) return 11;
+      if (p.includes("delantero")) return 12;
       return 999;
     };
     const arr = [...lineupMinutes];
@@ -928,25 +1240,36 @@ export default function Page() {
       const oa = positionOrder(a?.position);
       const ob = positionOrder(b?.position);
       if (oa !== ob) return oa - ob;
-      const ra = a?.role === 'starter' ? 0 : 1;
-      const rb = b?.role === 'starter' ? 0 : 1;
+      const ra = a?.role === "starter" ? 0 : 1;
+      const rb = b?.role === "starter" ? 0 : 1;
       if (ra !== rb) return ra - rb;
-      return String(a?.jugador || '').localeCompare(String(b?.jugador || ''));
+      return String(a?.jugador || "").localeCompare(String(b?.jugador || ""));
     });
     return arr;
   }, [lineupMinutes]);
 
-  const lineupStarters = React.useMemo(() => lineupSorted.filter((r: any) => r?.role === 'starter'), [lineupSorted]);
-  const lineupBench = React.useMemo(() => lineupSorted.filter((r: any) => r?.role !== 'starter'), [lineupSorted]);
+  const lineupStarters = React.useMemo(
+    () => lineupSorted.filter((r: any) => r?.role === "starter"),
+    [lineupSorted]
+  );
+  const lineupBench = React.useMemo(
+    () => lineupSorted.filter((r: any) => r?.role !== "starter"),
+    [lineupSorted]
+  );
 
   // Build per-minute acceleration histogram per player and WCS highlight minutes
   const accelMinuteByPlayer = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
-    const result: Record<string, { name: string; counts: number[]; highlights: number[]; lines: number[] }> = {};
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+    const result: Record<
+      string,
+      { name: string; counts: number[]; highlights: number[]; lines: number[] }
+    > = {};
     const perPlayerList = Object.keys(playersGrouped);
     for (const name of perPlayerList) {
       const key = normalize(name);
@@ -976,16 +1299,26 @@ export default function Page() {
       result[key] = { name, counts, highlights, lines: [...highlights] };
     }
     return result;
-  }, [playersGrouped, accelTimesByPlayer, minuteIndexFromAbs, wcsWindowByPlayer]);
+  }, [
+    playersGrouped,
+    accelTimesByPlayer,
+    minuteIndexFromAbs,
+    wcsWindowByPlayer,
+  ]);
 
   // Build per-minute sprint histogram per player and WCS highlight minutes
   const sprintMinuteByPlayer = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
-    const result: Record<string, { name: string; counts: number[]; highlights: number[]; lines: number[] }> = {};
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+    const result: Record<
+      string,
+      { name: string; counts: number[]; highlights: number[]; lines: number[] }
+    > = {};
     const perPlayerList = Object.keys(playersGrouped);
     for (const name of perPlayerList) {
       const key = normalize(name);
@@ -1013,16 +1346,26 @@ export default function Page() {
       result[key] = { name, counts, highlights, lines: [...highlights] };
     }
     return result;
-  }, [playersGrouped, sprintTimesByPlayer, minuteIndexFromAbs, wcsWindowByPlayer]);
+  }, [
+    playersGrouped,
+    sprintTimesByPlayer,
+    minuteIndexFromAbs,
+    wcsWindowByPlayer,
+  ]);
 
   // Build per-minute deceleration histogram per player and WCS highlight minutes
   const decelMinuteByPlayer = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
-    const result: Record<string, { name: string; counts: number[]; highlights: number[]; lines: number[] }> = {};
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+    const result: Record<
+      string,
+      { name: string; counts: number[]; highlights: number[]; lines: number[] }
+    > = {};
     const perPlayerList = Object.keys(playersGrouped);
     for (const name of perPlayerList) {
       const key = normalize(name);
@@ -1051,14 +1394,42 @@ export default function Page() {
       result[key] = { name, counts, highlights, lines: [...highlights] };
     }
     return result;
-  }, [playersGrouped, accelTimesByPlayer, minuteIndexFromAbs, wcsWindowByPlayer]);
+  }, [
+    playersGrouped,
+    accelTimesByPlayer,
+    minuteIndexFromAbs,
+    wcsWindowByPlayer,
+  ]);
 
   // Tiny bar chart components
-  const PlayerMiniChart: React.FC<{ counts: number[]; highlights?: number[]; refLines?: number[]; barColor?: string; highlightColor?: string; zeroColor?: string; heightClass?: string; refColor?: string }> = ({ counts, highlights, refLines, barColor = 'bg-blue-500', highlightColor = 'bg-red-400', zeroColor = 'bg-zinc-800', heightClass = 'h-16 md:h-20', refColor = '#4b172b' }) => {
-    const max = React.useMemo(() => counts.reduce((m, v) => Math.max(m, v), 0), [counts]);
+  const PlayerMiniChart: React.FC<{
+    counts: number[];
+    highlights?: number[];
+    refLines?: number[];
+    barColor?: string;
+    highlightColor?: string;
+    zeroColor?: string;
+    heightClass?: string;
+    refColor?: string;
+  }> = ({
+    counts,
+    highlights,
+    refLines,
+    barColor = "bg-primary",
+    highlightColor = "bg-destructive",
+    zeroColor = "bg-muted",
+    heightClass = "h-16 md:h-20",
+    refColor = "hsl(var(--destructive))",
+  }) => {
+    const max = React.useMemo(
+      () => counts.reduce((m, v) => Math.max(m, v), 0),
+      [counts]
+    );
     return (
       <div className="w-full">
-        <div className={`${heightClass} w-full flex items-end gap-[1px] relative`}>
+        <div
+          className={`${heightClass} w-full flex items-end gap-[1px] relative`}
+        >
           {counts.map((v, idx) => {
             const hPct = max > 0 ? Math.round((v / max) * 100) : 0;
             const isHi = (highlights || []).includes(idx);
@@ -1066,7 +1437,9 @@ export default function Page() {
               <div
                 key={idx}
                 title={`${idx}' : ${v}`}
-                className={`flex-1 ${v > 0 ? (isHi ? highlightColor : barColor) : zeroColor}`}
+                className={`flex-1 ${
+                  v > 0 ? (isHi ? highlightColor : barColor) : zeroColor
+                }`}
                 style={{ height: `${Math.max(1, hPct)}%` }}
               />
             );
@@ -1074,11 +1447,20 @@ export default function Page() {
           {(refLines || []).map((idx, i) => {
             const leftPct = ((idx + 0.5) / Math.max(1, counts.length)) * 100;
             return (
-              <div key={`ref-${i}`} className="absolute top-0 bottom-0" style={{ left: `${leftPct}%`, width: 2, background: refColor, opacity: 0.9 }} />
+              <div
+                key={`ref-${i}`}
+                className="absolute top-0 bottom-0"
+                style={{
+                  left: `${leftPct}%`,
+                  width: 2,
+                  background: refColor,
+                  opacity: 0.9,
+                }}
+              />
             );
           })}
         </div>
-        <div className="flex justify-between text-[10px] text-zinc-400 mt-1">
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
           <span>0'</span>
           <span>45'</span>
           <span>90+'</span>
@@ -1089,11 +1471,13 @@ export default function Page() {
 
   // Per-player summary around WCS for accelerations
   const accelWcsSummary = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
     const rows: Array<{
       player: string;
       wcsStart: number;
@@ -1118,13 +1502,24 @@ export default function Page() {
       const beforeSec = Math.max(0, w.start - b.first);
       const afterSec = Math.max(0, b.last - w.end);
       const times = accelTimesByPlayer[key] || { acc: [], dec: [] };
-      let accBefore = 0, accAfter = 0, decBefore = 0, decAfter = 0;
-      for (const t of times.acc) { if (t < w.start) accBefore++; else if (t > w.end) accAfter++; }
-      for (const t of times.dec) { if (t < w.start) decBefore++; else if (t > w.end) decAfter++; }
+      let accBefore = 0,
+        accAfter = 0,
+        decBefore = 0,
+        decAfter = 0;
+      for (const t of times.acc) {
+        if (t < w.start) accBefore++;
+        else if (t > w.end) accAfter++;
+      }
+      for (const t of times.dec) {
+        if (t < w.start) decBefore++;
+        else if (t > w.end) decAfter++;
+      }
       const per90 = 90 * 60;
-      const accRateBefore = beforeSec > 0 ? (accBefore * per90) / beforeSec : null;
+      const accRateBefore =
+        beforeSec > 0 ? (accBefore * per90) / beforeSec : null;
       const accRateAfter = afterSec > 0 ? (accAfter * per90) / afterSec : null;
-      const decRateBefore = beforeSec > 0 ? (decBefore * per90) / beforeSec : null;
+      const decRateBefore =
+        beforeSec > 0 ? (decBefore * per90) / beforeSec : null;
       const decRateAfter = afterSec > 0 ? (decAfter * per90) / afterSec : null;
       rows.push({
         player: name,
@@ -1143,15 +1538,22 @@ export default function Page() {
       });
     }
     return rows;
-  }, [playersGrouped, wcsWindowByPlayer, timeBoundsByPlayer, accelTimesByPlayer]);
+  }, [
+    playersGrouped,
+    wcsWindowByPlayer,
+    timeBoundsByPlayer,
+    accelTimesByPlayer,
+  ]);
 
   // Per-player summary around WCS for sprints
   const sprintWcsSummary = React.useMemo(() => {
-    const normalize = (s: string) => (s || '').trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .toLowerCase();
+    const normalize = (s: string) =>
+      (s || "")
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
     const rows: Array<{
       player: string;
       wcsStart: number;
@@ -1179,7 +1581,8 @@ export default function Page() {
         else if (t > w.end) afterCount++;
       }
       const per90 = 90 * 60;
-      const rateBefore = beforeSec > 0 ? (beforeCount * per90) / beforeSec : null;
+      const rateBefore =
+        beforeSec > 0 ? (beforeCount * per90) / beforeSec : null;
       const rateAfter = afterSec > 0 ? (afterCount * per90) / afterSec : null;
       rows.push({
         player: name,
@@ -1194,28 +1597,44 @@ export default function Page() {
       });
     }
     return rows;
-  }, [playersGrouped, wcsWindowByPlayer, timeBoundsByPlayer, sprintTimesByPlayer]);
+  }, [
+    playersGrouped,
+    wcsWindowByPlayer,
+    timeBoundsByPlayer,
+    sprintTimesByPlayer,
+  ]);
 
-  const orderedPlayers = React.useMemo(() => Object.keys(playersGrouped), [playersGrouped]);
-  const [playersRenderLimit, setPlayersRenderLimit] = React.useState<number>(10);
+  const orderedPlayers = React.useMemo(
+    () => Object.keys(playersGrouped),
+    [playersGrouped]
+  );
+  const [playersRenderLimit, setPlayersRenderLimit] =
+    React.useState<number>(10);
 
-  const [pinnedPlayers, setPinnedPlayers] = useState<Record<string, boolean>>({});
+  const [pinnedPlayers, setPinnedPlayers] = useState<Record<string, boolean>>(
+    {}
+  );
   const togglePinned = React.useCallback((name: string) => {
-    setPinnedPlayers(prev => ({ ...prev, [name]: !prev[name] }));
+    setPinnedPlayers((prev) => ({ ...prev, [name]: !prev[name] }));
   }, []);
   const [mapStacked, setMapStacked] = useState<boolean>(true);
   const [zoomLimited, setZoomLimited] = useState<boolean>(true);
   const [mapBearing, setMapBearing] = useState<number>(0);
   const [savingOrientation, setSavingOrientation] = useState<boolean>(false);
-  const [saveOrientationError, setSaveOrientationError] = useState<string | null>(null);
-  const [orientationSavedAt, setOrientationSavedAt] = useState<number | null>(null);
+  const [saveOrientationError, setSaveOrientationError] = useState<
+    string | null
+  >(null);
+  const [orientationSavedAt, setOrientationSavedAt] = useState<number | null>(
+    null
+  );
   const orientationSaveTimer = React.useRef<any>(null);
   const [showInfo, setShowInfo] = useState<boolean>(true);
   const [showAnalysis, setShowAnalysis] = useState<boolean>(true);
   const [showPlayersSection, setShowPlayersSection] = useState<boolean>(false);
   useEffect(() => {
     if (pendingSeek === undefined) return;
-    const closeEnough = Math.abs((videoTimeSec || 0) - (pendingSeek || 0)) <= 0.75;
+    const closeEnough =
+      Math.abs((videoTimeSec || 0) - (pendingSeek || 0)) <= 0.75;
     if (closeEnough) setPendingSeek(undefined);
   }, [videoTimeSec, pendingSeek]);
 
@@ -1230,19 +1649,26 @@ export default function Page() {
       timer = setTimeout(tick, 1000);
     };
     tick();
-    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [forecastAuto, fetchForecast]);
-  
+
   useEffect(() => {
     if (!periods) return;
     const fh = periods.detected_first_half_start ?? null;
     const sh = periods.detected_second_half_start ?? null;
-    setPatchedFirstHalfStart(typeof fh === 'number' ? fh : null);
-    setPatchedSecondHalfStart(typeof sh === 'number' ? sh : null);
+    setPatchedFirstHalfStart(typeof fh === "number" ? fh : null);
+    setPatchedSecondHalfStart(typeof sh === "number" ? sh : null);
     const fe = periods.detected_first_half_end ?? null;
-    setPatchedFirstHalfDuration(fh !== null && fe !== null ? Math.max(0, Math.floor(fe - fh)) : null);
+    setPatchedFirstHalfDuration(
+      fh !== null && fe !== null ? Math.max(0, Math.floor(fe - fh)) : null
+    );
     const se = periods.detected_second_half_end ?? null;
-    setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
+    setPatchedSecondHalfDuration(
+      sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null
+    );
   }, [periods?.detected_first_half_start, periods?.detected_second_half_start]);
 
   useEffect(() => {
@@ -1256,1639 +1682,3605 @@ export default function Page() {
     const out: TimelineMarker[] = [];
     const p = periods;
     if (!p) return out;
-    const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? undefined;
-    const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-    const fhDurPatched = patchedFirstHalfDuration ?? (p && typeof p.detected_first_half_end === 'number' && typeof fhStartPatched === 'number' ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
+    const fhStartPatched =
+      patchedFirstHalfStart ?? p?.detected_first_half_start ?? undefined;
+    const shStartPatched =
+      patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
+    const fhDurPatched =
+      patchedFirstHalfDuration ??
+      (p &&
+      typeof p.detected_first_half_end === "number" &&
+      typeof fhStartPatched === "number"
+        ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched)
+        : undefined);
     const toVideoSec = (abs: number): number => {
-      if (typeof fhStartPatched !== 'number') return Math.max(0, abs);
-      if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
+      if (typeof fhStartPatched !== "number") return Math.max(0, abs);
+      if (
+        typeof shStartPatched === "number" &&
+        typeof fhDurPatched === "number"
+      ) {
         if (abs < shStartPatched) return Math.max(0, abs - fhStartPatched);
         return fhDurPatched + Math.max(0, abs - shStartPatched);
       }
       return Math.max(0, abs - fhStartPatched);
     };
     for (const sp of sprintsInWorstCases) {
-      if (typeof sp.sprint_start_sec === 'number') {
+      if (typeof sp.sprint_start_sec === "number") {
         const at = toVideoSec(sp.sprint_start_sec);
-        const startKey = typeof sp.sprint_start_sec === 'number' ? sp.sprint_start_sec : (typeof sp.start_second === 'number' ? sp.start_second : at);
-        out.push({ id: `sprint-${sp.player_display_name}-${sp.sprint_id}-${Math.round(startKey*1000)}`, at, type: 'emoji', side: 'bottom', content: '🏃', label: `Sprint #${sp.sprint_id}`, data: { type: 'sprint', player: sp.player_display_name, sprintId: sp.sprint_id } });
+        const startKey =
+          typeof sp.sprint_start_sec === "number"
+            ? sp.sprint_start_sec
+            : typeof sp.start_second === "number"
+            ? sp.start_second
+            : at;
+        out.push({
+          id: `sprint-${sp.player_display_name}-${sp.sprint_id}-${Math.round(
+            startKey * 1000
+          )}`,
+          at,
+          type: "emoji",
+          side: "bottom",
+          content: "🏃",
+          label: `Sprint #${sp.sprint_id}`,
+          data: {
+            type: "sprint",
+            player: sp.player_display_name,
+            sprintId: sp.sprint_id,
+          },
+        });
       }
     }
     // Map match events using minute and added_time fields → to video seconds
-    const fhDur = typeof fhDurPatched === 'number' ? fhDurPatched : 2700; // fallback 45:00
+    const fhDur = typeof fhDurPatched === "number" ? fhDurPatched : 2700; // fallback 45:00
     for (const ev of matchEvents) {
       let m = Number(ev.minute);
       if (!Number.isFinite(m)) continue;
       const added = Number(ev.added_time || 0);
       if (!Number.isFinite(m)) m = 0;
       const inSecondHalf = m > 45; // simplistic but matches our list UI
-      const withinHalfMin = inSecondHalf ? (m - 45) : m;
-      const at = Math.max(0, (inSecondHalf ? fhDur : 0) + withinHalfMin * 60 + (added || 0) * 60);
-      const type = String(ev.type || '').toLowerCase();
-      if (type.includes('goal')) {
-        out.push({ id: `goal-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '⚽', label: `${ev.team_name || ''} Goal`, data: { type: 'goal', minute: m, team: ev.team_name } });
-      } else if (type.includes('yellow')) {
-        out.push({ id: `yc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🟨', label: `${ev.team_name || ''} Yellow`, data: { type: 'yellow', player: ev.jugador, team: ev.team_name, minute: m } });
-      } else if (type.includes('red')) {
-        out.push({ id: `rc-${ev.event_id || at}`, at, type: 'emoji', side: 'middle', content: '🟥', label: `${ev.team_name || ''} Red`, data: { type: 'red', player: ev.jugador, team: ev.team_name, minute: m } });
-      } else if (type.includes('sub')) {
-        out.push({ id: `sub-${ev.event_id || at}`, at, type: 'emoji', side: 'top', content: '🔁', label: `${ev.team_name || ''} Substitution`, data: { type: 'sub', playerOut: ev.related_jugador, playerIn: ev.jugador, team: ev.team_name, minute: m } });
+      const withinHalfMin = inSecondHalf ? m - 45 : m;
+      const at = Math.max(
+        0,
+        (inSecondHalf ? fhDur : 0) + withinHalfMin * 60 + (added || 0) * 60
+      );
+      const type = String(ev.type || "").toLowerCase();
+      if (type.includes("goal")) {
+        out.push({
+          id: `goal-${ev.event_id || at}`,
+          at,
+          type: "emoji",
+          side: "middle",
+          content: "⚽",
+          label: `${ev.team_name || ""} Goal`,
+          data: { type: "goal", minute: m, team: ev.team_name },
+        });
+      } else if (type.includes("yellow")) {
+        out.push({
+          id: `yc-${ev.event_id || at}`,
+          at,
+          type: "emoji",
+          side: "middle",
+          content: "🟨",
+          label: `${ev.team_name || ""} Yellow`,
+          data: {
+            type: "yellow",
+            player: ev.jugador,
+            team: ev.team_name,
+            minute: m,
+          },
+        });
+      } else if (type.includes("red")) {
+        out.push({
+          id: `rc-${ev.event_id || at}`,
+          at,
+          type: "emoji",
+          side: "middle",
+          content: "🟥",
+          label: `${ev.team_name || ""} Red`,
+          data: {
+            type: "red",
+            player: ev.jugador,
+            team: ev.team_name,
+            minute: m,
+          },
+        });
+      } else if (type.includes("sub")) {
+        out.push({
+          id: `sub-${ev.event_id || at}`,
+          at,
+          type: "emoji",
+          side: "top",
+          content: "🔁",
+          label: `${ev.team_name || ""} Substitution`,
+          data: {
+            type: "sub",
+            playerOut: ev.related_jugador,
+            playerIn: ev.jugador,
+            team: ev.team_name,
+            minute: m,
+          },
+        });
       }
     }
     return out;
-  }, [periods, patchedFirstHalfStart, patchedSecondHalfStart, patchedFirstHalfDuration, sprintsInWorstCases, matchEvents]);
+  }, [
+    periods,
+    patchedFirstHalfStart,
+    patchedSecondHalfStart,
+    patchedFirstHalfDuration,
+    sprintsInWorstCases,
+    matchEvents,
+  ]);
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="space-y-4">
-      <TopProgress active={loadingEntries || loadingPeriods || loadingWorstCases || loadingSprints} />
-      <div className="mb-3" />
-      <div className="space-y-4">        
-          
-            <button
-              onClick={()=>setShowInfo(v=>!v)}
-              className="w-full mt-2 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
-              aria-expanded={showInfo}
+        <TopProgress
+          active={
+            loadingEntries ||
+            loadingPeriods ||
+            loadingWorstCases ||
+            loadingSprints
+          }
+        />
+        <div className="mb-3" />
+        <div className="space-y-4">
+          <button
+            onClick={() => setShowInfo((v) => !v)}
+            className="w-full mt-2 flex items-center justify-between rounded-md bg-card border border-border px-3 py-2 hover:border-ring transition text-foreground"
+            aria-expanded={showInfo}
+          >
+            <span className="text-base font-semibold">Match info</span>
+            <svg
+              className={`w-4 h-4 ml-3 transition-transform ${
+                showInfo ? "rotate-0" : "-rotate-90"
+              }`}
+              viewBox="0 0 20 20"
+              fill="currentColor"
             >
-              <span className="text-base font-semibold">Match info</span>
-              <svg className={`w-4 h-4 ml-3 transition-transform ${showInfo ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
-            </button>
-            <div style={{maxHeight: showInfo ? '2000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+          <div
+            style={{ maxHeight: showInfo ? "2000px" : "0px" }}
+            className="transition-[max-height] duration-300 overflow-hidden"
+          >
             {showInfo && (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-3">
-              <div className="md:col-span-6 lg:col-span-3 h-full">
-                <Card className="h-full bg-zinc-900/50 border-zinc-800">
-                <CardHeader>
-                  <CardTitle>Details</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {!selectedMatchId ? (
-                    <div className="text-sm text-gray-600">Select a match to view details.</div>
-                  ) : matchDetailsLoading ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-5" />
-                      <Skeleton className="h-5" />
-                      <Skeleton className="h-5" />
-                    </div>
-                  ) : matchDetailsError ? (
-                    <div className="text-sm text-red-400">Failed to load match details. {matchDetailsError}</div>
-                  ) : (
-                    matchDetails == null ? (
-                      <div className="text-sm text-gray-600">No info.</div>
-                    ) : (() => { const md = matchDetails as MatchDetails; return (
-                      <div className="space-y-2 text-sm">
-                        <p className="text-lg font-semibold">
-                          {(md.home_team_name || (md.home_team_id?.slice(0,8)+"…"))} vs {(md.away_team_name || (md.away_team_id?.slice(0,8)+"…"))}
-                        </p>
-                        <p>
-                          <span className="text-zinc-400">Date:</span> {md.match_date ? new Date(md.match_date).toLocaleString() : 'No info'}
-                        </p>
-                        <p>
-                          <span className="text-zinc-400">Competition:</span> {md.competition_name || 'No info'}
-                        </p>                        
-                        <p>
-                          <span className="text-zinc-400">Venue:</span> {md.venue_name ? `${md.venue_name}${md.venue_city ? ' · ' + md.venue_city : ''}` : 'No info'}
-                        </p>
-                        <p>
-                          <span className="text-zinc-400">Result:</span> {md.result_home} - {md.result_away}
-                        </p>
-                        <p>
-                          <span className="text-zinc-400">YouTube:</span> {md.youtube_link ? (<a href={md.youtube_link} className="underline" target="_blank" rel="noreferrer">{md.youtube_link}</a>) : 'No info'}
-                        </p>
-                        <hr className="border-zinc-800" />
-                        <p>
-                          <span className="text-zinc-400">Home team:</span> {md.home_team_name || 'No info'}
-                        </p>
-                        <p>
-                          <span className="text-zinc-400">Away team:</span> {md.away_team_name || 'No info'}
-                        </p>                        
-                        <p>
-                          <span className="text-zinc-400">Parse confidence:</span> {md.parse_confidence ?? 'No info'}
-                        </p>
-                        <p>
-                          <span className="text-zinc-400">Source PDF hash:</span> {md.source_pdf_hash || 'No info'}
-                        </p>
-                        <p>
-                          <span className="text-zinc-400">Notes:</span> {md.notes || 'No info'}
-                        </p>
-                        <div className="mt-3" />
-                        <div>
-                          <div className="text-sm font-semibold mb-2">Stadium</div>
-                          <div className="rounded-md overflow-hidden border border-zinc-800">
-                            <StadiumMap
-                              latitude={(md.venue_latitude ?? -34.795334) as number}
-                              longitude={(md.venue_longitude ?? -56.147974) as number}
-                              zoom={15}
-                              styleUrl={`https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY || ''}`}
-                            />
-                          </div>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-3">
+                <div className="md:col-span-6 lg:col-span-3 h-full">
+                  <Card className="h-full bg-card border-border">
+                    <CardHeader>
+                      <CardTitle>Details</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {!selectedMatchId ? (
+                        <div className="text-sm text-muted-foreground">
+                          Select a match to view details.
                         </div>
-                      </div>
-                    ); })()
-                  )}
-                </CardContent>
-                </Card>
-              </div>
-
-              
-
-              <div className="md:col-span-6 lg:col-span-3 h-full">
-                <Card className="h-full bg-zinc-900/50 border-zinc-800">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-3">
-                      <Tabs value={eventsTab} onValueChange={(v)=>setEventsTab(v as any)}>
-                        <TabsList>
-                          <TabsTrigger value="events">Events</TabsTrigger>
-                          <TabsTrigger value="lineup">Lineup minutes</TabsTrigger>
-                        </TabsList>
-                      </Tabs>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {eventsTab === 'events' ? (
-                      (!selectedMatchId || loadingEvents) ? (
+                      ) : matchDetailsLoading ? (
                         <div className="space-y-2">
                           <Skeleton className="h-5" />
                           <Skeleton className="h-5" />
                           <Skeleton className="h-5" />
                         </div>
-                      ) : matchEvents.length === 0 ? (
-                        <div className="text-sm text-gray-600">No events.</div>
+                      ) : matchDetailsError ? (
+                        <div className="text-sm text-red-400">
+                          Failed to load match details. {matchDetailsError}
+                        </div>
+                      ) : matchDetails == null ? (
+                        <div className="text-sm text-muted-foreground">
+                          No info.
+                        </div>
                       ) : (
-                        <div className="space-y-1 text-sm">
-                          {matchEvents
-                            .filter((ev: any) => ev.type.toLowerCase() !== 'suboff')
-                            .map((ev: any) => (
-                              <div key={ev.event_id} className="flex items-start gap-2 py-1 px-2 rounded border border-zinc-800">
-                                <div className="w-16 text-zinc-400">{ev.minute}{typeof ev.added_time === 'number' ? `+${ev.added_time}` : ''}'</div>
-                                <div className="flex-1">
-                                  <div>
-                                    <span className="text-zinc-300">{ev.team_name}</span> · 
-                                    <span className={`uppercase text-xs font-semibold  px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 ${ev.type.toLowerCase() === 'goal' ? 'bg-green-600' : ev.type.toLowerCase() === 'yellow' ? 'bg-yellow-500' : ev.type.toLowerCase() === 'red' ? 'bg-red-900' : ev.type.toLowerCase() === 'subon' ? 'bg-blue-900' : ''}`}>
-                                      { ev.type.toLowerCase() === 'subon' ? 'substitution' : ev.type}
-                                    </span>
-                                  </div>
-                                  <div className="text-zinc-400">
-                                    {ev.jugador || ''}
-                                    {ev.related_jugador ? ` ↔ ${ev.related_jugador}` : ''}
-                                    {ev.assist_jugador ? ` (assist: ${ev.assist_jugador})` : ''}
-                                    {ev.reason ? ` – ${ev.reason}` : ''}
-                                  </div>
+                        (() => {
+                          const md = matchDetails as MatchDetails;
+                          return (
+                            <div className="space-y-2 text-sm">
+                              <p className="text-lg font-semibold">
+                                {md.home_team_name ||
+                                  md.home_team_id?.slice(0, 8) + "…"}{" "}
+                                vs{" "}
+                                {md.away_team_name ||
+                                  md.away_team_id?.slice(0, 8) + "…"}
+                              </p>
+                              <p>
+                                <span className="text-muted-foreground">
+                                  Date:
+                                </span>{" "}
+                                {md.match_date
+                                  ? new Date(md.match_date).toLocaleString()
+                                  : "No info"}
+                              </p>
+                              <p>
+                                <span className="text-muted-foreground">
+                                  Competition:
+                                </span>{" "}
+                                {md.competition_name || "No info"}
+                              </p>
+                              <p>
+                                <span className="text-muted-foreground">
+                                  Venue:
+                                </span>{" "}
+                                {md.venue_name
+                                  ? `${md.venue_name}${
+                                      md.venue_city ? " · " + md.venue_city : ""
+                                    }`
+                                  : "No info"}
+                              </p>
+                              <p>
+                                <span className="text-muted-foreground">
+                                  Result:
+                                </span>{" "}
+                                {md.result_home} - {md.result_away}
+                              </p>
+                              <p>
+                                <span className="text-muted-foreground">
+                                  YouTube:
+                                </span>{" "}
+                                {md.youtube_link ? (
+                                  <a
+                                    href={md.youtube_link}
+                                    className="underline"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    {md.youtube_link}
+                                  </a>
+                                ) : (
+                                  "No info"
+                                )}
+                              </p>
+                              <hr className="border-border" />
+                              <p>
+                                <span className="text-muted-foreground">
+                                  Home team:
+                                </span>{" "}
+                                {md.home_team_name || "No info"}
+                              </p>
+                              <p>
+                                <span className="text-muted-foreground">
+                                  Away team:
+                                </span>{" "}
+                                {md.away_team_name || "No info"}
+                              </p>
+                              <p>
+                                <span className="text-muted-foreground">
+                                  Parse confidence:
+                                </span>{" "}
+                                {md.parse_confidence ?? "No info"}
+                              </p>
+                              <p>
+                                <span className="text-muted-foreground">
+                                  Source PDF hash:
+                                </span>{" "}
+                                {md.source_pdf_hash || "No info"}
+                              </p>
+                              <p>
+                                <span className="text-muted-foreground">
+                                  Notes:
+                                </span>{" "}
+                                {md.notes || "No info"}
+                              </p>
+                              <div className="mt-3" />
+                              <div>
+                                <div className="text-sm font-semibold mb-2">
+                                  Stadium
+                                </div>
+                                <div className="rounded-md overflow-hidden border border-border">
+                                  <StadiumMap
+                                    latitude={
+                                      (md.venue_latitude ??
+                                        -34.795334) as number
+                                    }
+                                    longitude={
+                                      (md.venue_longitude ??
+                                        -56.147974) as number
+                                    }
+                                    zoom={15}
+                                    styleUrl={`https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${
+                                      process.env.NEXT_PUBLIC_MAPTILER_KEY || ""
+                                    }`}
+                                  />
                                 </div>
                               </div>
-                            ))}
-                        </div>
-                      )
-                    ) : (
-                      (!selectedMatchId || loadingLineup) ? (
+                            </div>
+                          );
+                        })()
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="md:col-span-6 lg:col-span-3 h-full">
+                  <Card className="h-full bg-card border-border">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-3">
+                        <Tabs
+                          value={eventsTab}
+                          onValueChange={(v) => setEventsTab(v as any)}
+                        >
+                          <TabsList>
+                            <TabsTrigger value="events">Events</TabsTrigger>
+                            <TabsTrigger value="lineup">
+                              Lineup minutes
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {eventsTab === "events" ? (
+                        !selectedMatchId || loadingEvents ? (
+                          <div className="space-y-2">
+                            <Skeleton className="h-5" />
+                            <Skeleton className="h-5" />
+                            <Skeleton className="h-5" />
+                          </div>
+                        ) : matchEvents.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">
+                            No events.
+                          </div>
+                        ) : (
+                          <div className="space-y-1 text-sm">
+                            {matchEvents
+                              .filter(
+                                (ev: any) => ev.type.toLowerCase() !== "suboff"
+                              )
+                              .map((ev: any) => (
+                                <div
+                                  key={ev.event_id}
+                                  className="flex items-start gap-2 py-1 px-2 rounded border border-border"
+                                >
+                                  <div className="w-16 text-muted-foreground">
+                                    {ev.minute}
+                                    {typeof ev.added_time === "number"
+                                      ? `+${ev.added_time}`
+                                      : ""}
+                                    '
+                                  </div>
+                                  <div className="flex-1">
+                                    <div>
+                                      <span className="text-foreground">
+                                        {ev.team_name}
+                                      </span>{" "}
+                                      ·
+                                      <span
+                                        className={`uppercase text-xs font-semibold  px-1 py-0.5 rounded bg-border border border-border ${
+                                          ev.type.toLowerCase() === "goal"
+                                            ? "bg-green-600"
+                                            : ev.type.toLowerCase() === "yellow"
+                                            ? "bg-yellow-500"
+                                            : ev.type.toLowerCase() === "red"
+                                            ? "bg-red-900"
+                                            : ev.type.toLowerCase() === "subon"
+                                            ? "bg-blue-900"
+                                            : ""
+                                        }`}
+                                      >
+                                        {ev.type.toLowerCase() === "subon"
+                                          ? "substitution"
+                                          : ev.type}
+                                      </span>
+                                    </div>
+                                    <div className="text-muted-foreground">
+                                      {ev.jugador || ""}
+                                      {ev.related_jugador
+                                        ? ` ↔ ${ev.related_jugador}`
+                                        : ""}
+                                      {ev.assist_jugador
+                                        ? ` (assist: ${ev.assist_jugador})`
+                                        : ""}
+                                      {ev.reason ? ` – ${ev.reason}` : ""}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        )
+                      ) : !selectedMatchId || loadingLineup ? (
                         <div className="space-y-2">
                           <Skeleton className="h-5" />
                           <Skeleton className="h-5" />
                           <Skeleton className="h-5" />
                         </div>
                       ) : lineupMinutes.length === 0 ? (
-                        <div className="text-sm text-gray-600">No lineup data.</div>
+                        <div className="text-sm text-muted-foreground">
+                          No lineup data.
+                        </div>
                       ) : (
                         <div className="text-sm space-y-2">
                           <div className="space-y-1">
                             {lineupStarters.map((row: any) => (
-                              <div key={row.match_player_id} className="flex items-center justify-between border border-zinc-800 rounded px-2 py-1">
+                              <div
+                                key={row.match_player_id}
+                                className="flex items-center justify-between border border-border rounded px-2 py-1"
+                              >
                                 <div className="truncate mr-2">
-                                  <span className="text-zinc-300">{row.jugador || '—'}</span>
-                                  <span className="ml-2 text-xs text-zinc-400">{row.position ? `(${row.position})` : ''}</span>
+                                  <span className="text-foreground">
+                                    {row.jugador || "—"}
+                                  </span>
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    {row.position ? `(${row.position})` : ""}
+                                  </span>
                                 </div>
-                                <div className="text-zinc-400">{(row.minutes_played ?? 0) > 0 ? `${row.minutes_played} min` : '—'}</div>
+                                <div className="text-muted-foreground">
+                                  {(row.minutes_played ?? 0) > 0
+                                    ? `${row.minutes_played} min`
+                                    : "—"}
+                                </div>
                               </div>
                             ))}
                           </div>
-                          <Separator className="bg-zinc-800" />
+                          <Separator className="bg-border" />
                           <div className="space-y-1">
                             {lineupBench.map((row: any) => (
-                              <div key={row.match_player_id} className="flex items-center justify-between border border-zinc-800 rounded px-2 py-1">
+                              <div
+                                key={row.match_player_id}
+                                className="flex items-center justify-between border border-border rounded px-2 py-1"
+                              >
                                 <div className="truncate mr-2">
-                                  <span className="text-zinc-300">{row.jugador || '—'}</span>
-                                  <span className="ml-2 text-xs text-zinc-400">{row.position ? `(${row.position})` : ''} (sub)</span>
+                                  <span className="text-foreground">
+                                    {row.jugador || "—"}
+                                  </span>
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    {row.position ? `(${row.position})` : ""}{" "}
+                                    (sub)
+                                  </span>
                                 </div>
-                                <div className="text-zinc-400">{(row.minutes_played ?? 0) > 0 ? `${row.minutes_played} min` : '—'}</div>
+                                <div className="text-muted-foreground">
+                                  {(row.minutes_played ?? 0) > 0
+                                    ? `${row.minutes_played} min`
+                                    : "—"}
+                                </div>
                               </div>
                             ))}
                           </div>
                         </div>
-                      )
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-
-              <div className="md:col-span-12 lg:col-span-6 h-full">
-                <Card className="bg-zinc-900/50 border-zinc-800">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      Accelerations Summary
-                      {loadingAccelerations && (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {!selectedTable ? (
-                      <div className="text-sm text-gray-600">Select a match to view accelerations.</div>
-                    ) : loadingAccelerations ? (
-                      <div className="space-y-2">
-                        <Skeleton className="h-6" />
-                        <Skeleton className="h-6" />
-                        <Skeleton className="h-6" />
-                      </div>
-                    ) : accelerations.length === 0 ? (
-                      <div className="text-sm text-gray-600">No data.</div>
-                    ) : (
-                      <>
-                      <div className="overflow-x-auto  mb-8">
-                        <table className="w-full text-sm">
-                          <thead className="text-zinc-300">
-                            <tr className="border-b border-zinc-800">
-                              <th className="text-left py-2 pr-3">Player</th>
-                            {Array.from({ length: Math.max(0, Math.min(10, accelerations[0]?.values?.length || 0)) }).map((_, idx) => (
-                              <th key={idx} className="text-right py-2 px-2">{accelColumns[idx] ?? `V${idx+1}`}</th>
-                            ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {accelerations.slice(0, 10).map((row, idx) => (
-                              <tr key={`accsum-${row.id}-${row.player_display_name}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
-                                <td className="py-2 pr-3 align-top text-zinc-200">{row.player_display_name}</td>
-                              {row.values.slice(0, 10).map((v, i) => (
-                                <td key={i} className="py-2 px-2 text-right tabular-nums text-zinc-300">{formatAccelValue(v, i)}</td>
-                              ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
 
-                      {/* Player comparison and intensity charts (side by side) */}
-                      <div className="md:col-span-12 w-full md:grid-cols-2 gap-4">
-                          {!selectedTable ? (
-                            <div className="text-sm text-gray-600">Select a match to view.</div>
-                          ) : accelerations.length === 0 ? (
-                            <div className="text-sm text-gray-600">No data.</div>
-                          ) : (
-                            <PlayerAccelComparisonChart rows={accelerations as any} />
-                          )}                      
-                    </div>
-                    </>
-                    )}
-                  </CardContent>
-                </Card>                
-              </div>
+                <div className="md:col-span-12 lg:col-span-6 h-full">
+                  <Card className="bg-card border-border">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        Accelerations Summary
+                        {loadingAccelerations && (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {!selectedTable ? (
+                        <div className="text-sm text-muted-foreground">
+                          Select a match to view accelerations.
+                        </div>
+                      ) : loadingAccelerations ? (
+                        <div className="space-y-2">
+                          <Skeleton className="h-6" />
+                          <Skeleton className="h-6" />
+                          <Skeleton className="h-6" />
+                        </div>
+                      ) : accelerations.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">
+                          No data.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="overflow-x-auto  mb-8">
+                            <table className="w-full text-sm">
+                              <thead className="text-foreground">
+                                <tr className="border-b border-border">
+                                  <th className="text-left py-2 pr-3">
+                                    Player
+                                  </th>
+                                  {Array.from({
+                                    length: Math.max(
+                                      0,
+                                      Math.min(
+                                        10,
+                                        accelerations[0]?.values?.length || 0
+                                      )
+                                    ),
+                                  }).map((_, idx) => (
+                                    <th
+                                      key={idx}
+                                      className="text-right py-2 px-2"
+                                    >
+                                      {accelColumns[idx] ?? `V${idx + 1}`}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {accelerations.slice(0, 10).map((row, idx) => (
+                                  <tr
+                                    key={`accsum-${row.id}-${row.player_display_name}-${idx}`}
+                                    className="border-b border-border hover:bg-accent"
+                                  >
+                                    <td className="py-2 pr-3 align-top text-foreground">
+                                      {row.player_display_name}
+                                    </td>
+                                    {row.values.slice(0, 10).map((v, i) => (
+                                      <td
+                                        key={i}
+                                        className="py-2 px-2 text-right tabular-nums text-foreground"
+                                      >
+                                        {formatAccelValue(v, i)}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
 
-            </div>
-            )}
-            </div>
-
-            <button
-              onClick={()=>setShowAnalysis(v=>!v)}
-              className="w-full mt-6 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
-              aria-expanded={showAnalysis}
-            >
-              <span className="text-base font-semibold">Analysis</span>
-              <svg className={`w-4 h-4 ml-3 transition-transform ${showAnalysis ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
-            </button>
-            <div style={{maxHeight: showAnalysis ? '4000px' : '0px'}} className="transition-[max-height] duration-300 overflow-hidden">
-            {showAnalysis && (
-            <div className={`grid gap-4 mt-3 ${showPatchPanel ? 'grid-cols-1 md:grid-cols-6' : 'grid-cols-1'}`}>
-              <Card className={`${showPatchPanel ? 'md:col-span-5' : ''} bg-zinc-900/50 border-zinc-800`}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Average Speed Over Time
-                    {loadingEntries&&(
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    )}
-
-                  {!showPatchPanel && (
-                    <div className="ml-auto justify-end">
-                      <Button variant={'secondary'} onClick={()=>setShowPatchPanel(true)}>
-                        Edit Periods
-                      </Button>
-                    </div>
-                  )}
-                  </CardTitle>
-                  
-                  <div className="ml-auto">
-                    <div className="relative" style={{ height: 0 }}>
-                      <div className="absolute right-3 -top-4">
-                        <ThresholdLegend thresholds={thresholds} inChart vertical className="min-w-[300px]" />
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {loadingEntries ? (                      
-                    <Skeleton className="h-[360px]" />
-                  ) : entries.length === 0 || !periods ? (
-                    <div className="text-sm text-gray-600">No data to display.</div>
-                  ) : (
-                    <>
-                      <AvgSpeedChart
-                        entries={entries}
-                        thresholds={thresholds}
-                        periods={periods}
-                        kickoffSpike={kickoffSpike}
-                        cursorSecond={(function(){
-                          const p = periods;
-                          const kickoff = kickoffSpike ?? 0;
-                          const t = videoTimeSec;
-                          const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
-                          const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-                          const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - fhStartPatched) : undefined);
-                          if (!p) return kickoff + t;
-                          if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
-                            const firstHalfDuration = Math.max(0, fhDurPatched);
-                            if (t <= firstHalfDuration) return fhStartPatched + t;
-                            return shStartPatched + (t - firstHalfDuration);
-                          }
-                          return fhStartPatched + t;
-                        })()}
-                        patchedFirstHalfStart={patchedFirstHalfStart}
-                        patchedSecondHalfStart={patchedSecondHalfStart}
-                      />
-
-                      <div className="mt-3 relative">
-                        <div className={`${forecastOpen ? 'w-60 h-[660px]' : 'w-[15px]'} absolute left-0 top-2 transition-all duration-200 h-[700px]`}>
-                          <div className="h-full rounded-md border border-zinc-800 bg-zinc-900/60 flex flex-col">
-                            <button className="text-xs px-1 py-1 border-b border-zinc-800 hover:bg-zinc-800/50" onClick={()=> setForecastOpen(v=>!v)} title={forecastOpen ? 'Hide forecast' : 'Show forecast'}>
-                              {forecastOpen ? '⟨' : '⟩'}
-                            </button>
-                            {forecastOpen && (
-                              <div className="p-2 space-y-2 text-xs">
-                                <div>
-                                  <Label className="text-xs text-zinc-400" htmlFor="forecast-horizon">Horizon (s)</Label>
-                                  <Input
-                                    id="forecast-horizon"
-                                    type="number"
-                                    step={0.1}
-                                    className="bg-zinc-900/60 border-zinc-800 text-zinc-100 h-7"
-                                    value={forecastHorizon}
-                                    onChange={(e)=> setForecastHorizon(Number(e.target.value))}
-                                  />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Button variant={'secondary'} size={'sm'} onClick={fetchForecast} disabled={!selectedTable || loadingForecast}>
-                                    <span className="inline-flex items-center gap-1">
-                                      {loadingForecast ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>Fetch…</span></>) : 'Fetch now'}
-                                    </span>
-                                  </Button>
-                                  <Button variant={'default'} className="bg-primary text-primary-foreground hover:bg-primary/90" size={'sm'} onClick={()=> setForecastAuto(v=>!v)} disabled={!selectedTable}>
-                                    {forecastAuto ? 'Stop' : 'Start'}
-                                  </Button>
-                                </div>
-                                {forecastError && (<div className="text-red-400 text-xs mt-1">{forecastError}</div>)}
-                                {forecastData && (
-                                  <div className="mt-1 text-xs">
-                                    {Array.isArray(forecastData?.results) && forecastData.results.length > 0 ? (
-                                      <div className="flex flex-col gap-1">
-                                        {forecastData.results
-                                          .slice()
-                                          .sort((a: any, b: any) => String(a.name||a.id||'').localeCompare(String(b.name||b.id||'')))
-                                          .map((r: any, idx: number) => (
-                                          <div key={r.id || r.name || idx} className={`flex items-center justify-between rounded px-2 py-1 border ${r.above_thr ? 'border-red-900 bg-red-900/20 text-red-200' : 'border-emerald-900 bg-emerald-900/20 text-emerald-200'}`}>
-                                            <div className="truncate mr-2">{r.name || r.id}</div>
-                                            <div className="tabular-nums">{(Number(r.prob)||0).toFixed(3)}</div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <pre className="whitespace-pre-wrap break-words">{JSON.stringify(forecastData, null, 2)}</pre>
-                                    )}
-                                  </div>
-                                )}
+                          {/* Player comparison and intensity charts (side by side) */}
+                          <div className="md:col-span-12 w-full md:grid-cols-2 gap-4">
+                            {!selectedTable ? (
+                              <div className="text-sm text-muted-foreground">
+                                Select a match to view.
                               </div>
+                            ) : accelerations.length === 0 ? (
+                              <div className="text-sm text-muted-foreground">
+                                No data.
+                              </div>
+                            ) : (
+                              <PlayerAccelComparisonChart
+                                rows={accelerations as any}
+                              />
                             )}
                           </div>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => setShowAnalysis((v) => !v)}
+            className="w-full mt-6 flex items-center justify-between rounded-md bg-card border border-border px-3 py-2 hover:border-ring transition text-foreground"
+            aria-expanded={showAnalysis}
+          >
+            <span className="text-base font-semibold">Analysis</span>
+            <svg
+              className={`w-4 h-4 ml-3 transition-transform ${
+                showAnalysis ? "rotate-0" : "-rotate-90"
+              }`}
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+          <div
+            style={{ maxHeight: showAnalysis ? "4000px" : "0px" }}
+            className="transition-[max-height] duration-300 overflow-hidden"
+          >
+            {showAnalysis && (
+              <div
+                className={`grid gap-4 mt-3 ${
+                  showPatchPanel ? "grid-cols-1 md:grid-cols-6" : "grid-cols-1"
+                }`}
+              >
+                <Card
+                  className={`${
+                    showPatchPanel ? "md:col-span-5" : ""
+                  } bg-card border-border`}
+                >
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      Average Speed Over Time
+                      {loadingEntries && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                      {!showPatchPanel && (
+                        <div className="ml-auto justify-end">
+                          <Button
+                            variant={"secondary"}
+                            onClick={() => setShowPatchPanel(true)}
+                          >
+                            Edit Periods
+                          </Button>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginLeft: forecastOpen ? 240 : 15 }}>
-                          <div className="p-2" id="unified-video">
-                            <UnifiedVideo
-                            youtubeId={searchParams.get('yt')}
-                            videoUrl={youtubeLink || searchParams.get('video') || undefined}
-                            onSecondChange={handleVideoSecondChange}
-                            seekTo={pendingSeek}
-                            markers={videoMarkers}
-                            onMarkerClick={(m)=>{
-                              const d: any = (m as any).data || {}
-                              const player = d.player || d.playerIn || d.playerOut || d.player_display_name || null
-                              if (player) {
-                                setPinnedPlayers(prev => ({ ...prev, [player]: true }))
-                              }
-                              const el = document.getElementById('unified-video')
-                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                            }}
-                            />
-                            <div className="mt-2 w-[110px] text-xs text-zinc-300 flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              <span>{(function(){
-                                const p = periods;
-                                const kickoff = kickoffSpike ?? 0;
-                                const fhStartPatched = patchedFirstHalfStart ?? p?.detected_first_half_start ?? kickoff;
-                                const shStartPatched = patchedSecondHalfStart ?? p?.detected_second_half_start ?? undefined;
-                                const fhDurPatched = patchedFirstHalfDuration ?? (p && p.detected_first_half_end !== undefined ? Math.max(0, (p.detected_first_half_end as number) - (fhStartPatched as number)) : undefined);
-                                if (!p) return Math.max(0, (fhStartPatched as number) + videoTimeSec).toFixed(3);
-                                if (typeof shStartPatched === 'number' && typeof fhDurPatched === 'number') {
-                                  const firstHalfDuration = Math.max(0, fhDurPatched);
-                                  if (videoTimeSec <= firstHalfDuration) return ((fhStartPatched as number) + videoTimeSec).toFixed(3);
-                                  return ((shStartPatched as number) + (videoTimeSec - firstHalfDuration)).toFixed(3);
+                      )}
+                    </CardTitle>
+
+                    <div className="ml-auto">
+                      <div className="relative" style={{ height: 0 }}>
+                        <div className="absolute right-3 -top-4">
+                          <ThresholdLegend
+                            thresholds={thresholds}
+                            inChart
+                            vertical
+                            className="min-w-[300px]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingEntries ? (
+                      <Skeleton className="h-[360px]" />
+                    ) : entries.length === 0 || !periods ? (
+                      <div className="text-sm text-muted-foreground">
+                        No data to display.
+                      </div>
+                    ) : (
+                      <>
+                        <AvgSpeedChart
+                          entries={entries}
+                          thresholds={thresholds}
+                          periods={periods}
+                          kickoffSpike={kickoffSpike}
+                          cursorSecond={(function () {
+                            const p = periods;
+                            const kickoff = kickoffSpike ?? 0;
+                            const t = videoTimeSec;
+                            const fhStartPatched =
+                              patchedFirstHalfStart ??
+                              p?.detected_first_half_start ??
+                              kickoff;
+                            const shStartPatched =
+                              patchedSecondHalfStart ??
+                              p?.detected_second_half_start ??
+                              undefined;
+                            const fhDurPatched =
+                              patchedFirstHalfDuration ??
+                              (p && p.detected_first_half_end !== undefined
+                                ? Math.max(
+                                    0,
+                                    (p.detected_first_half_end as number) -
+                                      fhStartPatched
+                                  )
+                                : undefined);
+                            if (!p) return kickoff + t;
+                            if (
+                              typeof shStartPatched === "number" &&
+                              typeof fhDurPatched === "number"
+                            ) {
+                              const firstHalfDuration = Math.max(
+                                0,
+                                fhDurPatched
+                              );
+                              if (t <= firstHalfDuration)
+                                return fhStartPatched + t;
+                              return shStartPatched + (t - firstHalfDuration);
+                            }
+                            return fhStartPatched + t;
+                          })()}
+                          patchedFirstHalfStart={patchedFirstHalfStart}
+                          patchedSecondHalfStart={patchedSecondHalfStart}
+                        />
+
+                        <div className="mt-3 relative">
+                          <div
+                            className={`${
+                              forecastOpen ? "w-60 h-[660px]" : "w-[15px]"
+                            } absolute left-0 top-2 transition-all duration-200 h-[700px]`}
+                          >
+                            <div className="h-full rounded-md border border-border bg-card flex flex-col">
+                              <button
+                                className="text-xs px-1 py-1 border-b border-border hover:bg-border/50"
+                                onClick={() => setForecastOpen((v) => !v)}
+                                title={
+                                  forecastOpen
+                                    ? "Hide forecast"
+                                    : "Show forecast"
                                 }
-                                return ((fhStartPatched as number) + videoTimeSec).toFixed(3);
-                              })()}</span>
-                            </div>
-                          </div>
-                          <div className="p-2">
-                            <div className="h-[660px] md:h-[760px]">
-                              <div className="sticky z-20 bg-zinc-900/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-zinc-800 flex items-center justify-between">
-                                <div className="flex items-center gap-2 py-2">
-                                  <label className="text-xs text-zinc-400">Orientation</label>
-                                  <Slider
-                                    min={-180}
-                                    max={180}
-                                    step={1}
-                                    value={[mapBearing]}
-                                    onValueChange={(vals)=>{
-                                      const v = Number(vals?.[0] ?? 0);
-                                      setMapBearing(v);
-                                      if (orientationSaveTimer.current) clearTimeout(orientationSaveTimer.current);
-                                      orientationSaveTimer.current = setTimeout(()=>{ persistVenueOrientation(v); }, 600);
-                                    }}
-                                    onValueCommit={(vals)=>{
-                                      const v = Number(vals?.[0] ?? mapBearing);
-                                      persistVenueOrientation(v);
-                                    }}
-                                    className="w-44"
-                                  />
-                                  <span className="ml-1 text-xs w-10 text-right text-zinc-300">{mapBearing}°</span>
-                                  <span className="ml-2 text-xs text-zinc-400 min-w-[70px]">{savingOrientation ? 'Saving…' : (orientationSavedAt ? 'Saved' : '')}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Button variant={'ghost'} size={'sm'} onClick={()=>setMapStacked(v=>!v)}>Toggle layout</Button>
-                                  <Button variant={'ghost'} size={'sm'} onClick={()=>setZoomLimited(v=>!v)}>
-                                    {zoomLimited ? 'Enable full zoom' : 'Limit zoom'}
-                                  </Button>
-                                  <div className="flex items-center gap-2">
-                                    <Button variant={'destructive'} size={'sm'} onClick={()=> setSharpTraces([])}>Clear traces</Button>
-                                    {loadingSharpAngles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                                  </div>
-                                </div>
-                              </div>
-                              {(!selectedTable || !periods) ? (
-                                <div className="text-sm text-gray-600">Select a match to view players and positions.</div>
-                              ) : (
-                                <div className={mapStacked ? 'flex flex-col h-full gap-3' : 'grid grid-cols-5 gap-3 h-full'}>
-                                  <div className={mapStacked ? 'flex-1 min-h-0 relative z-0' : 'col-span-4 h-full relative z-0'}>
-                                    <PitchMap
-                                      points={livePositions}
-                                      styleObj={googleRasterStyle}
-                                      pinned={pinnedPlayers}
-                                      onToggle={togglePinned}
-                                      heightClass={'h-full'}
-                                      heightStyle={mapStacked ? undefined : undefined}
-                                      centerLatitude={(matchDetails?.venue_latitude ?? -34.795334) as number}
-                                      centerLongitude={(matchDetails?.venue_longitude ?? -56.147974) as number}
-                                      bearing={mapBearing}
-                                      traceLines={(sharpTraces && sharpTraces.length>0) ? sharpTraces.map(t => t.points.map(p=>({ lat: p.lat, lon: p.lon }))) : undefined}
-                                      traceColor={'#ef4444'}
-                                      traceLines2={(sharpTraces2 && sharpTraces2.length>0) ? sharpTraces2.map(t => t.points.map(p=>({ lat: p.lat, lon: p.lon }))) : undefined}
-                                      traceColor2={'#60a5fa'}
-                                      limitZoom={zoomLimited}
+                              >
+                                {forecastOpen ? "⟨" : "⟩"}
+                              </button>
+                              {forecastOpen && (
+                                <div className="p-2 space-y-2 text-xs">
+                                  <div>
+                                    <Label
+                                      className="text-xs text-muted-foreground"
+                                      htmlFor="forecast-horizon"
+                                    >
+                                      Horizon (s)
+                                    </Label>
+                                    <Input
+                                      id="forecast-horizon"
+                                      type="number"
+                                      step={0.1}
+                                      className="bg-card border-border text-foreground h-7"
+                                      value={forecastHorizon}
+                                      onChange={(e) =>
+                                        setForecastHorizon(
+                                          Number(e.target.value)
+                                        )
+                                      }
                                     />
                                   </div>
-                                  <div className={mapStacked ? 'h-28 md:h-32 overflow-y-auto relative z-10' : 'col-span-1 h-full overflow-y-auto relative z-10'}>
-                                    {loadingPlayers ? (
-                                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                    ) : players.length === 0 ? (
-                                      <div className="text-sm text-gray-600">No players found.</div>
-                                    ) : (
-                                      <div className={mapStacked ? 'flex flex-wrap gap-2 items-start' : 'flex flex-col gap-2'}>
-                                        {players.map((player, index) => {
-                                          const { base, border } = stringToColorPair(player || "");
-                                          const active = !!pinnedPlayers[player];
-                                          return (
-                                            <button
-                                              key={index}
-                                              onClick={() => togglePinned(player)}
-                                              className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out`}
-                                              style={{
-                                                background: active ? base : '#27272a',
-                                                color: active ? '#fff' : '#d4d4d8',
-                                                padding: '3px 8px',
-                                              }}
-                                              title={player}
-                                            >
-                                              <span
-                                                className="inline-block rounded-full"
-                                                style={{ width: 6, height: 6, background: active ? '#fff' : base, border: `2px solid ${border}` }}
-                                              />
-                                              <span className={mapStacked ? 'truncate max-w-[120px]' : ''}>{player}</span>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant={"secondary"}
+                                      size={"sm"}
+                                      onClick={fetchForecast}
+                                      disabled={
+                                        !selectedTable || loadingForecast
+                                      }
+                                    >
+                                      <span className="inline-flex items-center gap-1">
+                                        {loadingForecast ? (
+                                          <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            <span>Fetch…</span>
+                                          </>
+                                        ) : (
+                                          "Fetch now"
+                                        )}
+                                      </span>
+                                    </Button>
+                                    <Button
+                                      variant={"default"}
+                                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                                      size={"sm"}
+                                      onClick={() => setForecastAuto((v) => !v)}
+                                      disabled={!selectedTable}
+                                    >
+                                      {forecastAuto ? "Stop" : "Start"}
+                                    </Button>
                                   </div>
+                                  {forecastError && (
+                                    <div className="text-red-400 text-xs mt-1">
+                                      {forecastError}
+                                    </div>
+                                  )}
+                                  {forecastData && (
+                                    <div className="mt-1 text-xs">
+                                      {Array.isArray(forecastData?.results) &&
+                                      forecastData.results.length > 0 ? (
+                                        <div className="flex flex-col gap-1">
+                                          {forecastData.results
+                                            .slice()
+                                            .sort((a: any, b: any) =>
+                                              String(
+                                                a.name || a.id || ""
+                                              ).localeCompare(
+                                                String(b.name || b.id || "")
+                                              )
+                                            )
+                                            .map((r: any, idx: number) => (
+                                              <div
+                                                key={r.id || r.name || idx}
+                                                className={`flex items-center justify-between rounded px-2 py-1 border ${
+                                                  r.above_thr
+                                                    ? "border-red-900 bg-red-900/20 text-red-200"
+                                                    : "border-emerald-900 bg-emerald-900/20 text-emerald-200"
+                                                }`}
+                                              >
+                                                <div className="truncate mr-2">
+                                                  {r.name || r.id}
+                                                </div>
+                                                <div className="tabular-nums">
+                                                  {(
+                                                    Number(r.prob) || 0
+                                                  ).toFixed(3)}
+                                                </div>
+                                              </div>
+                                            ))}
+                                        </div>
+                                      ) : (
+                                        <pre className="whitespace-pre-wrap break-words">
+                                          {JSON.stringify(
+                                            forecastData,
+                                            null,
+                                            2
+                                          )}
+                                        </pre>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-              {showPatchPanel && (
-                <>
-                <Card className="md:col-span-1 bg-zinc-900/50 border-zinc-800">
-                  <CardHeader>
-                    <div className="ml-auto">
-                      <Button variant={'secondary'} onClick={()=>setShowPatchPanel(false)}>Close Editor</Button>
-                    </div>
-                    <CardTitle>Periods Editor</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {!periods ? (
-                      <div className="text-sm text-gray-600">No detected periods yet.</div>
-                    ) : (
-                      <div className="space-y-4 text-sm">
-                        <div className="space-y-2">
-                          <Label className="font-medium text-zinc-300">Detected first half start</Label>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">sec: {periods.detected_first_half_start ?? '—'}</span>
-                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">time: { periods.detected_first_half_start}</span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="font-medium text-zinc-300">Detected second half start</Label>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">sec: {periods.detected_second_half_start ?? '—'}</span>
-                            <span className="px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-300">time: {periods.detected_second_half_start}</span>
-                          </div>
-                        </div>
-                        <Separator className="bg-zinc-800" />
-                        <div className="space-y-1">
-                          <Label className="font-medium text-zinc-300" htmlFor="fh-start">Patched first half start (sec)</Label>
-                          <Input
-                            id="fh-start"
-                            type="number"
-                            className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
-                            value={patchedFirstHalfStart ?? ''}
-                            onChange={(e)=>setPatchedFirstHalfStart(e.target.value === '' ? null : Number(e.target.value))}
-                            onBlur={() => setPositionsResetKey((k)=> (k ?? 0) + 1)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="font-medium text-zinc-300" htmlFor="sh-start">Patched second half start (sec)</Label>
-                          <Input
-                            id="sh-start"
-                            type="number"
-                            className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
-                            value={patchedSecondHalfStart ?? ''}
-                            onChange={(e)=>setPatchedSecondHalfStart(e.target.value === '' ? null : Number(e.target.value))}
-                            onBlur={() => setPositionsResetKey((k)=> (k ?? 0) + 1)}
-                          />
-                        </div>
-                        <div className="flex items-center gap-2 justify-end">
-                          <Button size={'sm'} variant={'secondary'} onClick={()=>{
-                            setPatchedFirstHalfStart(periods.detected_first_half_start ?? null);
-                            setPatchedSecondHalfStart(periods.detected_second_half_start ?? null);
-                            const fh = periods.detected_first_half_start ?? null;
-                            const fe = periods.detected_first_half_end ?? null;
-                            setPatchedFirstHalfDuration(fh !== null && fe !== null ? Math.max(0, Math.floor(fe - fh)) : null);
-                            const sh = periods.detected_second_half_start ?? null;
-                            const se = periods.detected_second_half_end ?? null;
-                            setPatchedSecondHalfDuration(sh !== null && se !== null ? Math.max(0, Math.floor(se - sh)) : null);
-                          }}>Reset to detected</Button>
-                          <Button size={'sm'} variant={'default'} className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed min-w-[130px]"
-                            disabled={savingPeriods}
-                            onClick={async()=>{
-                              if (!selectedTable) return;
-                              setSavingPeriods(true);
-                              setSavingPeriodsError(null);
-                              const body = {
-                                match_name: selectedTable,
-                                manual_first_half_start: patchedFirstHalfStart,
-                                manual_second_half_start: patchedSecondHalfStart,
-                                first_half_duration_sec: patchedFirstHalfDuration,
-                                second_half_duration_sec: patchedSecondHalfDuration,
-                              };
-                              try {
-                                const start = Date.now();
-                                const res = await fetch(`${API_BASE}/match/table/${selectedTable}/periods/patch`,{
-                                  method:'POST',
-                                  headers:{'Content-Type':'application/json'},
-                                  body: JSON.stringify(body)
-                                });
-                                if (!res.ok) {
-                                  const txt = await res.text().catch(()=> '');
-                                  throw new Error(`HTTP ${res.status} ${txt}`);
-                                }
-                                const elapsed = Date.now() - start;
-                                if (elapsed < 200) {
-                                  await new Promise(r => setTimeout(r, 300 - elapsed));
-                                }
-                              } catch (e: any) {
-                                setSavingPeriodsError('Failed to save periods.');
-                              } finally {
-                                setSavingPeriods(false);
-                              }
-                            }}
+                          <div
+                            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                            style={{ marginLeft: forecastOpen ? 240 : 15 }}
                           >
-                            <span className="inline-flex items-center gap-1 justify-center w-full">
-                              <span>{savingPeriods ? "Saving..." : "Save changes"}</span>
-                              {savingPeriods && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                            </span>
+                            <div className="p-2" id="unified-video">
+                              <UnifiedVideo
+                                youtubeId={searchParams.get("yt")}
+                                videoUrl={
+                                  youtubeLink ||
+                                  searchParams.get("video") ||
+                                  undefined
+                                }
+                                onSecondChange={handleVideoSecondChange}
+                                seekTo={pendingSeek}
+                                markers={videoMarkers}
+                                onMarkerClick={(m) => {
+                                  const d: any = (m as any).data || {};
+                                  const player =
+                                    d.player ||
+                                    d.playerIn ||
+                                    d.playerOut ||
+                                    d.player_display_name ||
+                                    null;
+                                  if (player) {
+                                    setPinnedPlayers((prev) => ({
+                                      ...prev,
+                                      [player]: true,
+                                    }));
+                                  }
+                                  const el =
+                                    document.getElementById("unified-video");
+                                  if (el)
+                                    el.scrollIntoView({
+                                      behavior: "smooth",
+                                      block: "center",
+                                    });
+                                }}
+                              />
+                              <div className="mt-2 w-[110px] text-xs text-foreground flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                <span>
+                                  {(function () {
+                                    const p = periods;
+                                    const kickoff = kickoffSpike ?? 0;
+                                    const fhStartPatched =
+                                      patchedFirstHalfStart ??
+                                      p?.detected_first_half_start ??
+                                      kickoff;
+                                    const shStartPatched =
+                                      patchedSecondHalfStart ??
+                                      p?.detected_second_half_start ??
+                                      undefined;
+                                    const fhDurPatched =
+                                      patchedFirstHalfDuration ??
+                                      (p &&
+                                      p.detected_first_half_end !== undefined
+                                        ? Math.max(
+                                            0,
+                                            (p.detected_first_half_end as number) -
+                                              (fhStartPatched as number)
+                                          )
+                                        : undefined);
+                                    if (!p)
+                                      return Math.max(
+                                        0,
+                                        (fhStartPatched as number) +
+                                          videoTimeSec
+                                      ).toFixed(3);
+                                    if (
+                                      typeof shStartPatched === "number" &&
+                                      typeof fhDurPatched === "number"
+                                    ) {
+                                      const firstHalfDuration = Math.max(
+                                        0,
+                                        fhDurPatched
+                                      );
+                                      if (videoTimeSec <= firstHalfDuration)
+                                        return (
+                                          (fhStartPatched as number) +
+                                          videoTimeSec
+                                        ).toFixed(3);
+                                      return (
+                                        (shStartPatched as number) +
+                                        (videoTimeSec - firstHalfDuration)
+                                      ).toFixed(3);
+                                    }
+                                    return (
+                                      (fhStartPatched as number) + videoTimeSec
+                                    ).toFixed(3);
+                                  })()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="p-2">
+                              <div className="h-[660px] md:h-[760px]">
+                                <div className="sticky z-20 bg-background/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-border flex items-center justify-between">
+                                  <div className="flex items-center gap-2 py-2">
+                                    <label className="text-xs text-muted-foreground">
+                                      Orientation
+                                    </label>
+                                    <Slider
+                                      min={-180}
+                                      max={180}
+                                      step={1}
+                                      value={[mapBearing]}
+                                      onValueChange={(vals) => {
+                                        const v = Number(vals?.[0] ?? 0);
+                                        setMapBearing(v);
+                                        if (orientationSaveTimer.current)
+                                          clearTimeout(
+                                            orientationSaveTimer.current
+                                          );
+                                        orientationSaveTimer.current =
+                                          setTimeout(() => {
+                                            persistVenueOrientation(v);
+                                          }, 600);
+                                      }}
+                                      onValueCommit={(vals) => {
+                                        const v = Number(
+                                          vals?.[0] ?? mapBearing
+                                        );
+                                        persistVenueOrientation(v);
+                                      }}
+                                      className="w-44"
+                                    />
+                                    <span className="ml-1 text-xs w-10 text-right text-foreground">
+                                      {mapBearing}°
+                                    </span>
+                                    <span className="ml-2 text-xs text-muted-foreground min-w-[70px]">
+                                      {savingOrientation
+                                        ? "Saving…"
+                                        : orientationSavedAt
+                                        ? "Saved"
+                                        : ""}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant={"ghost"}
+                                      size={"sm"}
+                                      onClick={() => setMapStacked((v) => !v)}
+                                    >
+                                      Toggle layout
+                                    </Button>
+                                    <Button
+                                      variant={"ghost"}
+                                      size={"sm"}
+                                      onClick={() => setZoomLimited((v) => !v)}
+                                    >
+                                      {zoomLimited
+                                        ? "Enable full zoom"
+                                        : "Limit zoom"}
+                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        variant={"destructive"}
+                                        size={"sm"}
+                                        onClick={() => setSharpTraces([])}
+                                      >
+                                        Clear traces
+                                      </Button>
+                                      {loadingSharpAngles && (
+                                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                {!selectedTable || !periods ? (
+                                  <div className="text-sm text-muted-foreground">
+                                    Select a match to view players and
+                                    positions.
+                                  </div>
+                                ) : (
+                                  <div
+                                    className={
+                                      mapStacked
+                                        ? "flex flex-col h-full gap-3"
+                                        : "grid grid-cols-5 gap-3 h-full"
+                                    }
+                                  >
+                                    <div
+                                      className={
+                                        mapStacked
+                                          ? "flex-1 min-h-0 relative z-0"
+                                          : "col-span-4 h-full relative z-0"
+                                      }
+                                    >
+                                      <PitchMap
+                                        points={livePositions}
+                                        styleObj={googleRasterStyle}
+                                        pinned={pinnedPlayers}
+                                        onToggle={togglePinned}
+                                        heightClass={"h-full"}
+                                        heightStyle={
+                                          mapStacked ? undefined : undefined
+                                        }
+                                        centerLatitude={
+                                          (matchDetails?.venue_latitude ??
+                                            -34.795334) as number
+                                        }
+                                        centerLongitude={
+                                          (matchDetails?.venue_longitude ??
+                                            -56.147974) as number
+                                        }
+                                        bearing={mapBearing}
+                                        traceLines={
+                                          sharpTraces && sharpTraces.length > 0
+                                            ? sharpTraces.map((t) =>
+                                                t.points.map((p) => ({
+                                                  lat: p.lat,
+                                                  lon: p.lon,
+                                                }))
+                                              )
+                                            : undefined
+                                        }
+                                        traceColor={"#ef4444"}
+                                        traceLines2={
+                                          sharpTraces2 &&
+                                          sharpTraces2.length > 0
+                                            ? sharpTraces2.map((t) =>
+                                                t.points.map((p) => ({
+                                                  lat: p.lat,
+                                                  lon: p.lon,
+                                                }))
+                                              )
+                                            : undefined
+                                        }
+                                        traceColor2={"#60a5fa"}
+                                        limitZoom={zoomLimited}
+                                      />
+                                    </div>
+                                    <div
+                                      className={
+                                        mapStacked
+                                          ? "h-28 md:h-32 overflow-y-auto relative z-10"
+                                          : "col-span-1 h-full overflow-y-auto relative z-10"
+                                      }
+                                    >
+                                      {loadingPlayers ? (
+                                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                      ) : players.length === 0 ? (
+                                        <div className="text-sm text-muted-foreground">
+                                          No players found.
+                                        </div>
+                                      ) : (
+                                        <div
+                                          className={
+                                            mapStacked
+                                              ? "flex flex-wrap gap-2 items-start"
+                                              : "flex flex-col gap-2"
+                                          }
+                                        >
+                                          {players.map((player, index) => {
+                                            const { base, border } =
+                                              stringToColorPair(player || "");
+                                            const active =
+                                              !!pinnedPlayers[player];
+                                            return (
+                                              <button
+                                                key={index}
+                                                onClick={() =>
+                                                  togglePinned(player)
+                                                }
+                                                className={`inline-flex items-center gap-1 rounded-md text-[12px] transition-all duration-300 ease-in-out px-2 py-1 ${
+                                                  active
+                                                    ? "bg-primary text-primary-foreground border border-primary/20"
+                                                    : "bg-muted text-muted-foreground border border-border hover:bg-accent hover:text-accent-foreground"
+                                                }`}
+                                                title={player}
+                                              >
+                                                <span
+                                                  className={`inline-block rounded-full w-1.5 h-1.5 border-2 ${
+                                                    active
+                                                      ? "bg-primary-foreground border-primary-foreground"
+                                                      : "border-border"
+                                                  }`}
+                                                  style={{
+                                                    backgroundColor: active
+                                                      ? undefined
+                                                      : base,
+                                                    borderColor: active
+                                                      ? undefined
+                                                      : border,
+                                                  }}
+                                                />
+                                                <span
+                                                  className={
+                                                    mapStacked
+                                                      ? "truncate max-w-[120px]"
+                                                      : ""
+                                                  }
+                                                >
+                                                  {player}
+                                                </span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+                {showPatchPanel && (
+                  <>
+                    <Card className="md:col-span-1 bg-card border-border">
+                      <CardHeader>
+                        <div className="ml-auto">
+                          <Button
+                            variant={"secondary"}
+                            onClick={() => setShowPatchPanel(false)}
+                          >
+                            Close Editor
                           </Button>
                         </div>
-                        {savingPeriodsError && (
-                          <div className="text-red-400 text-xs mt-1 text-right">{savingPeriodsError}</div>
-                        )}
-                        <Separator className="bg-zinc-800" />
-                        <div className="space-y-1">
-                          <Label className="font-medium text-zinc-300" htmlFor="fh-dur">First half duration (mm:ss)</Label>
-                          <Input
-                            id="fh-dur"
-                            type="text"
-                            placeholder="45:00"
-                            className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
-                            value={fhDurInput}
-                            onChange={(e)=> { setFhDurInput(e.target.value); if (fhDurError) setFhDurError(null); setHasPendingDurationChanges(true); }}
-                            onBlur={() => {
-                              const sec = parseMmSsToSeconds(fhDurInput);
-                              if (sec === null) { setFhDurError('Format should be MM:SS'); return; }
-                              setPatchedFirstHalfDuration(sec);
-                              setFhDurInput(formatMmSsFromSeconds(sec));
-                              setFhDurError(null);
-                              setPositionsResetKey((k)=> (k ?? 0) + 1);
-                            }}
-                          />
-                          {fhDurError && (<div className="text-red-400 text-xs mt-1">{fhDurError}</div>)}
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="font-medium text-zinc-300" htmlFor="sh-dur">Second half duration (mm:ss)</Label>
-                          <Input
-                            id="sh-dur"
-                            type="text"
-                            placeholder="45:00"
-                            className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
-                            value={shDurInput}
-                            onChange={(e)=> { setShDurInput(e.target.value); if (shDurError) setShDurError(null); setHasPendingDurationChanges(true); }}
-                            onBlur={() => {
-                              const sec = parseMmSsToSeconds(shDurInput);
-                              if (sec === null) { setShDurError('Format should be MM:SS'); return; }
-                              setPatchedSecondHalfDuration(sec);
-                              setShDurInput(formatMmSsFromSeconds(sec));
-                              setShDurError(null);
-                              setPositionsResetKey((k)=> (k ?? 0) + 1);
-                            }}
-                          />
-                          {shDurError && (<div className="text-red-400 text-xs mt-1">{shDurError}</div>)}
-                        </div>
-                        {hasPendingDurationChanges && (
-                          <div className="pt-2 flex justify-end">
-                            <Button size={'sm'} variant={'default'} className="bg-emerald-600 hover:bg-emerald-500"
-                              onClick={() => { if (typeof window !== 'undefined') { window.location.reload(); } }}
-                            >Refresh global the times</Button>
+                        <CardTitle>Periods Editor</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {!periods ? (
+                          <div className="text-sm text-muted-foreground">
+                            No detected periods yet.
+                          </div>
+                        ) : (
+                          <div className="space-y-4 text-sm">
+                            <div className="space-y-2">
+                              <Label className="font-medium text-foreground">
+                                Detected first half start
+                              </Label>
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-1 rounded border border-border bg-card text-foreground">
+                                  sec:{" "}
+                                  {periods.detected_first_half_start ?? "—"}
+                                </span>
+                                <span className="px-2 py-1 rounded border border-border bg-card text-foreground">
+                                  time: {periods.detected_first_half_start}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="font-medium text-foreground">
+                                Detected second half start
+                              </Label>
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-1 rounded border border-border bg-card text-foreground">
+                                  sec:{" "}
+                                  {periods.detected_second_half_start ?? "—"}
+                                </span>
+                                <span className="px-2 py-1 rounded border border-border bg-card text-foreground">
+                                  time: {periods.detected_second_half_start}
+                                </span>
+                              </div>
+                            </div>
+                            <Separator className="bg-border" />
+                            <div className="space-y-1">
+                              <Label
+                                className="font-medium text-foreground"
+                                htmlFor="fh-start"
+                              >
+                                Patched first half start (sec)
+                              </Label>
+                              <Input
+                                id="fh-start"
+                                type="number"
+                                className="bg-card border-border text-foreground placeholder:text-muted-foreground"
+                                value={patchedFirstHalfStart ?? ""}
+                                onChange={(e) =>
+                                  setPatchedFirstHalfStart(
+                                    e.target.value === ""
+                                      ? null
+                                      : Number(e.target.value)
+                                  )
+                                }
+                                onBlur={() =>
+                                  setPositionsResetKey((k) => (k ?? 0) + 1)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label
+                                className="font-medium text-foreground"
+                                htmlFor="sh-start"
+                              >
+                                Patched second half start (sec)
+                              </Label>
+                              <Input
+                                id="sh-start"
+                                type="number"
+                                className="bg-card border-border text-foreground placeholder:text-muted-foreground"
+                                value={patchedSecondHalfStart ?? ""}
+                                onChange={(e) =>
+                                  setPatchedSecondHalfStart(
+                                    e.target.value === ""
+                                      ? null
+                                      : Number(e.target.value)
+                                  )
+                                }
+                                onBlur={() =>
+                                  setPositionsResetKey((k) => (k ?? 0) + 1)
+                                }
+                              />
+                            </div>
+                            <div className="flex items-center gap-2 justify-end">
+                              <Button
+                                size={"sm"}
+                                variant={"secondary"}
+                                onClick={() => {
+                                  setPatchedFirstHalfStart(
+                                    periods.detected_first_half_start ?? null
+                                  );
+                                  setPatchedSecondHalfStart(
+                                    periods.detected_second_half_start ?? null
+                                  );
+                                  const fh =
+                                    periods.detected_first_half_start ?? null;
+                                  const fe =
+                                    periods.detected_first_half_end ?? null;
+                                  setPatchedFirstHalfDuration(
+                                    fh !== null && fe !== null
+                                      ? Math.max(0, Math.floor(fe - fh))
+                                      : null
+                                  );
+                                  const sh =
+                                    periods.detected_second_half_start ?? null;
+                                  const se =
+                                    periods.detected_second_half_end ?? null;
+                                  setPatchedSecondHalfDuration(
+                                    sh !== null && se !== null
+                                      ? Math.max(0, Math.floor(se - sh))
+                                      : null
+                                  );
+                                }}
+                              >
+                                Reset to detected
+                              </Button>
+                              <Button
+                                size={"sm"}
+                                variant={"default"}
+                                className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed min-w-[130px]"
+                                disabled={savingPeriods}
+                                onClick={async () => {
+                                  if (!selectedTable) return;
+                                  setSavingPeriods(true);
+                                  setSavingPeriodsError(null);
+                                  const body = {
+                                    match_name: selectedTable,
+                                    manual_first_half_start:
+                                      patchedFirstHalfStart,
+                                    manual_second_half_start:
+                                      patchedSecondHalfStart,
+                                    first_half_duration_sec:
+                                      patchedFirstHalfDuration,
+                                    second_half_duration_sec:
+                                      patchedSecondHalfDuration,
+                                  };
+                                  try {
+                                    const start = Date.now();
+                                    const res = await fetch(
+                                      `${API_BASE}/match/table/${selectedTable}/periods/patch`,
+                                      {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify(body),
+                                      }
+                                    );
+                                    if (!res.ok) {
+                                      const txt = await res
+                                        .text()
+                                        .catch(() => "");
+                                      throw new Error(
+                                        `HTTP ${res.status} ${txt}`
+                                      );
+                                    }
+                                    const elapsed = Date.now() - start;
+                                    if (elapsed < 200) {
+                                      await new Promise((r) =>
+                                        setTimeout(r, 300 - elapsed)
+                                      );
+                                    }
+                                  } catch (e: any) {
+                                    setSavingPeriodsError(
+                                      "Failed to save periods."
+                                    );
+                                  } finally {
+                                    setSavingPeriods(false);
+                                  }
+                                }}
+                              >
+                                <span className="inline-flex items-center gap-1 justify-center w-full">
+                                  <span>
+                                    {savingPeriods
+                                      ? "Saving..."
+                                      : "Save changes"}
+                                  </span>
+                                  {savingPeriods && (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  )}
+                                </span>
+                              </Button>
+                            </div>
+                            {savingPeriodsError && (
+                              <div className="text-red-400 text-xs mt-1 text-right">
+                                {savingPeriodsError}
+                              </div>
+                            )}
+                            <Separator className="bg-border" />
+                            <div className="space-y-1">
+                              <Label
+                                className="font-medium text-foreground"
+                                htmlFor="fh-dur"
+                              >
+                                First half duration (mm:ss)
+                              </Label>
+                              <Input
+                                id="fh-dur"
+                                type="text"
+                                placeholder="45:00"
+                                className="bg-card border-border text-foreground placeholder:text-muted-foreground"
+                                value={fhDurInput}
+                                onChange={(e) => {
+                                  setFhDurInput(e.target.value);
+                                  if (fhDurError) setFhDurError(null);
+                                  setHasPendingDurationChanges(true);
+                                }}
+                                onBlur={() => {
+                                  const sec = parseMmSsToSeconds(fhDurInput);
+                                  if (sec === null) {
+                                    setFhDurError("Format should be MM:SS");
+                                    return;
+                                  }
+                                  setPatchedFirstHalfDuration(sec);
+                                  setFhDurInput(formatMmSsFromSeconds(sec));
+                                  setFhDurError(null);
+                                  setPositionsResetKey((k) => (k ?? 0) + 1);
+                                }}
+                              />
+                              {fhDurError && (
+                                <div className="text-red-400 text-xs mt-1">
+                                  {fhDurError}
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-1">
+                              <Label
+                                className="font-medium text-foreground"
+                                htmlFor="sh-dur"
+                              >
+                                Second half duration (mm:ss)
+                              </Label>
+                              <Input
+                                id="sh-dur"
+                                type="text"
+                                placeholder="45:00"
+                                className="bg-card border-border text-foreground placeholder:text-muted-foreground"
+                                value={shDurInput}
+                                onChange={(e) => {
+                                  setShDurInput(e.target.value);
+                                  if (shDurError) setShDurError(null);
+                                  setHasPendingDurationChanges(true);
+                                }}
+                                onBlur={() => {
+                                  const sec = parseMmSsToSeconds(shDurInput);
+                                  if (sec === null) {
+                                    setShDurError("Format should be MM:SS");
+                                    return;
+                                  }
+                                  setPatchedSecondHalfDuration(sec);
+                                  setShDurInput(formatMmSsFromSeconds(sec));
+                                  setShDurError(null);
+                                  setPositionsResetKey((k) => (k ?? 0) + 1);
+                                }}
+                              />
+                              {shDurError && (
+                                <div className="text-red-400 text-xs mt-1">
+                                  {shDurError}
+                                </div>
+                              )}
+                            </div>
+                            {hasPendingDurationChanges && (
+                              <div className="pt-2 flex justify-end">
+                                <Button
+                                  size={"sm"}
+                                  variant={"default"}
+                                  className="bg-emerald-600 hover:bg-emerald-500"
+                                  onClick={() => {
+                                    if (typeof window !== "undefined") {
+                                      window.location.reload();
+                                    }
+                                  }}
+                                >
+                                  Refresh global the times
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
-                      </div>
-                    )}
 
-                    {/* Periods section */}
-                    <div className="mt-6">
-                      <Card className="h-full bg-zinc-900/50 border-zinc-800">
-                        <CardHeader>
-                          <CardTitle>Periods
-                          {loadingPeriods && (
-                            <Loader2 className="h-4 w-4 animate-spin ml-2 text-muted-foreground" />
-                          )}
-                          </CardTitle>
-                          {!loadingPeriods && periods && (
-                            <div className="text-xs text-gray-500">{autoData.periods?.using_manual ? 'Using patched periods' : 'Using detected periods'}</div>
-                          )}
-                        </CardHeader>
-                        <CardContent>
-                          {!selectedTable ? (
-                            <div className="text-sm text-gray-600">Select a match to view periods.</div>
-                          ) : !periods ? (
-                            <div className="space-y-2">
-                              <Skeleton className="h-6" />
-                              <Skeleton className="h-6" />
-                              <Skeleton className="h-6" />
-                            </div>
-                          ) : (
-                            <PeriodsSummary
-                              detected_first_half_start={periods.detected_first_half_start}
-                              detected_first_half_end={periods.detected_first_half_end}
-                              detected_second_half_start={periods.detected_second_half_start}
-                              detected_second_half_end={periods.detected_second_half_end}
-                              detected_halftime_start={periods.detected_halftime_start}
-                              detected_halftime_end={periods.detected_halftime_end}
-                            />
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </CardContent>
-                </Card>                
-              </>
-              )}
-            </div>
-            )}
-            </div>
-
-            
-            </div>
-          
-
-          <button
-            onClick={()=>setShowPlayersSection(v=>!v)}
-            className="w-full mt-6 flex items-center justify-between rounded-md bg-zinc-900/60 border border-zinc-800 px-3 py-2 hover:border-zinc-700 transition text-zinc-200"
-            aria-expanded={showPlayersSection}
-          >
-            <span className="text-base font-semibold">WCS</span>
-            <svg className={`w-4 h-4 ml-3 transition-transform ${showPlayersSection ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
-          </button>
-          {selectedTable && showPlayersSection && (
-            <div className="grid gap-4 items-start">
-              <div className="md:col-span-3 space-y-3">
-                {orderedPlayers.slice(0, playersRenderLimit).map(p => {
-                  const norm = (s: string) => (s||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').toLowerCase();
-                  return (
-                    <div key={p} className="space-y-2">
-                      <PlayerDetailCard
-                        name={p}
-                        entries={playersGrouped[p]}
-                        windows={playerHighlights[norm(p)]}
-                        sprints={sprintsGrouped[p]}
-                        onOpenAnalysisAt={(abs, sec, playerName)=>{
-                          console.log('onOpenAnalysisAt', abs, sec);
-                          if (typeof abs === 'number') {
-                            setVideoTimeSec(abs);
-                            setPendingSeek(abs);
-                            try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: abs })); } catch {}
-                            const el = document.getElementById('unified-video');
-                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }
-                          if (playerName) {
-                            setPinnedPlayers(prev => ({ ...prev, [playerName]: true }));
-                          }
-                        }}
-                        firstHalfStart={periods?.detected_first_half_start ?? null}
-                        secondHalfStart={periods?.detected_second_half_start ?? null}
-                        firstHalfEnd={periods?.detected_first_half_end ?? null}
-                        secondHalfEnd={periods?.detected_second_half_end ?? null}
-                        accelMinute={accelMinuteByPlayer[norm(p)]}
-                        sprintMinute={sprintMinuteByPlayer[norm(p)]}
-                        decelMinute={decelMinuteByPlayer[norm(p)]}
-                      />
-                    </div>
-                  );
-                })}
-                {orderedPlayers.length > playersRenderLimit && (
-                  <div className="flex justify-center mt-2">
-                    <Button variant={'outline'} onClick={()=>setPlayersRenderLimit(l=>l+10)}>Load more</Button>
-                  </div>
+                        {/* Periods section */}
+                        <div className="mt-6">
+                          <Card className="h-full bg-card border-border">
+                            <CardHeader>
+                              <CardTitle>
+                                Periods
+                                {loadingPeriods && (
+                                  <Loader2 className="h-4 w-4 animate-spin ml-2 text-muted-foreground" />
+                                )}
+                              </CardTitle>
+                              {!loadingPeriods && periods && (
+                                <div className="text-xs text-muted-foreground">
+                                  {autoData.periods?.using_manual
+                                    ? "Using patched periods"
+                                    : "Using detected periods"}
+                                </div>
+                              )}
+                            </CardHeader>
+                            <CardContent>
+                              {!selectedTable ? (
+                                <div className="text-sm text-muted-foreground">
+                                  Select a match to view periods.
+                                </div>
+                              ) : !periods ? (
+                                <div className="space-y-2">
+                                  <Skeleton className="h-6" />
+                                  <Skeleton className="h-6" />
+                                  <Skeleton className="h-6" />
+                                </div>
+                              ) : (
+                                <PeriodsSummary
+                                  detected_first_half_start={
+                                    periods.detected_first_half_start
+                                  }
+                                  detected_first_half_end={
+                                    periods.detected_first_half_end
+                                  }
+                                  detected_second_half_start={
+                                    periods.detected_second_half_start
+                                  }
+                                  detected_second_half_end={
+                                    periods.detected_second_half_end
+                                  }
+                                  detected_halftime_start={
+                                    periods.detected_halftime_start
+                                  }
+                                  detected_halftime_end={
+                                    periods.detected_halftime_end
+                                  }
+                                />
+                              )}
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </>
                 )}
               </div>
-            </div>
-          )}
-          {/* Acceleration events (full) section */}
-          <div className="mt-6">
-            {/* Accelerations Around WCS */}
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Accelerations Around WCS
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!selectedTable ? (
-                  <div className="text-sm text-gray-600">Select a match to view.</div>
-                ) : accelWcsSummary.length === 0 ? (
-                  <div className="text-sm text-gray-600">No data.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-zinc-300">
-                        <tr className="border-b border-zinc-800">
-                          <th className="text-left py-2 pr-3">Player</th>
-                          <th className="text-right py-2 px-2">Time before (min)</th>
-                          <th className="text-right py-2 px-2">Time after (min)</th>
-                          <th className="text-right py-2 px-2">Accels before</th>
-                          <th className="text-right py-2 px-2">Accels after</th>
-                          <th className="text-right py-2 px-2">Acc rate before (/90)</th>
-                          <th className="text-right py-2 px-2">Acc rate after (/90)</th>
-                          <th className="text-right py-2 px-2">Decels before</th>
-                          <th className="text-right py-2 px-2">Decels after</th>
-                          <th className="text-right py-2 px-2">Dec rate before (/90)</th>
-                          <th className="text-right py-2 px-2">Dec rate after (/90)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {accelWcsSummary.map((r, idx) => (
-                          <tr key={`accwcs-${r.player}-${r.wcsStart}-${r.wcsEnd}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
-                            <td className="py-2 pr-3 text-zinc-200">{r.player}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeBefore/60).toFixed(1)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeAfter/60).toFixed(1)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.accBefore}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.accAfter}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.accRateBeforePer90 == null ? '—' : r.accRateBeforePer90.toFixed(2)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.accRateAfterPer90 == null ? '—' : r.accRateAfterPer90.toFixed(2)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.decBefore}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.decAfter}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.decRateBeforePer90 == null ? '—' : r.decRateBeforePer90.toFixed(2)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.decRateAfterPer90 == null ? '—' : r.decRateAfterPer90.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Sprints Around WCS */}
-            <div className="mt-6" />
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Sprints Around WCS
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!selectedTable ? (
-                  <div className="text-sm text-gray-600">Select a match to view.</div>
-                ) : sprintWcsSummary.length === 0 ? (
-                  <div className="text-sm text-gray-600">No data.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-zinc-300">
-                        <tr className="border-b border-zinc-800">
-                          <th className="text-left py-2 pr-3">Player</th>
-                          <th className="text-right py-2 px-2">Time before (min)</th>
-                          <th className="text-right py-2 px-2">Time after (min)</th>
-                          <th className="text-right py-2 px-2">Sprints before</th>
-                          <th className="text-right py-2 px-2">Sprints after</th>
-                          <th className="text-right py-2 px-2">Rate before (/90)</th>
-                          <th className="text-right py-2 px-2">Rate after (/90)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sprintWcsSummary.map((r, idx) => (
-                          <tr key={`sprintwcs-${r.player}-${r.wcsStart}-${r.wcsEnd}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
-                            <td className="py-2 pr-3 text-zinc-200">{r.player}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeBefore/60).toFixed(1)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{(r.timeAfter/60).toFixed(1)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.countBefore}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.countAfter}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.rateBeforePer90 == null ? '—' : r.rateBeforePer90.toFixed(2)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{r.rateAfterPer90 == null ? '—' : r.rateAfterPer90.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            )}
           </div>
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Acceleration Events (Full)
-                  {loadingAccelEvents && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!selectedTable ? (
-                  <div className="text-sm text-gray-600">Select a match to view events.</div>
-                ) : loadingAccelEvents ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                  </div>
-                ) : accelEvents.length === 0 ? (
-                  <div className="text-sm text-gray-600">No events.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-zinc-300">
-                        <tr className="border-b border-zinc-800">
-                          <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSort('player_display_name')}>Player</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSort('accel_or_decel')}>Type</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSort('start_time')}>Start</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSort('end_time')}>End</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('seconds_since_midnight')}>Seconds since midnight</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('duration_s')}>Duration (s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('peak_acc')}>Peak acc (m/s²)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('max_speed_kph')}>Max speed (km/h)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSort('distance_m')}>Distance (m)</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSort('intensity_category')}>Intensity</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedAccelEvents
-                          .slice((accelPage-1)*ACCEL_PAGE_SIZE, (accelPage)*ACCEL_PAGE_SIZE)
-                          .map((ev, idx) => (
-                          <tr key={`accelev-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
-                            <td className="py-2 pr-3 text-zinc-200">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline capitalize">{ev.accel_or_decel}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.start_time}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.end_time}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.seconds_since_midnight.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.duration_s.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.peak_acc.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.max_speed_kph.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.distance_m.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline capitalize">{ev.intensity_category}</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className="flex items-center justify-between mt-3 text-sm text-zinc-300">
-                      <div>
-                        Page {accelPage} of {Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE))}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant={'outline'} size={'sm'} disabled={accelPage<=1} onClick={()=>setAccelPage(p=>Math.max(1, p-1))}>Prev</Button>
-                        <Button variant={'outline'} size={'sm'} disabled={accelPage>=Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE))} onClick={()=>setAccelPage(p=>Math.min(Math.max(1, Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE)), p+1))}>Next</Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+        </div>
 
-          {/* Sprints (full) section */}
-          <div className="mt-6">
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Sprints (Full)
-                  {loadingSprintEvents && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!selectedTable ? (
-                  <div className="text-sm text-gray-600">Select a match to view sprints.</div>
-                ) : loadingSprintEvents ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                  </div>
-                ) : sprintEvents.length === 0 ? (
-                  <div className="text-sm text-gray-600">No sprints.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-zinc-300">
-                        <tr className="border-b border-zinc-800">
-                          <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSprintSort('player_display_name')}>Player</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('sprint_type')}>Type</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('start_time')}>Start</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('end_time')}>End</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('seconds_since_midnight')}>Seconds since midnight</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('duration_s')}>Duration (s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('max_speed_kph')}>Max speed (km/h)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('peak_acc_m_s2')}>Peak acc (m/s²)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('distance_m')}>Distance (m)</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSprintSort('intensity_category')}>Intensity</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedSprintEvents
-                          .slice((sprintPage-1)*SPRINT_PAGE_SIZE, sprintPage*SPRINT_PAGE_SIZE)
-                          .map((ev, idx) => (
-                          <tr key={`sprintev-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
-                            <td className="py-2 pr-3 text-zinc-200">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline capitalize">{ev.sprint_type}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.start_time}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.end_time}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.seconds_since_midnight.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.duration_s.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.max_speed_kph.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.peak_acc_m_s2.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.distance_m.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline capitalize">{ev.intensity_category}</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className="flex items-center justify-between mt-3 text-sm text-zinc-300">
-                      <div>
-                        Page {sprintPage} of {Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE))}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant={'outline'} size={'sm'} disabled={sprintPage<=1} onClick={()=>setSprintPage(p=>Math.max(1, p-1))}>Prev</Button>
-                        <Button variant={'outline'} size={'sm'} disabled={sprintPage>=Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE))} onClick={()=>setSprintPage(p=>Math.min(Math.max(1, Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE)), p+1))}>Next</Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sharp Angles section */}
-          <div className="mt-6">
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="flex items-center gap-2">
-                    Sharp Angles - Reilly 2021
-                    {loadingSharpAngles && (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    )}
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button size={'sm'} variant={'secondary'} onClick={async()=>{
-                      const pageRows = sortedSharpAngles.slice((sharpPage-1)*SHARP_PAGE_SIZE, sharpPage*SHARP_PAGE_SIZE);
-                      const traces: Array<{ player: string; points: any[] }> = [];
-                      for (const ev of pageRows) {
-                        const qs = new URLSearchParams({ player: ev.player_display_name, start: String(ev.start_time), end: String(ev.finish_time) });
-                        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/trace?`+qs.toString());
-                        if (res.ok) {
-                          const data = await res.json();
-                          traces.push({ player: ev.player_display_name, points: data?.trace || [] });
+        <button
+          onClick={() => setShowPlayersSection((v) => !v)}
+          className="w-full mt-6 flex items-center justify-between rounded-md bg-card border border-border px-3 py-2 hover:border-ring transition text-foreground"
+          aria-expanded={showPlayersSection}
+        >
+          <span className="text-base font-semibold">WCS</span>
+          <svg
+            className={`w-4 h-4 ml-3 transition-transform ${
+              showPlayersSection ? "rotate-0" : "-rotate-90"
+            }`}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
+        {selectedTable && showPlayersSection && (
+          <div className="grid gap-4 items-start">
+            <div className="md:col-span-3 space-y-3">
+              {orderedPlayers.slice(0, playersRenderLimit).map((p) => {
+                const norm = (s: string) =>
+                  (s || "")
+                    .trim()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/\s+/g, " ")
+                    .toLowerCase();
+                return (
+                  <div key={p} className="space-y-2">
+                    <PlayerDetailCard
+                      name={p}
+                      entries={playersGrouped[p]}
+                      windows={playerHighlights[norm(p)]}
+                      sprints={sprintsGrouped[p]}
+                      onOpenAnalysisAt={(abs, sec, playerName) => {
+                        console.log("onOpenAnalysisAt", abs, sec);
+                        if (typeof abs === "number") {
+                          setVideoTimeSec(abs);
+                          setPendingSeek(abs);
+                          try {
+                            document.dispatchEvent(
+                              new CustomEvent("tf:seek", { detail: abs })
+                            );
+                          } catch {}
+                          const el = document.getElementById("unified-video");
+                          if (el)
+                            el.scrollIntoView({
+                              behavior: "smooth",
+                              block: "center",
+                            });
                         }
+                        if (playerName) {
+                          setPinnedPlayers((prev) => ({
+                            ...prev,
+                            [playerName]: true,
+                          }));
+                        }
+                      }}
+                      firstHalfStart={
+                        periods?.detected_first_half_start ?? null
                       }
-                      setSharpTraces(traces);
-                      const el = document.getElementById('unified-video');
-                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }}>Show all traces</Button>
+                      secondHalfStart={
+                        periods?.detected_second_half_start ?? null
+                      }
+                      firstHalfEnd={periods?.detected_first_half_end ?? null}
+                      secondHalfEnd={periods?.detected_second_half_end ?? null}
+                      accelMinute={accelMinuteByPlayer[norm(p)]}
+                      sprintMinute={sprintMinuteByPlayer[norm(p)]}
+                      decelMinute={decelMinuteByPlayer[norm(p)]}
+                    />
+                  </div>
+                );
+              })}
+              {orderedPlayers.length > playersRenderLimit && (
+                <div className="flex justify-center mt-2">
+                  <Button
+                    variant={"outline"}
+                    onClick={() => setPlayersRenderLimit((l) => l + 10)}
+                  >
+                    Load more
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Acceleration events (full) section */}
+        <div className="mt-6">
+          {/* Accelerations Around WCS */}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Accelerations Around WCS
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!selectedTable ? (
+                <div className="text-sm text-muted-foreground">
+                  Select a match to view.
+                </div>
+              ) : accelWcsSummary.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No data.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-foreground">
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 pr-3">Player</th>
+                        <th className="text-right py-2 px-2">
+                          Time before (min)
+                        </th>
+                        <th className="text-right py-2 px-2">
+                          Time after (min)
+                        </th>
+                        <th className="text-right py-2 px-2">Accels before</th>
+                        <th className="text-right py-2 px-2">Accels after</th>
+                        <th className="text-right py-2 px-2">
+                          Acc rate before (/90)
+                        </th>
+                        <th className="text-right py-2 px-2">
+                          Acc rate after (/90)
+                        </th>
+                        <th className="text-right py-2 px-2">Decels before</th>
+                        <th className="text-right py-2 px-2">Decels after</th>
+                        <th className="text-right py-2 px-2">
+                          Dec rate before (/90)
+                        </th>
+                        <th className="text-right py-2 px-2">
+                          Dec rate after (/90)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accelWcsSummary.map((r, idx) => (
+                        <tr
+                          key={`accwcs-${r.player}-${r.wcsStart}-${r.wcsEnd}-${idx}`}
+                          className="border-b border-border hover:bg-accent"
+                        >
+                          <td className="py-2 pr-3 text-foreground">
+                            {r.player}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {(r.timeBefore / 60).toFixed(1)}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {(r.timeAfter / 60).toFixed(1)}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.accBefore}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.accAfter}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.accRateBeforePer90 == null
+                              ? "—"
+                              : r.accRateBeforePer90.toFixed(2)}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.accRateAfterPer90 == null
+                              ? "—"
+                              : r.accRateAfterPer90.toFixed(2)}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.decBefore}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.decAfter}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.decRateBeforePer90 == null
+                              ? "—"
+                              : r.decRateBeforePer90.toFixed(2)}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.decRateAfterPer90 == null
+                              ? "—"
+                              : r.decRateAfterPer90.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Sprints Around WCS */}
+          <div className="mt-6" />
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Sprints Around WCS
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!selectedTable ? (
+                <div className="text-sm text-muted-foreground">
+                  Select a match to view.
+                </div>
+              ) : sprintWcsSummary.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No data.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-foreground">
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 pr-3">Player</th>
+                        <th className="text-right py-2 px-2">
+                          Time before (min)
+                        </th>
+                        <th className="text-right py-2 px-2">
+                          Time after (min)
+                        </th>
+                        <th className="text-right py-2 px-2">Sprints before</th>
+                        <th className="text-right py-2 px-2">Sprints after</th>
+                        <th className="text-right py-2 px-2">
+                          Rate before (/90)
+                        </th>
+                        <th className="text-right py-2 px-2">
+                          Rate after (/90)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sprintWcsSummary.map((r, idx) => (
+                        <tr
+                          key={`sprintwcs-${r.player}-${r.wcsStart}-${r.wcsEnd}-${idx}`}
+                          className="border-b border-border hover:bg-accent"
+                        >
+                          <td className="py-2 pr-3 text-foreground">
+                            {r.player}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {(r.timeBefore / 60).toFixed(1)}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {(r.timeAfter / 60).toFixed(1)}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.countBefore}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.countAfter}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.rateBeforePer90 == null
+                              ? "—"
+                              : r.rateBeforePer90.toFixed(2)}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            {r.rateAfterPer90 == null
+                              ? "—"
+                              : r.rateAfterPer90.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Acceleration Events (Full)
+              {loadingAccelEvents && (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!selectedTable ? (
+              <div className="text-sm text-muted-foreground">
+                Select a match to view events.
+              </div>
+            ) : loadingAccelEvents ? (
+              <div className="space-y-2">
+                <Skeleton className="h-6" />
+                <Skeleton className="h-6" />
+                <Skeleton className="h-6" />
+              </div>
+            ) : accelEvents.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No events.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-foreground">
+                    <tr className="border-b border-border">
+                      <th
+                        className="text-left py-2 pr-3 cursor-pointer"
+                        onClick={() => toggleSort("player_display_name")}
+                      >
+                        Player
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSort("accel_or_decel")}
+                      >
+                        Type
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSort("start_time")}
+                      >
+                        Start
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSort("end_time")}
+                      >
+                        End
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSort("seconds_since_midnight")}
+                      >
+                        Seconds since midnight
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSort("duration_s")}
+                      >
+                        Duration (s)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSort("peak_acc")}
+                      >
+                        Peak acc (m/s²)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSort("max_speed_kph")}
+                      >
+                        Max speed (km/h)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSort("distance_m")}
+                      >
+                        Distance (m)
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSort("intensity_category")}
+                      >
+                        Intensity
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedAccelEvents
+                      .slice(
+                        (accelPage - 1) * ACCEL_PAGE_SIZE,
+                        accelPage * ACCEL_PAGE_SIZE
+                      )
+                      .map((ev, idx) => (
+                        <tr
+                          key={`accelev-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`}
+                          className="border-b border-border hover:bg-accent"
+                        >
+                          <td className="py-2 pr-3 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.player_display_name}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline capitalize"
+                            >
+                              {ev.accel_or_decel}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.start_time}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.end_time}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.seconds_since_midnight.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.duration_s.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.peak_acc.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.max_speed_kph.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.distance_m.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline capitalize"
+                            >
+                              {ev.intensity_category}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between mt-3 text-sm text-foreground">
+                  <div>
+                    Page {accelPage} of{" "}
+                    {Math.max(
+                      1,
+                      Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE)
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={"outline"}
+                      size={"sm"}
+                      disabled={accelPage <= 1}
+                      onClick={() => setAccelPage((p) => Math.max(1, p - 1))}
+                    >
+                      Prev
+                    </Button>
+                    <Button
+                      variant={"outline"}
+                      size={"sm"}
+                      disabled={
+                        accelPage >=
+                        Math.max(
+                          1,
+                          Math.ceil(sortedAccelEvents.length / ACCEL_PAGE_SIZE)
+                        )
+                      }
+                      onClick={() =>
+                        setAccelPage((p) =>
+                          Math.min(
+                            Math.max(
+                              1,
+                              Math.ceil(
+                                sortedAccelEvents.length / ACCEL_PAGE_SIZE
+                              )
+                            ),
+                            p + 1
+                          )
+                        )
+                      }
+                    >
+                      Next
+                    </Button>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {!selectedTable ? (
-                  <div className="text-sm text-gray-600">Select a match to view sharp angles.</div>
-                ) : loadingSharpAngles ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                  </div>
-                ) : sharpAngles.length === 0 ? (
-                  <div className="text-sm text-gray-600">No sharp angles.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-zinc-300">
-                        <tr className="border-b border-zinc-800">
-                          <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSharpSort('player_display_name')}>Player</th>
-                          <th className="text-left py-2 px-2">vs WCS</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('seconds_since_midnight')}>Sharp angle time</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('start_time')}>Start (s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('finish_time')}>Finish (s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('duration_seconds')}>Duration (s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('angle_degrees')}>Angle (°)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('actual_dist_in')}>In dist (m)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort('actual_dist_out')}>Out dist (m)</th>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sprints (full) section */}
+      <div className="mt-6">
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Sprints (Full)
+              {loadingSprintEvents && (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!selectedTable ? (
+              <div className="text-sm text-muted-foreground">
+                Select a match to view sprints.
+              </div>
+            ) : loadingSprintEvents ? (
+              <div className="space-y-2">
+                <Skeleton className="h-6" />
+                <Skeleton className="h-6" />
+                <Skeleton className="h-6" />
+              </div>
+            ) : sprintEvents.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No sprints.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-foreground">
+                    <tr className="border-b border-border">
+                      <th
+                        className="text-left py-2 pr-3 cursor-pointer"
+                        onClick={() => toggleSprintSort("player_display_name")}
+                      >
+                        Player
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSprintSort("sprint_type")}
+                      >
+                        Type
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSprintSort("start_time")}
+                      >
+                        Start
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSprintSort("end_time")}
+                      >
+                        End
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() =>
+                          toggleSprintSort("seconds_since_midnight")
+                        }
+                      >
+                        Seconds since midnight
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSprintSort("duration_s")}
+                      >
+                        Duration (s)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSprintSort("max_speed_kph")}
+                      >
+                        Max speed (km/h)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSprintSort("peak_acc_m_s2")}
+                      >
+                        Peak acc (m/s²)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSprintSort("distance_m")}
+                      >
+                        Distance (m)
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSprintSort("intensity_category")}
+                      >
+                        Intensity
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedSprintEvents
+                      .slice(
+                        (sprintPage - 1) * SPRINT_PAGE_SIZE,
+                        sprintPage * SPRINT_PAGE_SIZE
+                      )
+                      .map((ev, idx) => (
+                        <tr
+                          key={`sprintev-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`}
+                          className="border-b border-border hover:bg-accent"
+                        >
+                          <td className="py-2 pr-3 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.player_display_name}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline capitalize"
+                            >
+                              {ev.sprint_type}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.start_time}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.end_time}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.seconds_since_midnight.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.duration_s.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.max_speed_kph.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.peak_acc_m_s2.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.distance_m.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
+                                const vs = absToVideoSec(abs);
+                                setVideoTimeSec(vs);
+                                setPendingSeek(vs);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline capitalize"
+                            >
+                              {ev.intensity_category}
+                            </button>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {sortedSharpAngles
-                          .slice((sharpPage-1)*SHARP_PAGE_SIZE, sharpPage*SHARP_PAGE_SIZE)
-                          .map((ev, idx) => (
-                          <tr key={`sharp-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
-                            <td className="py-2 pr-3 text-zinc-200">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
+                      ))}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between mt-3 text-sm text-foreground">
+                  <div>
+                    Page {sprintPage} of{" "}
+                    {Math.max(
+                      1,
+                      Math.ceil(sortedSprintEvents.length / SPRINT_PAGE_SIZE)
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={"outline"}
+                      size={"sm"}
+                      disabled={sprintPage <= 1}
+                      onClick={() => setSprintPage((p) => Math.max(1, p - 1))}
+                    >
+                      Prev
+                    </Button>
+                    <Button
+                      variant={"outline"}
+                      size={"sm"}
+                      disabled={
+                        sprintPage >=
+                        Math.max(
+                          1,
+                          Math.ceil(
+                            sortedSprintEvents.length / SPRINT_PAGE_SIZE
+                          )
+                        )
+                      }
+                      onClick={() =>
+                        setSprintPage((p) =>
+                          Math.min(
+                            Math.max(
+                              1,
+                              Math.ceil(
+                                sortedSprintEvents.length / SPRINT_PAGE_SIZE
+                              )
+                            ),
+                            p + 1
+                          )
+                        )
+                      }
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sharp Angles section */}
+      <div className="mt-6">
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2">
+                Sharp Angles - Reilly 2021
+                {loadingSharpAngles && (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  size={"sm"}
+                  variant={"secondary"}
+                  onClick={async () => {
+                    const pageRows = sortedSharpAngles.slice(
+                      (sharpPage - 1) * SHARP_PAGE_SIZE,
+                      sharpPage * SHARP_PAGE_SIZE
+                    );
+                    const traces: Array<{ player: string; points: any[] }> = [];
+                    for (const ev of pageRows) {
+                      const qs = new URLSearchParams({
+                        player: ev.player_display_name,
+                        start: String(ev.start_time),
+                        end: String(ev.finish_time),
+                      });
+                      const res = await fetch(
+                        `${API_BASE}/match/table/${selectedTable}/trace?` +
+                          qs.toString()
+                      );
+                      if (res.ok) {
+                        const data = await res.json();
+                        traces.push({
+                          player: ev.player_display_name,
+                          points: data?.trace || [],
+                        });
+                      }
+                    }
+                    setSharpTraces(traces);
+                    const el = document.getElementById("unified-video");
+                    if (el)
+                      el.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
+                  }}
+                >
+                  Show all traces
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!selectedTable ? (
+              <div className="text-sm text-muted-foreground">
+                Select a match to view sharp angles.
+              </div>
+            ) : loadingSharpAngles ? (
+              <div className="space-y-2">
+                <Skeleton className="h-6" />
+                <Skeleton className="h-6" />
+                <Skeleton className="h-6" />
+              </div>
+            ) : sharpAngles.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                No sharp angles.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-foreground">
+                    <tr className="border-b border-border">
+                      <th
+                        className="text-left py-2 pr-3 cursor-pointer"
+                        onClick={() => toggleSharpSort("player_display_name")}
+                      >
+                        Player
+                      </th>
+                      <th className="text-left py-2 px-2">vs WCS</th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() =>
+                          toggleSharpSort("seconds_since_midnight")
+                        }
+                      >
+                        Sharp angle time
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort("start_time")}
+                      >
+                        Start (s)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort("finish_time")}
+                      >
+                        Finish (s)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort("duration_seconds")}
+                      >
+                        Duration (s)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort("angle_degrees")}
+                      >
+                        Angle (°)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort("actual_dist_in")}
+                      >
+                        In dist (m)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort("actual_dist_out")}
+                      >
+                        Out dist (m)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedSharpAngles
+                      .slice(
+                        (sharpPage - 1) * SHARP_PAGE_SIZE,
+                        sharpPage * SHARP_PAGE_SIZE
+                      )
+                      .map((ev, idx) => (
+                        <tr
+                          key={`sharp-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`}
+                          className="border-b border-border hover:bg-accent"
+                        >
+                          <td className="py-2 pr-3 text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">
-                              {(() => {
-                                const norm = (s: string) => (s||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').toLowerCase();
-                                const key = norm(ev.player_display_name || '');
-                                const w = wcsWindowByPlayer[key];
-                                if (!w) return '—';
-                                const t = Number(ev.seconds_since_midnight || 0);
-                                if (t < w.start) return 'Before';
-                                if (t > w.end) return 'After';
-                                return 'During';
-                              })()}
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.player_display_name}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            {(() => {
+                              const norm = (s: string) =>
+                                (s || "")
+                                  .trim()
+                                  .normalize("NFD")
+                                  .replace(/[\u0300-\u036f]/g, "")
+                                  .replace(/\s+/g, " ")
+                                  .toLowerCase();
+                              const key = norm(ev.player_display_name || "");
+                              const w = wcsWindowByPlayer[key];
+                              if (!w) return "—";
+                              const t = Number(ev.seconds_since_midnight || 0);
+                              if (t < w.start) return "Before";
+                              if (t > w.end) return "After";
+                              return "During";
+                            })()}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.seconds_since_midnight.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.seconds_since_midnight.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.start_time.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.start_time.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.finish_time.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.finish_time.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.duration_seconds.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.duration_seconds.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.angle_degrees > 300 ? (ev.angle_degrees - 360).toFixed(3) : ev.angle_degrees.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.angle_degrees > 300
+                                ? (ev.angle_degrees - 360).toFixed(3)
+                                : ev.angle_degrees.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.actual_dist_in.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
-                                const abs = Number(ev.seconds_since_midnight || 0);
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.actual_dist_in.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
+                                const abs = Number(
+                                  ev.seconds_since_midnight || 0
+                                );
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.actual_dist_out.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2">
-                              <div className="flex gap-2">
-                                <Button size={'sm'} variant={'secondary'} onClick={async()=>{
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.actual_dist_out.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2">
+                            <div className="flex gap-2">
+                              <Button
+                                size={"sm"}
+                                variant={"secondary"}
+                                onClick={async () => {
                                   try {
-                                    const qs = new URLSearchParams({ player: ev.player_display_name, start: String(ev.start_time), end: String(ev.finish_time) });
-                                    const res = await fetch(`${API_BASE}/match/table/${selectedTable}/trace?`+qs.toString());
+                                    const qs = new URLSearchParams({
+                                      player: ev.player_display_name,
+                                      start: String(ev.start_time),
+                                      end: String(ev.finish_time),
+                                    });
+                                    const res = await fetch(
+                                      `${API_BASE}/match/table/${selectedTable}/trace?` +
+                                        qs.toString()
+                                    );
                                     if (res.ok) {
                                       const data = await res.json();
                                       const points = data?.trace || [];
-                                      setSharpTraces(prev => [...prev.filter(t => t.player !== ev.player_display_name), { player: ev.player_display_name, points }]);
+                                      setSharpTraces((prev) => [
+                                        ...prev.filter(
+                                          (t) =>
+                                            t.player !== ev.player_display_name
+                                        ),
+                                        {
+                                          player: ev.player_display_name,
+                                          points,
+                                        },
+                                      ]);
                                       const abs = Number(ev.start_time || 0);
                                       const vs = absToVideoSec(abs);
                                       setVideoTimeSec(vs);
                                       setPendingSeek(vs);
-                                      try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                      const el = document.getElementById('unified-video');
-                                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      try {
+                                        document.dispatchEvent(
+                                          new CustomEvent("tf:seek", {
+                                            detail: vs,
+                                          })
+                                        );
+                                      } catch {}
+                                      const el =
+                                        document.getElementById(
+                                          "unified-video"
+                                        );
+                                      if (el)
+                                        el.scrollIntoView({
+                                          behavior: "smooth",
+                                          block: "center",
+                                        });
                                     }
                                   } catch {}
-                                }}>Show trace</Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className="flex items-center justify-between mt-3 text-sm text-zinc-300">
-                      <div>
-                        Page {sharpPage} of {Math.max(1, Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE))}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant={'outline'} size={'sm'} disabled={sharpPage<=1} onClick={()=>setSharpPage(p=>Math.max(1, p-1))}>Prev</Button>
-                        <Button variant={'outline'} size={'sm'} disabled={sharpPage>=Math.max(1, Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE))} onClick={()=>setSharpPage(p=>Math.min(Math.max(1, Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE)), p+1))}>Next</Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sharp Angles 2 section */}
-          <div className="mt-6">
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="flex items-center gap-2">
-                    Sharp Angles 2 - Dos'Santos, 2022
-                    {loadingSharpAngles2 && (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                }}
+                              >
+                                Show trace
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between mt-3 text-sm text-foreground">
+                  <div>
+                    Page {sharpPage} of{" "}
+                    {Math.max(
+                      1,
+                      Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE)
                     )}
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button size={'sm'} variant={'secondary'} onClick={async()=>{
-                      const pageRows = sortedSharpAngles2.slice((sharpPage2-1)*SHARP_PAGE_SIZE_2, sharpPage2*SHARP_PAGE_SIZE_2);
-                      const traces: Array<{ player: string; points: any[] }> = [];
-                      for (const ev of pageRows) {
-                        const qs = new URLSearchParams({ player: ev.player_display_name, start: String(ev.start_time), end: String(ev.finish_time) });
-                        const res = await fetch(`${API_BASE}/match/table/${selectedTable}/trace?`+qs.toString());
-                        if (res.ok) {
-                          const data = await res.json();
-                          traces.push({ player: ev.player_display_name, points: data?.trace || [] });
-                        }
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={"outline"}
+                      size={"sm"}
+                      disabled={sharpPage <= 1}
+                      onClick={() => setSharpPage((p) => Math.max(1, p - 1))}
+                    >
+                      Prev
+                    </Button>
+                    <Button
+                      variant={"outline"}
+                      size={"sm"}
+                      disabled={
+                        sharpPage >=
+                        Math.max(
+                          1,
+                          Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE)
+                        )
                       }
-                      setSharpTraces2(traces);
-                      const el = document.getElementById('unified-video');
-                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }}>Show all traces</Button>
+                      onClick={() =>
+                        setSharpPage((p) =>
+                          Math.min(
+                            Math.max(
+                              1,
+                              Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE)
+                            ),
+                            p + 1
+                          )
+                        )
+                      }
+                    >
+                      Next
+                    </Button>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {!selectedTable ? (
-                  <div className="text-sm text-gray-600">Select a match to view sharp angles 2.</div>
-                ) : loadingSharpAngles2 ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                    <Skeleton className="h-6" />
-                  </div>
-                ) : sharpAngles2.length === 0 ? (
-                  <div className="text-sm text-gray-600">No sharp angles 2.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-zinc-300">
-                        <tr className="border-b border-zinc-800">
-                          <th className="text-left py-2 pr-3 cursor-pointer" onClick={()=>toggleSharpSort2('player_display_name')}>Player</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('start_time')}>Start (s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('finish_time')}>Finish (s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('duration_seconds')}>Duration (s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('entry_speed')}>Entry Speed (m/s)</th>
-                          <th className="text-right py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('turning_angle_degrees')}>Turning Angle (°)</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('entry_speed_category')}>Speed Category</th>
-                          <th className="text-left py-2 px-2 cursor-pointer" onClick={()=>toggleSharpSort2('turning_angle_category')}>Angle Category</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedSharpAngles2
-                          .slice((sharpPage2-1)*SHARP_PAGE_SIZE_2, sharpPage2*SHARP_PAGE_SIZE_2)
-                          .map((ev, idx) => (
-                          <tr key={`sharp2-${ev.turn_id}-${ev.player_display_name}-${ev.start_time}-${idx}`} className="border-b border-zinc-900/60 hover:bg-zinc-900/40">
-                            <td className="py-2 pr-3 text-zinc-200">
-                              <button onClick={()=>{
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sharp Angles 2 section */}
+      <div className="mt-6">
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2">
+                Sharp Angles 2 - Dos'Santos, 2022
+                {loadingSharpAngles2 && (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  size={"sm"}
+                  variant={"secondary"}
+                  onClick={async () => {
+                    const pageRows = sortedSharpAngles2.slice(
+                      (sharpPage2 - 1) * SHARP_PAGE_SIZE_2,
+                      sharpPage2 * SHARP_PAGE_SIZE_2
+                    );
+                    const traces: Array<{ player: string; points: any[] }> = [];
+                    for (const ev of pageRows) {
+                      const qs = new URLSearchParams({
+                        player: ev.player_display_name,
+                        start: String(ev.start_time),
+                        end: String(ev.finish_time),
+                      });
+                      const res = await fetch(
+                        `${API_BASE}/match/table/${selectedTable}/trace?` +
+                          qs.toString()
+                      );
+                      if (res.ok) {
+                        const data = await res.json();
+                        traces.push({
+                          player: ev.player_display_name,
+                          points: data?.trace || [],
+                        });
+                      }
+                    }
+                    setSharpTraces2(traces);
+                    const el = document.getElementById("unified-video");
+                    if (el)
+                      el.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
+                  }}
+                >
+                  Show all traces
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!selectedTable ? (
+              <div className="text-sm text-muted-foreground">
+                Select a match to view sharp angles 2.
+              </div>
+            ) : loadingSharpAngles2 ? (
+              <div className="space-y-2">
+                <Skeleton className="h-6" />
+                <Skeleton className="h-6" />
+                <Skeleton className="h-6" />
+              </div>
+            ) : sharpAngles2.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                No sharp angles 2.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-foreground">
+                    <tr className="border-b border-border">
+                      <th
+                        className="text-left py-2 pr-3 cursor-pointer"
+                        onClick={() => toggleSharpSort2("player_display_name")}
+                      >
+                        Player
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort2("start_time")}
+                      >
+                        Start (s)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort2("finish_time")}
+                      >
+                        Finish (s)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort2("duration_seconds")}
+                      >
+                        Duration (s)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort2("entry_speed")}
+                      >
+                        Entry Speed (m/s)
+                      </th>
+                      <th
+                        className="text-right py-2 px-2 cursor-pointer"
+                        onClick={() =>
+                          toggleSharpSort2("turning_angle_degrees")
+                        }
+                      >
+                        Turning Angle (°)
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() => toggleSharpSort2("entry_speed_category")}
+                      >
+                        Speed Category
+                      </th>
+                      <th
+                        className="text-left py-2 px-2 cursor-pointer"
+                        onClick={() =>
+                          toggleSharpSort2("turning_angle_category")
+                        }
+                      >
+                        Angle Category
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedSharpAngles2
+                      .slice(
+                        (sharpPage2 - 1) * SHARP_PAGE_SIZE_2,
+                        sharpPage2 * SHARP_PAGE_SIZE_2
+                      )
+                      .map((ev, idx) => (
+                        <tr
+                          key={`sharp2-${ev.turn_id}-${ev.player_display_name}-${ev.start_time}-${idx}`}
+                          className="border-b border-border hover:bg-accent"
+                        >
+                          <td className="py-2 pr-3 text-foreground">
+                            <button
+                              onClick={() => {
                                 const abs = Number(ev.start_time || 0);
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.player_display_name}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.player_display_name}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
                                 const abs = Number(ev.start_time || 0);
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.start_time.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.start_time.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
                                 const abs = Number(ev.finish_time || 0);
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.finish_time.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.finish_time.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
                                 const abs = Number(ev.start_time || 0);
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.duration_seconds.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.duration_seconds.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
                                 const abs = Number(ev.start_time || 0);
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.entry_speed.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-right tabular-nums text-zinc-300">
-                              <button onClick={()=>{
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.entry_speed.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                            <button
+                              onClick={() => {
                                 const abs = Number(ev.start_time || 0);
                                 const vs = absToVideoSec(abs);
                                 setVideoTimeSec(vs);
                                 setPendingSeek(vs);
-                                try { document.dispatchEvent(new CustomEvent('tf:seek', { detail: vs })); } catch {}
-                                const el = document.getElementById('unified-video');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                if (ev.player_display_name) setPinnedPlayers(prev => ({ ...prev, [ev.player_display_name]: true }));
-                              }} className="underline-offset-2 hover:underline">{ev.turning_angle_degrees.toFixed(3)}</button>
-                            </td>
-                            <td className="py-2 px-2 text-zinc-300">{ev.entry_speed_category}</td>
-                            <td className="py-2 px-2 text-zinc-300">{ev.turning_angle_category}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className="flex items-center justify-between mt-3 text-sm text-zinc-300">
-                      <div>
-                        Page {sharpPage2} of {Math.max(1, Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2))}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant={'outline'} size={'sm'} disabled={sharpPage2<=1} onClick={()=>setSharpPage2(p=>Math.max(1, p-1))}>Prev</Button>
-                        <Button variant={'outline'} size={'sm'} disabled={sharpPage2>=Math.max(1, Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2))} onClick={()=>setSharpPage2(p=>Math.min(Math.max(1, Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2)), p+1))}>Next</Button>
-                      </div>
-                    </div>
+                                try {
+                                  document.dispatchEvent(
+                                    new CustomEvent("tf:seek", { detail: vs })
+                                  );
+                                } catch {}
+                                const el =
+                                  document.getElementById("unified-video");
+                                if (el)
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                if (ev.player_display_name)
+                                  setPinnedPlayers((prev) => ({
+                                    ...prev,
+                                    [ev.player_display_name]: true,
+                                  }));
+                              }}
+                              className="underline-offset-2 hover:underline"
+                            >
+                              {ev.turning_angle_degrees.toFixed(3)}
+                            </button>
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            {ev.entry_speed_category}
+                          </td>
+                          <td className="py-2 px-2 text-foreground">
+                            {ev.turning_angle_category}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between mt-3 text-sm text-foreground">
+                  <div>
+                    Page {sharpPage2} of{" "}
+                    {Math.max(
+                      1,
+                      Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2)
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={"outline"}
+                      size={"sm"}
+                      disabled={sharpPage2 <= 1}
+                      onClick={() => setSharpPage2((p) => Math.max(1, p - 1))}
+                    >
+                      Prev
+                    </Button>
+                    <Button
+                      variant={"outline"}
+                      size={"sm"}
+                      disabled={
+                        sharpPage2 >=
+                        Math.max(
+                          1,
+                          Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2)
+                        )
+                      }
+                      onClick={() =>
+                        setSharpPage2((p) =>
+                          Math.min(
+                            Math.max(
+                              1,
+                              Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2)
+                            ),
+                            p + 1
+                          )
+                        )
+                      }
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

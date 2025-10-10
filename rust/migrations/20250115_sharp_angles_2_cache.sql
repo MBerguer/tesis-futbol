@@ -18,3 +18,4 @@ CREATE TABLE IF NOT EXISTS sharp_angles_2_cache (
 
 CREATE INDEX IF NOT EXISTS idx_sharp_angles_2_match_name ON sharp_angles_2_cache (match_name);
 CREATE INDEX IF NOT EXISTS idx_sharp_angles_2_player ON sharp_angles_2_cache (player_display_name);
+
