@@ -1,12 +1,12 @@
+use crate::config::dbconfig::DbConfig;
 use axum::extract::Path;
-use axum::extract::{Json, RawPathParams, Multipart};
+use axum::extract::{Json, Multipart, RawPathParams};
+use axum::http::StatusCode;
 use serde_json::{json, Value};
 use sqlx::Row;
-use uuid::Uuid;
 use std::path::Path as FsPath;
 use tokio::io::AsyncWriteExt;
-use crate::config::dbconfig::DbConfig;
-use axum::http::StatusCode;
+use uuid::Uuid;
 
 // DbConfig already imported above
 
@@ -221,7 +221,9 @@ pub struct CustomPhotoInput {
     pub player_id: i32,
 }
 
-pub async fn upload_custom_photo(mut multipart: Multipart) -> Result<Json<Value>, (StatusCode, String)> {
+pub async fn upload_custom_photo(
+    mut multipart: Multipart,
+) -> Result<Json<Value>, (StatusCode, String)> {
     // We expect fields: player_id (text), file (binary)
     let mut player_id: Option<i32> = None;
     let mut file_bytes: Option<Vec<u8>> = None;
@@ -236,7 +238,10 @@ pub async fn upload_custom_photo(mut multipart: Multipart) -> Result<Json<Value>
             }
         } else if name == "file" {
             filename = field.file_name().map(|s| s.to_string());
-            let data = field.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("read file: {}", e)))?;
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| (StatusCode::BAD_REQUEST, format!("read file: {}", e)))?;
             file_bytes = Some(data.to_vec());
         }
     }
@@ -250,18 +255,37 @@ pub async fn upload_custom_photo(mut multipart: Multipart) -> Result<Json<Value>
         None => return Err((StatusCode::BAD_REQUEST, "missing file".into())),
     };
     let ext = filename
-        .and_then(|f| FsPath::new(&f).extension().and_then(|e| e.to_str()).map(|s| s.to_string()))
+        .and_then(|f| {
+            FsPath::new(&f)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.to_string())
+        })
         .unwrap_or_else(|| "jpg".to_string());
     let id = Uuid::new_v4().to_string();
     let rel_path = format!("player_photos/{}_{}.{}", player_id, id, ext);
     let full_path = format!("uploads/{}", rel_path);
-    if let Some(parent) = FsPath::new(&full_path).parent() { let _ = tokio::fs::create_dir_all(parent).await; }
-    let mut f = tokio::fs::File::create(&full_path).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("create file: {}", e)))?;
-    f.write_all(&data).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("write file: {}", e)))?;
+    if let Some(parent) = FsPath::new(&full_path).parent() {
+        let _ = tokio::fs::create_dir_all(parent).await;
+    }
+    let mut f = tokio::fs::File::create(&full_path).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("create file: {}", e),
+        )
+    })?;
+    f.write_all(&data).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("write file: {}", e),
+        )
+    })?;
 
     // Persist mapping in DB
     let dbconfig = DbConfig::new();
-    let pool = sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "db".into()))?;
+    let pool = sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string())
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "db".into()))?;
     let _ = sqlx::query(
         r#"CREATE TABLE IF NOT EXISTS player_custom_photos(player_id integer primary key, photo_url text not null, updated_at timestamp without time zone default now())"#
     ).execute(&pool).await;
@@ -271,33 +295,58 @@ pub async fn upload_custom_photo(mut multipart: Multipart) -> Result<Json<Value>
         format!("/uploads/{}", rel_path)
     ).execute(&pool).await;
 
-    Ok(Json(json!({ "ok": true, "url": format!("/uploads/{}", rel_path) })))
+    Ok(Json(
+        json!({ "ok": true, "url": format!("/uploads/{}", rel_path) }),
+    ))
 }
 
 pub async fn delete_custom_photo(Json(input): Json<CustomPhotoInput>) -> Json<Value> {
     let dbconfig = DbConfig::new();
-    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await { Ok(p)=>p, Err(_)=> return Json(json!({"ok": false})) };
+    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await {
+        Ok(p) => p,
+        Err(_) => return Json(json!({"ok": false})),
+    };
     let _ = sqlx::query(
         r#"CREATE TABLE IF NOT EXISTS player_custom_photos(player_id integer primary key, photo_url text not null, updated_at timestamp without time zone default now())"#
     ).execute(&pool).await;
-    if let Ok(Some(row)) = sqlx::query!(r#"SELECT photo_url FROM player_custom_photos WHERE player_id = $1"#, input.player_id).fetch_optional(&pool).await {
+    if let Ok(Some(row)) = sqlx::query!(
+        r#"SELECT photo_url FROM player_custom_photos WHERE player_id = $1"#,
+        input.player_id
+    )
+    .fetch_optional(&pool)
+    .await
+    {
         let url: String = row.photo_url;
         // try delete file from disk
         let p = url.trim_start_matches('/');
         let _ = tokio::fs::remove_file(p).await;
     }
-    let _ = sqlx::query!(r#"DELETE FROM player_custom_photos WHERE player_id = $1"#, input.player_id).execute(&pool).await;
+    let _ = sqlx::query!(
+        r#"DELETE FROM player_custom_photos WHERE player_id = $1"#,
+        input.player_id
+    )
+    .execute(&pool)
+    .await;
     Json(json!({"ok": true}))
 }
 
 pub async fn get_custom_photos() -> Json<Value> {
     let dbconfig = DbConfig::new();
-    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await { Ok(p)=>p, Err(_)=> return Json(json!({"photos": []})) };
+    let pool = match sqlx::PgPool::connect(&dbconfig.get_postgres_connection_string()).await {
+        Ok(p) => p,
+        Err(_) => return Json(json!({"photos": []})),
+    };
     let _ = sqlx::query(
         r#"CREATE TABLE IF NOT EXISTS player_custom_photos(player_id integer primary key, photo_url text not null, updated_at timestamp without time zone default now())"#
     ).execute(&pool).await;
-    let rows = sqlx::query!(r#"SELECT player_id, photo_url FROM player_custom_photos"#).fetch_all(&pool).await.unwrap_or_default();
-    let arr: Vec<Value> = rows.into_iter().map(|r| json!({"player_id": r.player_id, "url": r.photo_url})).collect();
+    let rows = sqlx::query!(r#"SELECT player_id, photo_url FROM player_custom_photos"#)
+        .fetch_all(&pool)
+        .await
+        .unwrap_or_default();
+    let arr: Vec<Value> = rows
+        .into_iter()
+        .map(|r| json!({"player_id": r.player_id, "url": r.photo_url}))
+        .collect();
     Json(json!({"photos": arr}))
 }
 
@@ -433,8 +482,12 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
 
     // Try cache first
     if let Ok(Some(cached)) = sqlx::query!(
-        r#"SELECT * FROM player_metrics_cache WHERE player_id = $1"#, user_id
-    ).fetch_optional(&pool).await {
+        r#"SELECT * FROM player_metrics_cache WHERE player_id = $1"#,
+        user_id
+    )
+    .fetch_optional(&pool)
+    .await
+    {
         return Json(json!({
             "max_distance_m": (cached.max_distance_m.unwrap_or(0.0).round() as i64),
             "hsr_max_m": (cached.hsr_max_m.unwrap_or(0.0).round() as i64),
@@ -484,9 +537,44 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
             if let Some(table) = r.gps_table_name {
                 let table_ident = table.replace('"', ""); // sanitize quotes
                 let view_name = format!("{}_sql_player_gemini_processed_view", table_ident);
+
+                // Fetch match periods for this match
+                let periods_row = sqlx::query!(
+                    r#"
+                    SELECT 
+                        COALESCE(manual_first_half_start, detected_first_half_start) AS first_half_start,
+                        COALESCE(manual_first_half_end, detected_first_half_end) AS first_half_end,
+                        COALESCE(manual_second_half_start, detected_second_half_start) AS second_half_start,
+                        COALESCE(manual_second_half_end, detected_second_half_end) AS second_half_end
+                    FROM match_periods
+                    WHERE match_name = $1
+                    "#,
+                    table_ident
+                ).fetch_optional(&pool).await.ok().flatten();
+
+                // Build period filter conditions for both view and raw queries
+                let (period_filter, raw_period_filter) = if let Some(periods) = periods_row {
+                    if let (Some(fh_start), Some(fh_end), Some(sh_start), Some(sh_end)) = (
+                        periods.first_half_start,
+                        periods.first_half_end,
+                        periods.second_half_start,
+                        periods.second_half_end,
+                    ) {
+                        let view_filter = format!("AND (t.seconds_since_midnight BETWEEN {} AND {} OR t.seconds_since_midnight BETWEEN {} AND {})", 
+                                                 fh_start, fh_end, sh_start, sh_end);
+                        let raw_filter = format!("AND (EXTRACT(EPOCH FROM (to_timestamp(t.time,'HH24:MI:SS.MS')::time)) BETWEEN {} AND {} OR EXTRACT(EPOCH FROM (to_timestamp(t.time,'HH24:MI:SS.MS')::time)) BETWEEN {} AND {})", 
+                                                fh_start, fh_end, sh_start, sh_end);
+                        (view_filter, raw_filter)
+                    } else {
+                        (String::new(), String::new())
+                    }
+                } else {
+                    (String::new(), String::new())
+                };
+
                 let sql_view = format!(
-                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), top AS (\n   SELECT t.player_display_name, t.time, t.seconds_since_midnight, t.speed\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n   ORDER BY t.speed DESC NULLS LAST\n   LIMIT 1\n )\n SELECT top.player_display_name, top.speed, top.time AS time,\n        (floor(top.seconds_since_midnight/60))::int || ':' || lpad((floor(top.seconds_since_midnight) % 60)::int::text, 2, '0') AS minute_str\n FROM top",
-                    view_name, view_name
+                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), top AS (\n   SELECT t.player_display_name, t.time, t.seconds_since_midnight, t.speed\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name {}\n   ORDER BY t.speed DESC NULLS LAST\n   LIMIT 1\n )\n SELECT top.player_display_name, top.speed, top.time AS time,\n        (floor(top.seconds_since_midnight/60))::int || ':' || lpad((floor(top.seconds_since_midnight) % 60)::int::text, 2, '0') AS minute_str\n FROM top",
+                    view_name, view_name, period_filter
                 );
 
                 let mut row_opt = sqlx::query(&sql_view)
@@ -499,8 +587,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                 if row_opt.is_none() {
                     // Fallback to raw table if the view doesn't exist or query failed
                     let sql_raw = format!(
-                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), top AS (\n   SELECT t.player_display_name, t.time, t.speed\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n   ORDER BY t.speed DESC NULLS LAST\n   LIMIT 1\n )\n SELECT top.player_display_name, top.speed, top.time AS time,\n        (floor(EXTRACT(EPOCH FROM (to_timestamp(top.time,'HH24:MI:SS.MS')::time)) / 60))::int || ':' || lpad((floor(EXTRACT(EPOCH FROM (to_timestamp(top.time,'HH24:MI:SS.MS')::time)) % 60))::int::text, 2, '0') AS minute_str\n FROM top",
-                        table_ident, table_ident
+                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), top AS (\n   SELECT t.player_display_name, t.time, t.speed\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name {}\n   ORDER BY t.speed DESC NULLS LAST\n   LIMIT 1\n )\n SELECT top.player_display_name, top.speed, top.time AS time,\n        (floor(EXTRACT(EPOCH FROM (to_timestamp(top.time,'HH24:MI:SS.MS')::time)) / 60))::int || ':' || lpad((floor(EXTRACT(EPOCH FROM (to_timestamp(top.time,'HH24:MI:SS.MS')::time)) % 60))::int::text, 2, '0') AS minute_str\n FROM top",
+                        table_ident, table_ident, raw_period_filter
                     );
                     row_opt = sqlx::query(&sql_raw)
                         .bind(&display_name)
@@ -512,8 +600,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
 
                 if let Some(row) = row_opt {
                     let speed: f64 = row.try_get("speed").unwrap_or(0.0);
-                    let raw_time: Option<String> = row.try_get::<String,_>("time").ok();
-                    let minute_str: Option<String> = row.try_get::<String,_>("minute_str").ok();
+                    let raw_time: Option<String> = row.try_get::<String, _>("time").ok();
+                    let minute_str: Option<String> = row.try_get::<String, _>("minute_str").ok();
                     if speed > 0.0 && speed > max_speed_kmh {
                         max_speed_kmh = speed;
                         max_speed_match_id = Some(r.match_id);
@@ -526,8 +614,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                 // Compute total distance for this player in this match
                 // Try processed view first
                 let sql_dist_view = format!(
-                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(COALESCE(t.distancia_total_calc,0))::double precision AS total_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name",
-                    view_name, view_name
+                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(COALESCE(t.distancia_total_calc,0))::double precision AS total_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name {}",
+                    view_name, view_name, period_filter
                 );
                 let mut dist_row_opt = sqlx::query(&sql_dist_view)
                     .bind(&display_name)
@@ -538,8 +626,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                 if dist_row_opt.is_none() {
                     // Fallback to raw table
                     let sql_dist_raw = format!(
-                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(COALESCE(t.distancia_total_calc,0))::double precision AS total_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name",
-                        table_ident, table_ident
+                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(COALESCE(t.distancia_total_calc,0))::double precision AS total_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name {}",
+                        table_ident, table_ident, raw_period_filter
                     );
                     dist_row_opt = sqlx::query(&sql_dist_raw)
                         .bind(&display_name)
@@ -559,8 +647,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
 
                 // Compute HSR (> threshold) total distance for this match
                 let sql_hsr_view = format!(
-                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(CASE WHEN COALESCE(t.speed,0) > {} THEN COALESCE(t.distancia_total_calc,0) ELSE 0 END)::double precision AS hsr_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name",
-                    view_name, hsr_threshold_kmh, view_name
+                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(CASE WHEN COALESCE(t.speed,0) > {} THEN COALESCE(t.distancia_total_calc,0) ELSE 0 END)::double precision AS hsr_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name {}",
+                    view_name, hsr_threshold_kmh, view_name, period_filter
                 );
                 let mut hsr_row_opt = sqlx::query(&sql_hsr_view)
                     .bind(&display_name)
@@ -570,8 +658,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                     .flatten();
                 if hsr_row_opt.is_none() {
                     let sql_hsr_raw = format!(
-                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(CASE WHEN COALESCE(t.speed,0) > {} THEN COALESCE(t.distancia_total_calc,0) ELSE 0 END)::double precision AS hsr_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name",
-                        table_ident, hsr_threshold_kmh, table_ident
+                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n )\n SELECT SUM(CASE WHEN COALESCE(t.speed,0) > {} THEN COALESCE(t.distancia_total_calc,0) ELSE 0 END)::double precision AS hsr_distance\n FROM \"{}\" t, best b\n WHERE t.player_display_name = b.player_display_name {}",
+                        table_ident, hsr_threshold_kmh, table_ident, raw_period_filter
                     );
                     hsr_row_opt = sqlx::query(&sql_hsr_raw)
                         .bind(&display_name)
@@ -591,8 +679,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
 
                 // Compute HMLD values (25.5 and 18)
                 let sql_hmld_view = format!(
-                    "WITH best AS (\n   SELECT player_display_name, player_id\n   FROM \"{}\"\n   GROUP BY player_display_name, player_id\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), metabolic AS (\n   SELECT t.player_id, t.player_display_name, t.time, t.speed/3.6 AS speed_ms, t.instantaneous_acceleration,\n     COALESCE( EXTRACT(EPOCH FROM to_timestamp(t.time,'HH24:MI:SS.MS')::time) - EXTRACT(EPOCH FROM LAG(to_timestamp(t.time,'HH24:MI:SS.MS')::time) OVER (PARTITION BY t.player_id ORDER BY to_timestamp(t.time,'HH24:MI:SS.MS')::time)), 0) AS delta_time\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n ), filtered AS (\n   SELECT player_id, player_display_name, speed_ms, instantaneous_acceleration, delta_time, speed_ms * (1 + 0.1 * instantaneous_acceleration) AS metabolic_power\n   FROM metabolic\n   WHERE delta_time > 0 AND delta_time < 0.5\n )\n SELECT\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 25.5 AND speed_ms > 5.5), 0)::double precision AS hmld_25_5,\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 18 AND speed_ms > 5.5), 0)::double precision AS hmld_18\n FROM filtered",
-                    view_name, view_name
+                    "WITH best AS (\n   SELECT player_display_name, player_id\n   FROM \"{}\"\n   GROUP BY player_display_name, player_id\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), metabolic AS (\n   SELECT t.player_id, t.player_display_name, t.time, t.speed/3.6 AS speed_ms, t.instantaneous_acceleration,\n     COALESCE( EXTRACT(EPOCH FROM to_timestamp(t.time,'HH24:MI:SS.MS')::time) - EXTRACT(EPOCH FROM LAG(to_timestamp(t.time,'HH24:MI:SS.MS')::time) OVER (PARTITION BY t.player_id ORDER BY to_timestamp(t.time,'HH24:MI:SS.MS')::time)), 0) AS delta_time\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name {}\n ), filtered AS (\n   SELECT player_id, player_display_name, speed_ms, instantaneous_acceleration, delta_time, speed_ms * (1 + 0.1 * instantaneous_acceleration) AS metabolic_power\n   FROM metabolic\n   WHERE delta_time > 0 AND delta_time < 0.5\n )\n SELECT\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 25.5 AND speed_ms > 5.5), 0)::double precision AS hmld_25_5,\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 18 AND speed_ms > 5.5), 0)::double precision AS hmld_18\n FROM filtered",
+                    view_name, view_name, period_filter
                 );
                 let mut hmld_row_opt = sqlx::query(&sql_hmld_view)
                     .bind(&display_name)
@@ -602,8 +690,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                     .flatten();
                 if hmld_row_opt.is_none() {
                     let sql_hmld_raw = format!(
-                        "WITH best AS (\n   SELECT player_display_name, player_id\n   FROM \"{}\"\n   GROUP BY player_display_name, player_id\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), metabolic AS (\n   SELECT t.player_id, t.player_display_name, t.time, t.speed/3.6 AS speed_ms, t.instantaneous_acceleration,\n     COALESCE( EXTRACT(EPOCH FROM to_timestamp(t.time,'HH24:MI:SS.MS')::time) - EXTRACT(EPOCH FROM LAG(to_timestamp(t.time,'HH24:MI:SS.MS')::time) OVER (PARTITION BY t.player_id ORDER BY to_timestamp(t.time,'HH24:MI:SS.MS')::time)), 0) AS delta_time\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n ), filtered AS (\n   SELECT player_id, player_display_name, speed_ms, instantaneous_acceleration, delta_time, speed_ms * (1 + 0.1 * instantaneous_acceleration) AS metabolic_power\n   FROM metabolic\n   WHERE delta_time > 0 AND delta_time < 0.5\n )\n SELECT\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 25.5 AND speed_ms > 5.5), 0)::double precision AS hmld_25_5,\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 18 AND speed_ms > 5.5), 0)::double precision AS hmld_18\n FROM filtered",
-                        table_ident, table_ident
+                        "WITH best AS (\n   SELECT player_display_name, player_id\n   FROM \"{}\"\n   GROUP BY player_display_name, player_id\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), metabolic AS (\n   SELECT t.player_id, t.player_display_name, t.time, t.speed/3.6 AS speed_ms, t.instantaneous_acceleration,\n     COALESCE( EXTRACT(EPOCH FROM to_timestamp(t.time,'HH24:MI:SS.MS')::time) - EXTRACT(EPOCH FROM LAG(to_timestamp(t.time,'HH24:MI:SS.MS')::time) OVER (PARTITION BY t.player_id ORDER BY to_timestamp(t.time,'HH24:MI:SS.MS')::time)), 0) AS delta_time\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name {}\n ), filtered AS (\n   SELECT player_id, player_display_name, speed_ms, instantaneous_acceleration, delta_time, speed_ms * (1 + 0.1 * instantaneous_acceleration) AS metabolic_power\n   FROM metabolic\n   WHERE delta_time > 0 AND delta_time < 0.5\n )\n SELECT\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 25.5 AND speed_ms > 5.5), 0)::double precision AS hmld_25_5,\n   COALESCE(SUM(speed_ms * delta_time) FILTER (WHERE metabolic_power > 18 AND speed_ms > 5.5), 0)::double precision AS hmld_18\n FROM filtered",
+                        table_ident, table_ident, raw_period_filter
                     );
                     hmld_row_opt = sqlx::query(&sql_hmld_raw)
                         .bind(&display_name)
@@ -629,8 +717,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
 
                 // Compute Z6: seconds and distance (per second speed max > threshold)
                 let sql_z6_view = format!(
-                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), per_sec AS (\n   SELECT floor(t.seconds_since_midnight)::int AS sec, MAX(COALESCE(t.speed,0)) AS max_speed, SUM(COALESCE(t.distancia_total_calc,0)) AS sum_dist\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n   GROUP BY 1\n )\n SELECT SUM(CASE WHEN max_speed > {} THEN 1 ELSE 0 END)::double precision AS z6_seconds,\n        SUM(CASE WHEN max_speed > {} THEN sum_dist ELSE 0 END)::double precision AS z6_distance\n FROM per_sec",
-                    view_name, view_name, z6_threshold_kmh, z6_threshold_kmh
+                    "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), per_sec AS (\n   SELECT floor(t.seconds_since_midnight)::int AS sec, MAX(COALESCE(t.speed,0)) AS max_speed, SUM(COALESCE(t.distancia_total_calc,0)) AS sum_dist\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name {}\n   GROUP BY 1\n )\n SELECT SUM(CASE WHEN max_speed > {} THEN 1 ELSE 0 END)::double precision AS z6_seconds,\n        SUM(CASE WHEN max_speed > {} THEN sum_dist ELSE 0 END)::double precision AS z6_distance\n FROM per_sec",
+                    view_name, view_name, period_filter, z6_threshold_kmh, z6_threshold_kmh
                 );
                 let mut z6_row_opt = sqlx::query(&sql_z6_view)
                     .bind(&display_name)
@@ -640,8 +728,8 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                     .flatten();
                 if z6_row_opt.is_none() {
                     let sql_z6_raw = format!(
-                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), per_sec AS (\n   SELECT floor(EXTRACT(EPOCH FROM (to_timestamp(t.time,'HH24:MI:SS.MS')::time)))::int AS sec, MAX(COALESCE(t.speed,0)) AS max_speed, SUM(COALESCE(t.distancia_total_calc,0)) AS sum_dist\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name\n   GROUP BY 1\n )\n SELECT SUM(CASE WHEN max_speed > {} THEN 1 ELSE 0 END)::double precision AS z6_seconds,\n        SUM(CASE WHEN max_speed > {} THEN sum_dist ELSE 0 END)::double precision AS z6_distance\n FROM per_sec",
-                        table_ident, table_ident, z6_threshold_kmh, z6_threshold_kmh
+                        "WITH best AS (\n   SELECT player_display_name\n   FROM \"{}\"\n   GROUP BY player_display_name\n   ORDER BY similarity(unaccent(lower(player_display_name)), unaccent(lower($1))) DESC\n   LIMIT 1\n ), per_sec AS (\n   SELECT floor(EXTRACT(EPOCH FROM (to_timestamp(t.time,'HH24:MI:SS.MS')::time)))::int AS sec, MAX(COALESCE(t.speed,0)) AS max_speed, SUM(COALESCE(t.distancia_total_calc,0)) AS sum_dist\n   FROM \"{}\" t, best b\n   WHERE t.player_display_name = b.player_display_name {}\n   GROUP BY 1\n )\n SELECT SUM(CASE WHEN max_speed > {} THEN 1 ELSE 0 END)::double precision AS z6_seconds,\n        SUM(CASE WHEN max_speed > {} THEN sum_dist ELSE 0 END)::double precision AS z6_distance\n FROM per_sec",
+                        table_ident, table_ident, raw_period_filter, z6_threshold_kmh, z6_threshold_kmh
                     );
                     z6_row_opt = sqlx::query(&sql_z6_raw)
                         .bind(&display_name)
@@ -668,8 +756,14 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
             let mp_row = sqlx::query!(
                 r#"SELECT manual_first_half_start FROM match_periods WHERE match_name = $1"#,
                 max_speed_table.clone().unwrap()
-            ).fetch_optional(&pool).await.ok().flatten();
-            if let Some(r) = mp_row { manual_first_half_start = r.manual_first_half_start; }
+            )
+            .fetch_optional(&pool)
+            .await
+            .ok()
+            .flatten();
+            if let Some(r) = mp_row {
+                manual_first_half_start = r.manual_first_half_start;
+            }
         }
     }
 
@@ -740,13 +834,28 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
             updated_at = NOW()
         "#,
         user_id,
-        max_speed_kmh, max_speed_match_id, max_speed_table,
-        max_distance_m_val, max_distance_match_id, max_distance_table,
-        hsr_max_m_val, hsr_max_match_id, hsr_max_table,
-        hmld_25_5_val, hmld_25_5_match_id, hmld_25_5_table,
-        hmld_18_val, hmld_18_match_id, hmld_18_table,
-        z6_seconds_val, z6_distance_val, z6_match_id, z6_table
-    ).execute(&pool).await;
+        max_speed_kmh,
+        max_speed_match_id,
+        max_speed_table,
+        max_distance_m_val,
+        max_distance_match_id,
+        max_distance_table,
+        hsr_max_m_val,
+        hsr_max_match_id,
+        hsr_max_table,
+        hmld_25_5_val,
+        hmld_25_5_match_id,
+        hmld_25_5_table,
+        hmld_18_val,
+        hmld_18_match_id,
+        hmld_18_table,
+        z6_seconds_val,
+        z6_distance_val,
+        z6_match_id,
+        z6_table
+    )
+    .execute(&pool)
+    .await;
 
     Json(response)
 }
