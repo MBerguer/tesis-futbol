@@ -32,6 +32,26 @@ type AdminMatch = {
   away_team_name?: string | null;
 };
 
+type MatchPlayer = {
+  match_player_id: string;
+  match_id: string;
+  team_id: string;
+  team_name: string;
+  player_id: number;
+  jugador?: string | null;
+  nombre?: string | null;
+  role: string;
+  position?: string | null;
+  jersey_number?: number | null;
+};
+
+type Player = {
+  documento_de_identidad: number;
+  jugador?: string | null;
+  nombre?: string | null;
+  posicion?: string | null;
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function AdminPage() {
@@ -87,23 +107,48 @@ export default function AdminPage() {
     notes: "",
   });
 
+  // Match Players state
+  const [matchPlayers, setMatchPlayers] = React.useState<MatchPlayer[]>([]);
+  const [players, setPlayers] = React.useState<Player[]>([]);
+  const [selectedMatchId, setSelectedMatchId] = React.useState<string | null>(
+    null
+  );
+  const [editingMatchPlayerId, setEditingMatchPlayerId] = React.useState<
+    string | null
+  >(null);
+  const [matchPlayerForm, setMatchPlayerForm] = React.useState<
+    Partial<MatchPlayer>
+  >({});
+  const [newMatchPlayer, setNewMatchPlayer] = React.useState<
+    Partial<MatchPlayer>
+  >({
+    match_id: "",
+    team_id: "",
+    player_id: 0,
+    role: "starter",
+    position: "",
+    jersey_number: undefined,
+  });
+
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
         setError(null);
-        const [c, v, t, m] = await Promise.all([
+        const [c, v, t, m, p] = await Promise.all([
           fetch(`${API_BASE}/api/competitions`).then((r) => r.json()),
           fetch(`${API_BASE}/api/venues`).then((r) => r.json()),
           fetch(`${API_BASE}/api/teams`).then((r) => r.json()),
           fetch(`${API_BASE}/api/matches`).then((r) => r.json()),
+          fetch(`${API_BASE}/api/players?search=`).then((r) => r.json()),
         ]);
         if (!cancelled) {
           setCompetitions(Array.isArray(c) ? c : []);
           setVenues(Array.isArray(v) ? v : []);
           setTeams(Array.isArray(t) ? t : []);
           setMatches(Array.isArray(m) ? m : []);
+          setPlayers(Array.isArray(p) ? p : []);
         }
       } catch (e: any) {
         if (!cancelled) setError(String(e?.message || e));
@@ -120,16 +165,18 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [c, v, t, m] = await Promise.all([
+      const [c, v, t, m, p] = await Promise.all([
         fetch(`${API_BASE}/api/competitions`).then((r) => r.json()),
         fetch(`${API_BASE}/api/venues`).then((r) => r.json()),
         fetch(`${API_BASE}/api/teams`).then((r) => r.json()),
         fetch(`${API_BASE}/api/matches`).then((r) => r.json()),
+        fetch(`${API_BASE}/api/players?search=`).then((r) => r.json()),
       ]);
       setCompetitions(Array.isArray(c) ? c : []);
       setVenues(Array.isArray(v) ? v : []);
       setTeams(Array.isArray(t) ? t : []);
       setMatches(Array.isArray(m) ? m : []);
+      setPlayers(Array.isArray(p) ? p : []);
     } catch (e: any) {
       setError(String(e?.message || e));
     } finally {
@@ -397,6 +444,91 @@ export default function AdminPage() {
     try {
       await fetch(`${API_BASE}/api/matches/${id}`, { method: "DELETE" });
       await refreshAll();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Match Players functions
+  async function loadMatchPlayers(matchId: string) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/matches/${matchId}/players`
+      );
+      const data = await response.json();
+      setMatchPlayers(data.match_players || []);
+    } catch (e: any) {
+      setError(String(e?.message || e));
+    }
+  }
+
+  async function createMatchPlayer() {
+    if (
+      !newMatchPlayer.match_id ||
+      !newMatchPlayer.team_id ||
+      !newMatchPlayer.player_id
+    )
+      return;
+    setSaving(true);
+    try {
+      await fetch(`${API_BASE}/api/match-players`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          match_id: newMatchPlayer.match_id,
+          team_id: newMatchPlayer.team_id,
+          player_id: newMatchPlayer.player_id,
+          role: newMatchPlayer.role,
+          position: newMatchPlayer.position || null,
+          jersey_number: newMatchPlayer.jersey_number || null,
+        }),
+      });
+      setNewMatchPlayer({
+        match_id: "",
+        team_id: "",
+        player_id: 0,
+        role: "starter",
+        position: "",
+        jersey_number: undefined,
+      });
+      if (selectedMatchId) {
+        await loadMatchPlayers(selectedMatchId);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateMatchPlayer(id: string) {
+    setSaving(true);
+    try {
+      await fetch(`${API_BASE}/api/match-players/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: matchPlayerForm.role,
+          position: matchPlayerForm.position || null,
+          jersey_number: matchPlayerForm.jersey_number || null,
+        }),
+      });
+      setEditingMatchPlayerId(null);
+      setMatchPlayerForm({});
+      if (selectedMatchId) {
+        await loadMatchPlayers(selectedMatchId);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteMatchPlayer(id: string) {
+    if (!confirm("Delete match player?")) return;
+    setSaving(true);
+    try {
+      await fetch(`${API_BASE}/api/match-players/${id}`, { method: "DELETE" });
+      if (selectedMatchId) {
+        await loadMatchPlayers(selectedMatchId);
+      }
     } finally {
       setSaving(false);
     }
@@ -1005,6 +1137,269 @@ export default function AdminPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-2">Match Players</h2>
+
+        {/* Match Selection */}
+        <div className="mb-4">
+          <label className="block text-sm text-muted-foreground mb-2">
+            Select Match
+          </label>
+          <select
+            value={selectedMatchId || ""}
+            onChange={(e) => {
+              const matchId = e.target.value;
+              setSelectedMatchId(matchId);
+              if (matchId) {
+                loadMatchPlayers(matchId);
+                setNewMatchPlayer((prev) => ({ ...prev, match_id: matchId }));
+              } else {
+                setMatchPlayers([]);
+              }
+            }}
+            className="h-9 rounded bg-background border border-input px-2 text-sm text-foreground w-full max-w-md"
+          >
+            <option value="">Select a match...</option>
+            {matches
+              .sort(
+                (a, b) =>
+                  new Date(b.match_date).getTime() -
+                  new Date(a.match_date).getTime()
+              )
+              .map((m) => (
+                <option key={m.match_id} value={m.match_id}>
+                  {m.home_team_name || m.home_team_id.slice(0, 6)} vs{" "}
+                  {m.away_team_name || m.away_team_id.slice(0, 6)} -{" "}
+                  {new Date(m.match_date).toLocaleDateString()}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        {selectedMatchId && (
+          <>
+            {/* Add New Match Player */}
+            <div className="mb-4 p-4 border border-border rounded bg-card">
+              <h3 className="text-md font-medium mb-3">Add Player to Match</h3>
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+                <select
+                  value={newMatchPlayer.team_id || ""}
+                  onChange={(e) =>
+                    setNewMatchPlayer((prev) => ({
+                      ...prev,
+                      team_id: e.target.value,
+                    }))
+                  }
+                  className="h-9 rounded bg-background border border-input px-2 text-sm text-foreground"
+                >
+                  <option value="">Team</option>
+                  {teams.map((t) => (
+                    <option key={t.team_id} value={t.team_id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={newMatchPlayer.player_id || ""}
+                  onChange={(e) =>
+                    setNewMatchPlayer((prev) => ({
+                      ...prev,
+                      player_id: Number(e.target.value),
+                    }))
+                  }
+                  className="h-9 rounded bg-background border border-input px-2 text-sm text-foreground"
+                >
+                  <option value="">Player</option>
+                  {players
+                    .sort((a, b) => {
+                      const nameA = (
+                        a.jugador ||
+                        a.nombre ||
+                        `Player ${a.documento_de_identidad}`
+                      ).toLowerCase();
+                      const nameB = (
+                        b.jugador ||
+                        b.nombre ||
+                        `Player ${b.documento_de_identidad}`
+                      ).toLowerCase();
+                      return nameA.localeCompare(nameB);
+                    })
+                    .map((p) => (
+                      <option
+                        key={p.documento_de_identidad}
+                        value={p.documento_de_identidad}
+                      >
+                        {p.jugador ||
+                          p.nombre ||
+                          `Player ${p.documento_de_identidad}`}
+                      </option>
+                    ))}
+                </select>
+                <select
+                  value={newMatchPlayer.role || "starter"}
+                  onChange={(e) =>
+                    setNewMatchPlayer((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                    }))
+                  }
+                  className="h-9 rounded bg-background border border-input px-2 text-sm text-foreground"
+                >
+                  <option value="starter">Starter</option>
+                  <option value="sub">Substitute</option>
+                </select>
+                <input
+                  placeholder="Position"
+                  value={newMatchPlayer.position || ""}
+                  onChange={(e) =>
+                    setNewMatchPlayer((prev) => ({
+                      ...prev,
+                      position: e.target.value,
+                    }))
+                  }
+                  className="h-9 rounded bg-background border border-input px-2 text-sm text-foreground"
+                />
+                <input
+                  type="number"
+                  placeholder="Jersey #"
+                  value={newMatchPlayer.jersey_number || ""}
+                  onChange={(e) =>
+                    setNewMatchPlayer((prev) => ({
+                      ...prev,
+                      jersey_number: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
+                    }))
+                  }
+                  className="h-9 rounded bg-background border border-input px-2 text-sm text-foreground"
+                />
+                <button
+                  disabled={saving}
+                  onClick={createMatchPlayer}
+                  className="h-9 px-3 rounded border border-border bg-card text-foreground hover:bg-accent"
+                >
+                  Add Player
+                </button>
+              </div>
+            </div>
+
+            {/* Match Players List */}
+            <div className="space-y-2">
+              <h3 className="text-md font-medium">Players in Match</h3>
+              {matchPlayers.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-4 border border-border rounded bg-card">
+                  No players added to this match yet.
+                </div>
+              ) : (
+                matchPlayers.map((mp) => (
+                  <div
+                    key={mp.match_player_id}
+                    className="border border-border rounded p-3 bg-card"
+                  >
+                    {editingMatchPlayerId === mp.match_player_id ? (
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
+                        <select
+                          defaultValue={mp.role}
+                          onChange={(e) =>
+                            setMatchPlayerForm((prev) => ({
+                              ...prev,
+                              role: e.target.value,
+                            }))
+                          }
+                          className="h-9 rounded bg-background border border-input px-2 text-sm text-foreground"
+                        >
+                          <option value="starter">Starter</option>
+                          <option value="sub">Substitute</option>
+                        </select>
+                        <input
+                          placeholder="Position"
+                          defaultValue={mp.position || ""}
+                          onChange={(e) =>
+                            setMatchPlayerForm((prev) => ({
+                              ...prev,
+                              position: e.target.value,
+                            }))
+                          }
+                          className="h-9 rounded bg-background border border-input px-2 text-sm text-foreground"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Jersey #"
+                          defaultValue={mp.jersey_number || ""}
+                          onChange={(e) =>
+                            setMatchPlayerForm((prev) => ({
+                              ...prev,
+                              jersey_number: e.target.value
+                                ? Number(e.target.value)
+                                : undefined,
+                            }))
+                          }
+                          className="h-9 rounded bg-background border border-input px-2 text-sm text-foreground"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            disabled={saving}
+                            onClick={() =>
+                              updateMatchPlayer(mp.match_player_id)
+                            }
+                            className="h-9 px-3 rounded border border-border bg-card text-foreground hover:bg-accent"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingMatchPlayerId(null);
+                              setMatchPlayerForm({});
+                            }}
+                            className="h-9 px-3 rounded border border-border bg-card text-foreground hover:bg-accent"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {mp.jugador ||
+                              mp.nombre ||
+                              `Player ${mp.player_id}`}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {mp.team_name} · {mp.role} ·{" "}
+                            {mp.position || "No position"} · Jersey #
+                            {mp.jersey_number || "—"}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setEditingMatchPlayerId(mp.match_player_id);
+                            setMatchPlayerForm({
+                              role: mp.role,
+                              position: mp.position,
+                              jersey_number: mp.jersey_number,
+                            });
+                          }}
+                          className="h-8 px-2 rounded border border-border bg-card text-foreground hover:bg-accent"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteMatchPlayer(mp.match_player_id)}
+                          className="h-8 px-2 rounded border border-red-900 text-red-300 hover:border-red-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </section>
     </main>
   );
