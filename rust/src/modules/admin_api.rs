@@ -331,7 +331,6 @@ pub async fn search_players(
                 "Club_de_Origen"              as "club_de_origen?",
                 "Club_de_Origen_Porcentaje"   as "club_de_origen_porcentaje?",
                 "Posicion"                     as "posicion?",
-                nombre                          as "nombre?",
                 NULL::date                      as birthdate,
                 NULL::uuid                      as current_team_id,
                 NULL::text                      as position,
@@ -387,7 +386,6 @@ pub async fn get_active_players(
             a."Club_de_Origen"                AS club_de_origen,
             a."Club_de_Origen_Porcentaje"     AS club_de_origen_porcentaje,
             a."Posicion"                       AS posicion_adm,
-            a.nombre                            AS nombre,
             COUNT(DISTINCT mp.match_date)       AS appearances,
             MAX(mp.match_date)                  AS last_match_date,
             MAX(mp.position) FILTER (WHERE mp.match_date = (SELECT MAX(match_date) FROM mp WHERE mp.player_id = a."Documento_de_Identidad")) AS last_position
@@ -406,8 +404,7 @@ pub async fn get_active_players(
             a."Oriundo",
             a."Club_de_Origen",
             a."Club_de_Origen_Porcentaje",
-            a."Posicion",
-            a.nombre
+            a."Posicion"
         ORDER BY last_match_date DESC NULLS LAST, jugador NULLS LAST
         "#,
     )
@@ -1620,7 +1617,6 @@ pub async fn get_match_players_by_match(
               t.name AS team_name,
               mp.player_id,
               a."Jugador" AS jugador,
-              a.nombre AS nombre,
               mp.role,
               mp.position,
               mp.jersey_number
@@ -1645,7 +1641,6 @@ pub async fn get_match_players_by_match(
                 "team_name": r.team_name,
                 "player_id": r.player_id,
                 "jugador": r.jugador,
-                "nombre": r.nombre,
                 "role": r.role,
                 "position": r.position,
                 "jersey_number": r.jersey_number
@@ -1728,7 +1723,6 @@ pub async fn get_match_player(
               t.name AS team_name,
               mp.player_id,
               a."Jugador" AS jugador,
-              a.nombre AS nombre,
               mp.role,
               mp.position,
               mp.jersey_number
@@ -1750,7 +1744,6 @@ pub async fn get_match_player(
             "team_name": row.team_name,
             "player_id": row.player_id,
             "jugador": row.jugador,
-            "nombre": row.nombre,
             "role": row.role,
             "position": row.position,
             "jersey_number": row.jersey_number

@@ -508,7 +508,7 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
 
     // Resolve display name for fuzzy matching in GPS tables
     let player_name: Option<String> = match sqlx::query!(
-        r#"SELECT COALESCE("Jugador", nombre) AS display FROM administrativo WHERE "Documento_de_Identidad" = $1"#,
+        r#"SELECT COALESCE("Jugador") AS display FROM administrativo WHERE "Documento_de_Identidad" = $1"#,
         user_id
     )
     .fetch_optional(&pool)
@@ -519,6 +519,27 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
     };
 
     if let Some(display_name) = player_name {
+        // First check if this player has any GPS data at all
+        let has_gps_data = sqlx::query!(
+            r#"SELECT 1 as exists FROM all_matches_filtred WHERE player_display_name ILIKE $1 LIMIT 1"#,
+            format!("%{}%", display_name)
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap_or_default()
+        .is_some();
+
+        if !has_gps_data {
+            // Player has no GPS data, return default values
+            return Json(json!({
+                "max_distance_m": max_distance_m,
+                "hsr_max_m": hsr_max_m,
+                "max_speed_kmh": max_speed_kmh,
+                "high_metabolic_distance_m": high_metabolic_distance_m,
+                "z6": { "seconds": z6_seconds, "distance_m": z6_distance_m }
+            }));
+        }
+
         // Find matches where player appeared and have a gps table name
         let rows = sqlx::query!(
             r#"
@@ -765,6 +786,15 @@ pub async fn get_player_max_metrics(Path(user_id): Path<i32>) -> Json<Value> {
                 manual_first_half_start = r.manual_first_half_start;
             }
         }
+    } else {
+        // No player name found, return default values
+        return Json(json!({
+            "max_distance_m": max_distance_m,
+            "hsr_max_m": hsr_max_m,
+            "max_speed_kmh": max_speed_kmh,
+            "high_metabolic_distance_m": high_metabolic_distance_m,
+            "z6": { "seconds": z6_seconds, "distance_m": z6_distance_m }
+        }));
     }
 
     let response = json!({

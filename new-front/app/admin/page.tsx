@@ -1215,9 +1215,7 @@ export default function AdminPage() {
                   {players
                     .sort((a, b) => {
                       const nameA = (
-                        a.jugador ||
-                        a.nombre ||
-                        `Player ${a.documento_de_identidad}`
+                        a.jugador || `Player ${a.documento_de_identidad}`
                       ).toLowerCase();
                       const nameB = (
                         b.jugador ||

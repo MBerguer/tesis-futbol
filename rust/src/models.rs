@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 // Database enum: event_type
 #[derive(sqlx::Type, Debug, Clone, Copy, Serialize, Deserialize)]
-#[sqlx(type_name = "event_type", rename_all = "snake_case")] 
+#[sqlx(type_name = "event_type", rename_all = "snake_case")]
 pub enum EventType {
     Goal,
     PenGoal,
@@ -60,7 +60,6 @@ pub struct Player {
     pub club_de_origen: Option<String>,
     pub club_de_origen_porcentaje: Option<String>,
     pub posicion: Option<String>,
-    pub nombre: Option<String>,
     // legacy optional fields for compatibility
     pub birthdate: Option<NaiveDate>,
     pub current_team_id: Option<Uuid>,
@@ -92,9 +91,9 @@ pub struct MatchPlayer {
     pub match_id: Uuid,
     pub team_id: Uuid,
     pub player_id: i32, // references administrativo.Documento_de_Identidad
-    pub role: String,                 // 'starter' | 'sub'
+    pub role: String,   // 'starter' | 'sub'
     pub position: Option<String>,
-    pub jersey_number: Option<i32>,   // youth jerseys rotate; optional
+    pub jersey_number: Option<i32>, // youth jerseys rotate; optional
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
@@ -111,7 +110,6 @@ pub struct Event {
     pub reason: Option<String>,
     pub data_json: Option<JsonValue>,
 }
-
 
 // -------- Forecasting service DTOs --------
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -147,4 +145,3 @@ pub struct ForecastResponse {
     pub horizon_s: f64,
     pub results: Vec<ForecastResult>,
 }
-

@@ -90,7 +90,7 @@ export default function SideNav({
             </Link>
             <Link
               href="/plantel"
-              title="Full Plantel"
+              title="Full Squad"
               className="rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
             >
               FP
@@ -133,7 +133,7 @@ export default function SideNav({
                 href="/plantel"
                 className="rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
               >
-                Full Plantel
+                Full Squad
               </Link>
               <Link
                 href="/week-preparation"
