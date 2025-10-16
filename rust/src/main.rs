@@ -41,7 +41,8 @@ async fn main() {
         .route("/", get(|| async { "Cantera inagotable API" }))
         .nest("/match", routes::matches_routes::matches_routes(pool.clone()))
         .nest("/player", routes::players_routes::players_routes())
-        .nest("/api", routes::admin_api::admin_api(pool))
+        .nest("/api", routes::admin_api::admin_api(pool.clone()))
+        .nest("/research", routes::research_routes::research_routes(pool))
         .nest_service("/uploads", ServeDir::new("uploads"))
         .layer(cors);
 
