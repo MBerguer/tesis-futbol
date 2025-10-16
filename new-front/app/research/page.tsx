@@ -479,14 +479,14 @@ export default function ResearchPage() {
                     dataKey="normalized_minute"
                     tick={false}
                     label={{
-                      value: "Tiempo juego normalizado (100 min)",
+                      value: "Normalized Time (100 min)",
                       position: "insideBottom",
                       offset: -10,
                     }}
                   />
                   <YAxis
                     label={{
-                      value: "Distancia en sprint (m/min)",
+                      value: "Distance in sprint (m/min)",
                       angle: -90,
                       position: "insideLeft",
                     }}
@@ -509,14 +509,14 @@ export default function ResearchPage() {
                       y={sprintMetadata.median}
                       stroke="hsl(var(--muted-foreground))"
                       strokeDasharray="5 5"
-                      label={{ value: "Media", position: "insideRight" }}
+                      label={{ value: "Median", position: "insideRight" }}
                     />
                   )}
                   <ReferenceLine
                     x={50}
                     stroke="hsl(var(--muted-foreground))"
                     strokeDasharray="3 3"
-                    label={{ value: "Descanso", position: "top" }}
+                    label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
                     type="monotone"
@@ -559,7 +559,7 @@ export default function ResearchPage() {
                       </span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Media: </span>
+                      <span className="text-muted-foreground">Median: </span>
                       <span className="font-semibold">
                         {highAccelMetadata.median.toFixed(2)} /min
                       </span>
@@ -580,14 +580,14 @@ export default function ResearchPage() {
                     dataKey="normalized_minute"
                     tick={false}
                     label={{
-                      value: "Tiempo juego normalizado (100 min)",
+                      value: "Normalized Time (100 min)",
                       position: "insideBottom",
                       offset: -10,
                     }}
                   />
                   <YAxis
                     label={{
-                      value: "Aceleraciones y deceleraciones (>3.0 m/s2)",
+                      value: "High Intensity Events",
                       angle: -90,
                       position: "insideLeft",
                     }}
@@ -610,14 +610,14 @@ export default function ResearchPage() {
                       y={highAccelMetadata.median}
                       stroke="hsl(var(--muted-foreground))"
                       strokeDasharray="5 5"
-                      label={{ value: "Media", position: "insideRight" }}
+                      label={{ value: "Median", position: "insideRight" }}
                     />
                   )}
                   <ReferenceLine
                     x={50}
                     stroke="hsl(var(--muted-foreground))"
                     strokeDasharray="3 3"
-                    label={{ value: "Descanso", position: "top" }}
+                    label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
                     type="monotone"
@@ -653,13 +653,13 @@ export default function ResearchPage() {
                 <div className="mb-4 p-3 bg-muted rounded-md text-sm">
                   <div className="flex gap-6">
                     <div>
-                      <span className="text-muted-foreground">Media AC: </span>
+                      <span className="text-muted-foreground">Median AC: </span>
                       <span className="font-semibold">
                         {accelDecelMetadata.median_acceleration.toFixed(2)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Media DC: </span>
+                      <span className="text-muted-foreground">Median DC: </span>
                       <span className="font-semibold">
                         {accelDecelMetadata.median_deceleration.toFixed(2)}
                       </span>
@@ -680,14 +680,14 @@ export default function ResearchPage() {
                     dataKey="normalized_minute"
                     tick={false}
                     label={{
-                      value: "Tiempo juego normalizado (100 min)",
+                      value: "Normalized Time (100 min)",
                       position: "insideBottom",
                       offset: -10,
                     }}
                   />
                   <YAxis
                     label={{
-                      value: "Numero",
+                      value: "Number",
                       angle: -90,
                       position: "insideLeft",
                     }}
@@ -708,7 +708,7 @@ export default function ResearchPage() {
                         stroke="hsl(var(--muted-foreground))"
                         strokeDasharray="5 5"
                         label={{
-                          value: "Media AC",
+                          value: "Median AC",
                           position: "insideTopRight",
                         }}
                       />
@@ -717,7 +717,7 @@ export default function ResearchPage() {
                         stroke="hsl(var(--muted-foreground))"
                         strokeDasharray="5 5"
                         label={{
-                          value: "Media DC",
+                          value: "Median DC",
                           position: "insideBottomRight",
                         }}
                       />
@@ -727,7 +727,7 @@ export default function ResearchPage() {
                     x={50}
                     stroke="hsl(var(--muted-foreground))"
                     strokeDasharray="3 3"
-                    label={{ value: "Descanso", position: "top" }}
+                    label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
                     type="monotone"
@@ -735,7 +735,7 @@ export default function ResearchPage() {
                     stroke="hsl(var(--chart-1))"
                     strokeWidth={2}
                     dot={false}
-                    name="Aceleraciones"
+                    name="Accelerations"
                   />
                   <Line
                     type="monotone"
@@ -743,7 +743,7 @@ export default function ResearchPage() {
                     stroke="hsl(var(--chart-5))"
                     strokeWidth={2}
                     dot={false}
-                    name="Deceleraciones"
+                    name="Decelerations"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -770,7 +770,7 @@ export default function ResearchPage() {
                 <div className="mb-4 p-3 bg-muted rounded-md text-sm">
                   <div className="flex gap-6">
                     <div>
-                      <span className="text-muted-foreground">Media: </span>
+                      <span className="text-muted-foreground">Median: </span>
                       <span className="font-semibold">
                         {ratioMetadata.median.toFixed(2)}
                       </span>
@@ -791,7 +791,7 @@ export default function ResearchPage() {
                     dataKey="normalized_minute"
                     tick={false}
                     label={{
-                      value: "Tiempo juego normalizado (100 min)",
+                      value: "Normalized Time (100 min)",
                       position: "insideBottom",
                       offset: -10,
                     }}
@@ -821,14 +821,14 @@ export default function ResearchPage() {
                       y={ratioMetadata.median}
                       stroke="hsl(var(--muted-foreground))"
                       strokeDasharray="5 5"
-                      label={{ value: "Media", position: "insideRight" }}
+                      label={{ value: "Median", position: "insideRight" }}
                     />
                   )}
                   <ReferenceLine
                     x={50}
                     stroke="hsl(var(--muted-foreground))"
                     strokeDasharray="3 3"
-                    label={{ value: "Descanso", position: "top" }}
+                    label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
                     type="monotone"
