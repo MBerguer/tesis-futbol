@@ -33,5 +33,9 @@ pub fn research_routes(pool: PgPool) -> Router {
             "/speed-zones-summary",
             get(handlers::get_speed_zones_summary),
         )
+        .route(
+            "/match-aggregate-stats",
+            get(handlers::get_match_aggregate_stats),
+        )
         .with_state(pool)
 }

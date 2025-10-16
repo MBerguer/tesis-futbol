@@ -743,3 +743,85 @@ pub async fn get_accel_decel_ratio_per_minute(
         })),
     }
 }
+
+pub async fn get_match_aggregate_stats(State(pool): State<PgPool>) -> Json<Value> {
+    let query = r#"
+        WITH match_stats AS (
+            SELECT 
+                match_name,
+                player_display_name,
+                (MAX(seconds_since_midnight) - MIN(seconds_since_midnight)) / 60.0 as minutes_played
+            FROM all_matches_filtred
+            WHERE match_name IS NOT NULL AND seconds_since_midnight IS NOT NULL
+            GROUP BY match_name, player_display_name
+            HAVING (MAX(seconds_since_midnight) - MIN(seconds_since_midnight)) / 60.0 >= 85.0
+        ),
+        player_data AS (
+            SELECT 
+                amf.match_name,
+                amf.player_display_name,
+                SUM((amf.speed / 3.6) * 0.1) / ms.minutes_played as dtr,
+                SUM(CASE WHEN amf.speed >= 19.8 AND amf.speed < 25.2 THEN (amf.speed / 3.6) * 0.1 ELSE 0 END) / ms.minutes_played as z2_distance,
+                SUM(CASE WHEN amf.speed >= 25.2 THEN (amf.speed / 3.6) * 0.1 ELSE 0 END) / ms.minutes_played as sprint_distance,
+                AVG(CASE WHEN amf.player_acceleration_final_smooth > 0 THEN amf.player_acceleration_final_smooth END) as accelerations,
+                AVG(CASE WHEN amf.player_acceleration_final_smooth < 0 THEN ABS(amf.player_acceleration_final_smooth) END) as decelerations,
+                COUNT(CASE WHEN ABS(amf.player_acceleration_final_smooth) >= 3.0 THEN 1 END)::float / ms.minutes_played as high_intensity
+            FROM all_matches_filtred amf
+            JOIN match_stats ms ON ms.match_name = amf.match_name AND ms.player_display_name = amf.player_display_name
+            WHERE amf.seconds_since_midnight IS NOT NULL
+            GROUP BY amf.match_name, amf.player_display_name, ms.minutes_played
+        )
+        SELECT 
+            match_name,
+            AVG(dtr)::float as avg_dtr,
+            AVG(z2_distance)::float as avg_z2_distance,
+            AVG(sprint_distance)::float as avg_sprint_distance,
+            AVG(accelerations)::float as avg_accelerations,
+            AVG(decelerations)::float as avg_decelerations,
+            AVG(high_intensity)::float as avg_high_intensity,
+            COUNT(DISTINCT player_display_name)::int as player_count
+        FROM player_data
+        GROUP BY match_name
+        ORDER BY match_name
+    "#;
+
+    match sqlx::query_as::<
+        _,
+        (
+            String,
+            Option<f64>,
+            Option<f64>,
+            Option<f64>,
+            Option<f64>,
+            Option<f64>,
+            Option<f64>,
+            i32,
+        ),
+    >(query)
+    .fetch_all(&pool)
+    .await
+    {
+        Ok(rows) => {
+            let matches: Vec<Value> = rows
+                .into_iter()
+                .map(|(name, dtr, z2, sprint, accel, decel, intensity, count)| {
+                    json!({
+                        "match_name": name,
+                        "dtr": dtr.unwrap_or(0.0),
+                        "z2_distance": z2.unwrap_or(0.0),
+                        "sprint_distance": sprint.unwrap_or(0.0),
+                        "accelerations": accel.unwrap_or(0.0),
+                        "decelerations": decel.unwrap_or(0.0),
+                        "high_intensity": intensity.unwrap_or(0.0),
+                        "player_count": count
+                    })
+                })
+                .collect();
+            Json(json!({ "matches": matches }))
+        }
+        Err(e) => Json(json!({
+            "error": format!("Database error: {}", e),
+            "matches": []
+        })),
+    }
+}
