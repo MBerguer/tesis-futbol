@@ -62,7 +62,7 @@ export default function ResearchPage() {
   const [highAccelData, setHighAccelData] = useState<TimeSeriesData[]>([]);
   const [accelDecelData, setAccelDecelData] = useState<AccelDecelData[]>([]);
   const [ratioData, setRatioData] = useState<RatioData[]>([]);
-  
+
   const [dtrMetadata, setDtrMetadata] = useState<
     TimeSeriesResponse["metadata"] | null
   >(null);
@@ -73,75 +73,103 @@ export default function ResearchPage() {
   const [highAccelMetadata, setHighAccelMetadata] = useState<any>(null);
   const [accelDecelMetadata, setAccelDecelMetadata] = useState<any>(null);
   const [ratioMetadata, setRatioMetadata] = useState<any>(null);
-  
+
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [minMinutesPlayed, setMinMinutesPlayed] = useState(85);
 
+  // Individual loading states for each chart
+  const [loadingDtr, setLoadingDtr] = useState(true);
+  const [loadingZ2, setLoadingZ2] = useState(true);
+  const [loadingSprint, setLoadingSprint] = useState(true);
+  const [loadingHighAccel, setLoadingHighAccel] = useState(true);
+  const [loadingAccelDecel, setLoadingAccelDecel] = useState(true);
+  const [loadingRatio, setLoadingRatio] = useState(true);
+
   useEffect(() => {
-    fetchData();
+    // Fetch all chart data in a single API call for maximum performance
+    fetchAllChartsData();
+    fetchMatches();
   }, [minMinutesPlayed]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchAllChartsData = async () => {
     try {
-      const [
-        dtrRes,
-        z2Res,
-        sprintRes,
-        highAccelRes,
-        accelDecelRes,
-        ratioRes,
-        matchesRes,
-      ] = await Promise.all([
-        fetch(
-          `${API_BASE}/research/distance-per-minute?min_minutes_played=${minMinutesPlayed}`
-        ),
-        fetch(
-          `${API_BASE}/research/distance-in-zone-per-minute?min_minutes_played=${minMinutesPlayed}`
-        ),
-        fetch(
-          `${API_BASE}/research/sprint-distance-per-minute?min_minutes_played=${minMinutesPlayed}`
-        ),
-        fetch(
-          `${API_BASE}/research/high-accel-decel-per-minute?min_minutes_played=${minMinutesPlayed}`
-        ),
-        fetch(
-          `${API_BASE}/research/accel-decel-separated-per-minute?min_minutes_played=${minMinutesPlayed}`
-        ),
-        fetch(
-          `${API_BASE}/research/accel-decel-ratio-per-minute?min_minutes_played=${minMinutesPlayed}`
-        ),
-        fetch(`${API_BASE}/research/available-matches`),
-      ]);
+      const res = await fetch(
+        `${API_BASE}/research/all-charts-data?min_minutes_played=${minMinutesPlayed}`
+      );
+      const json = await res.json();
 
-      const dtrJson: TimeSeriesResponse = await dtrRes.json();
-      const z2Json: TimeSeriesResponse = await z2Res.json();
-      const sprintJson = await sprintRes.json();
-      const highAccelJson = await highAccelRes.json();
-      const accelDecelJson = await accelDecelRes.json();
-      const ratioJson = await ratioRes.json();
-      const matchesJson = await matchesRes.json();
+      // Progressive rendering: show charts one by one with small delays for better UX
+      // DTR
+      setDtrData(json.dtr?.data || []);
+      setDtrMetadata(json.dtr?.metadata);
+      setLoadingDtr(false);
 
-      setDtrData(dtrJson.data || []);
-      setDtrMetadata(dtrJson.metadata);
-      setZ2Data(z2Json.data || []);
-      setZ2Metadata(z2Json.metadata);
-      setSprintData(sprintJson.data || []);
-      setSprintMetadata(sprintJson.metadata);
-      setHighAccelData(highAccelJson.data || []);
-      setHighAccelMetadata(highAccelJson.metadata);
-      setAccelDecelData(accelDecelJson.data || []);
-      setAccelDecelMetadata(accelDecelJson.metadata);
-      setRatioData(ratioJson.data || []);
-      setRatioMetadata(ratioJson.metadata);
-      setMatches(matchesJson.matches || []);
+      setTimeout(() => {
+        // Z2
+        setZ2Data(json.z2?.data || []);
+        setZ2Metadata(json.z2?.metadata);
+        setLoadingZ2(false);
+      }, 100);
+
+      setTimeout(() => {
+        // Sprint
+        setSprintData(json.sprint?.data || []);
+        setSprintMetadata(json.sprint?.metadata);
+        setLoadingSprint(false);
+      }, 200);
+
+      setTimeout(() => {
+        // High Accel
+        setHighAccelData(json.high_accel?.data || []);
+        setHighAccelMetadata(json.high_accel?.metadata);
+        setLoadingHighAccel(false);
+      }, 300);
+
+      setTimeout(() => {
+        // Accel/Decel
+        setAccelDecelData(json.accel_decel?.data || []);
+        setAccelDecelMetadata(json.accel_decel?.metadata);
+        setLoadingAccelDecel(false);
+      }, 400);
+
+      setTimeout(() => {
+        // Ratio
+        setRatioData(json.ratio?.data || []);
+        setRatioMetadata(json.ratio?.metadata);
+        setLoadingRatio(false);
+      }, 500);
     } catch (error) {
-      console.error("Error fetching research data:", error);
+      console.error("Error fetching chart data:", error);
+      // Set all loading states to false on error
+      setLoadingDtr(false);
+      setLoadingZ2(false);
+      setLoadingSprint(false);
+      setLoadingHighAccel(false);
+      setLoadingAccelDecel(false);
+      setLoadingRatio(false);
+    }
+  };
+
+  const fetchMatches = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/research/available-matches`);
+      const json = await res.json();
+      setMatches(json.matches || []);
+    } catch (error) {
+      console.error("Error fetching matches:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-8">
@@ -201,22 +229,21 @@ export default function ResearchPage() {
         </CardContent>
       </Card>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      ) : (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Total Distance Traveled per Minute (DTR)</CardTitle>
-              <CardDescription>
-                Average distance covered per minute across all matches
-                (normalized to 100 minutes). Players with ≥ {minMinutesPlayed}{" "}
-                minutes played.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>Total Distance Traveled per Minute (DTR)</CardTitle>
+          <CardDescription>
+            Average distance covered per minute across all matches (normalized
+            to 100 minutes). Players with ≥ {minMinutesPlayed} minutes played.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingDtr ? (
+            <div className="h-[420px] flex items-center justify-center">
+              <div className="text-muted-foreground">Loading...</div>
+            </div>
+          ) : (
+            <>
               {dtrMetadata && (
                 <div className="mb-4 p-3 bg-muted rounded-md text-sm">
                   <div className="flex gap-6">
@@ -236,13 +263,17 @@ export default function ResearchPage() {
                 </div>
               )}
               <ResponsiveContainer width="100%" height={420}>
-                <LineChart data={dtrData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+                <LineChart
+                  data={dtrData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                >
                   <CartesianGrid
                     strokeDasharray="3 3"
                     className="stroke-muted"
                   />
                   <XAxis
                     dataKey="normalized_minute"
+                    tick={false}
                     label={{
                       value: "Normalized Time (100 min)",
                       position: "insideBottom",
@@ -262,6 +293,7 @@ export default function ResearchPage() {
                       border: "1px solid hsl(var(--border))",
                       borderRadius: "6px",
                     }}
+                    labelFormatter={(label) => `Normalized minute: ${label}`}
                     formatter={(value: number) => [
                       `${value.toFixed(1)} m/min`,
                       "Distance",
@@ -273,7 +305,7 @@ export default function ResearchPage() {
                       y={dtrMetadata.median}
                       stroke="hsl(var(--muted-foreground))"
                       strokeDasharray="5 5"
-                      label={{ value: "Median", position: "right" }}
+                      label={{ value: "Median", position: "insideRight" }}
                     />
                   )}
                   <ReferenceLine
@@ -292,20 +324,26 @@ export default function ResearchPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Distance in Z2 per Minute (19.8 - 25.2 km/h)
-              </CardTitle>
-              <CardDescription>
-                Average distance covered in high-speed running zone per minute.
-                Matches normalized to 100 minutes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>Distance in Z2 per Minute (19.8 - 25.2 km/h)</CardTitle>
+          <CardDescription>
+            Average distance covered in high-speed running zone per minute.
+            Matches normalized to 100 minutes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingZ2 ? (
+            <div className="h-[420px] flex items-center justify-center">
+              <div className="text-muted-foreground">Loading...</div>
+            </div>
+          ) : (
+            <>
               {z2Metadata && (
                 <div className="mb-4 p-3 bg-muted rounded-md text-sm">
                   <div className="flex gap-6">
@@ -329,13 +367,17 @@ export default function ResearchPage() {
                 </div>
               )}
               <ResponsiveContainer width="100%" height={420}>
-                <LineChart data={z2Data} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+                <LineChart
+                  data={z2Data}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                >
                   <CartesianGrid
                     strokeDasharray="3 3"
                     className="stroke-muted"
                   />
                   <XAxis
                     dataKey="normalized_minute"
+                    tick={false}
                     label={{
                       value: "Normalized Time (100 min)",
                       position: "insideBottom",
@@ -355,6 +397,7 @@ export default function ResearchPage() {
                       border: "1px solid hsl(var(--border))",
                       borderRadius: "6px",
                     }}
+                    labelFormatter={(label) => `Normalized minute: ${label}`}
                     formatter={(value: number) => [
                       `${value.toFixed(2)} m/min`,
                       "Z2 Distance",
@@ -366,7 +409,7 @@ export default function ResearchPage() {
                       y={z2Metadata.median}
                       stroke="hsl(var(--muted-foreground))"
                       strokeDasharray="5 5"
-                      label={{ value: "Median", position: "right" }}
+                      label={{ value: "Median", position: "insideRight" }}
                     />
                   )}
                   <ReferenceLine
@@ -385,18 +428,26 @@ export default function ResearchPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Sprint Distance per Minute (>25.2 km/h)</CardTitle>
-              <CardDescription>
-                Average distance covered in sprint zone per minute. Matches
-                normalized to 100 minutes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>Sprint Distance per Minute (&gt;25.2 km/h)</CardTitle>
+          <CardDescription>
+            Average distance covered in sprint zone per minute. Matches
+            normalized to 100 minutes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingSprint ? (
+            <div className="h-[420px] flex items-center justify-center">
+              <div className="text-muted-foreground">Loading...</div>
+            </div>
+          ) : (
+            <>
               {sprintMetadata && (
                 <div className="mb-4 p-3 bg-muted rounded-md text-sm">
                   <div className="flex gap-6">
@@ -416,13 +467,17 @@ export default function ResearchPage() {
                 </div>
               )}
               <ResponsiveContainer width="100%" height={420}>
-                <LineChart data={sprintData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+                <LineChart
+                  data={sprintData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                >
                   <CartesianGrid
                     strokeDasharray="3 3"
                     className="stroke-muted"
                   />
                   <XAxis
                     dataKey="normalized_minute"
+                    tick={false}
                     label={{
                       value: "Tiempo juego normalizado (100 min)",
                       position: "insideBottom",
@@ -442,6 +497,7 @@ export default function ResearchPage() {
                       border: "1px solid hsl(var(--border))",
                       borderRadius: "6px",
                     }}
+                    labelFormatter={(label) => `Normalized minute: ${label}`}
                     formatter={(value: number) => [
                       `${value.toFixed(2)} m/min`,
                       "Sprint",
@@ -453,7 +509,7 @@ export default function ResearchPage() {
                       y={sprintMetadata.median}
                       stroke="hsl(var(--muted-foreground))"
                       strokeDasharray="5 5"
-                      label={{ value: "Media", position: "right" }}
+                      label={{ value: "Media", position: "insideRight" }}
                     />
                   )}
                   <ReferenceLine
@@ -472,20 +528,27 @@ export default function ResearchPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                High Accelerations & Decelerations (>3.0 m/s²)
-              </CardTitle>
-              <CardDescription>
-                Count of high-intensity acceleration/deceleration events per
-                minute.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            High Accelerations & Decelerations (&gt;3.0 m/s²)
+          </CardTitle>
+          <CardDescription>
+            Count of high-intensity acceleration/deceleration events per minute.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingHighAccel ? (
+            <div className="h-[420px] flex items-center justify-center">
+              <div className="text-muted-foreground">Loading...</div>
+            </div>
+          ) : (
+            <>
               {highAccelMetadata && (
                 <div className="mb-4 p-3 bg-muted rounded-md text-sm">
                   <div className="flex gap-6">
@@ -505,13 +568,17 @@ export default function ResearchPage() {
                 </div>
               )}
               <ResponsiveContainer width="100%" height={420}>
-                <LineChart data={highAccelData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+                <LineChart
+                  data={highAccelData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                >
                   <CartesianGrid
                     strokeDasharray="3 3"
                     className="stroke-muted"
                   />
                   <XAxis
                     dataKey="normalized_minute"
+                    tick={false}
                     label={{
                       value: "Tiempo juego normalizado (100 min)",
                       position: "insideBottom",
@@ -531,6 +598,7 @@ export default function ResearchPage() {
                       border: "1px solid hsl(var(--border))",
                       borderRadius: "6px",
                     }}
+                    labelFormatter={(label) => `Normalized minute: ${label}`}
                     formatter={(value: number) => [
                       `${value.toFixed(2)} events`,
                       "High Accel/Decel",
@@ -542,7 +610,7 @@ export default function ResearchPage() {
                       y={highAccelMetadata.median}
                       stroke="hsl(var(--muted-foreground))"
                       strokeDasharray="5 5"
-                      label={{ value: "Media", position: "right" }}
+                      label={{ value: "Media", position: "insideRight" }}
                     />
                   )}
                   <ReferenceLine
@@ -561,35 +629,37 @@ export default function ResearchPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Average Accelerations and Decelerations
-              </CardTitle>
-              <CardDescription>
-                Separate trends for acceleration and deceleration magnitudes per
-                minute.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>Average Accelerations and Decelerations</CardTitle>
+          <CardDescription>
+            Separate trends for acceleration and deceleration magnitudes per
+            minute.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingAccelDecel ? (
+            <div className="h-[420px] flex items-center justify-center">
+              <div className="text-muted-foreground">Loading...</div>
+            </div>
+          ) : (
+            <>
               {accelDecelMetadata && (
                 <div className="mb-4 p-3 bg-muted rounded-md text-sm">
                   <div className="flex gap-6">
                     <div>
-                      <span className="text-muted-foreground">
-                        Media AC:{" "}
-                      </span>
+                      <span className="text-muted-foreground">Media AC: </span>
                       <span className="font-semibold">
                         {accelDecelMetadata.median_acceleration.toFixed(2)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">
-                        Media DC:{" "}
-                      </span>
+                      <span className="text-muted-foreground">Media DC: </span>
                       <span className="font-semibold">
                         {accelDecelMetadata.median_deceleration.toFixed(2)}
                       </span>
@@ -598,43 +668,58 @@ export default function ResearchPage() {
                 </div>
               )}
               <ResponsiveContainer width="100%" height={420}>
-                <LineChart data={accelDecelData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+                <LineChart
+                  data={accelDecelData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                >
                   <CartesianGrid
                     strokeDasharray="3 3"
                     className="stroke-muted"
                   />
                   <XAxis
                     dataKey="normalized_minute"
+                    tick={false}
                     label={{
                       value: "Tiempo juego normalizado (100 min)",
                       position: "insideBottom",
                       offset: -10,
                     }}
                   />
-                  <YAxis label={{ value: "Numero", angle: -90, position: "insideLeft" }} />
+                  <YAxis
+                    label={{
+                      value: "Numero",
+                      angle: -90,
+                      position: "insideLeft",
+                    }}
+                  />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       border: "1px solid hsl(var(--border))",
                       borderRadius: "6px",
                     }}
+                    labelFormatter={(label) => `Normalized minute: ${label}`}
                   />
                   <Legend verticalAlign="top" height={36} />
                   {accelDecelMetadata && (
                     <>
                       <ReferenceLine
                         y={accelDecelMetadata.median_acceleration}
-                        stroke="hsl(var(--chart-1))"
+                        stroke="hsl(var(--muted-foreground))"
                         strokeDasharray="5 5"
-                        strokeOpacity={0.5}
-                        label={{ value: "Media AC", position: "right" }}
+                        label={{
+                          value: "Media AC",
+                          position: "insideTopRight",
+                        }}
                       />
                       <ReferenceLine
                         y={accelDecelMetadata.median_deceleration}
-                        stroke="hsl(var(--chart-5))"
+                        stroke="hsl(var(--muted-foreground))"
                         strokeDasharray="5 5"
-                        strokeOpacity={0.5}
-                        label={{ value: "Media DC", position: "right" }}
+                        label={{
+                          value: "Media DC",
+                          position: "insideBottomRight",
+                        }}
                       />
                     </>
                   )}
@@ -662,17 +747,25 @@ export default function ResearchPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Acceleration/Deceleration Ratio (AC/DC)</CardTitle>
-              <CardDescription>
-                Ratio between acceleration and deceleration counts per minute.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>Acceleration/Deceleration Ratio (AC/DC)</CardTitle>
+          <CardDescription>
+            Ratio between acceleration and deceleration counts per minute.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingRatio ? (
+            <div className="h-[420px] flex items-center justify-center">
+              <div className="text-muted-foreground">Loading...</div>
+            </div>
+          ) : (
+            <>
               {ratioMetadata && (
                 <div className="mb-4 p-3 bg-muted rounded-md text-sm">
                   <div className="flex gap-6">
@@ -686,26 +779,37 @@ export default function ResearchPage() {
                 </div>
               )}
               <ResponsiveContainer width="100%" height={420}>
-                <LineChart data={ratioData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+                <LineChart
+                  data={ratioData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                >
                   <CartesianGrid
                     strokeDasharray="3 3"
                     className="stroke-muted"
                   />
                   <XAxis
                     dataKey="normalized_minute"
+                    tick={false}
                     label={{
                       value: "Tiempo juego normalizado (100 min)",
                       position: "insideBottom",
                       offset: -10,
                     }}
                   />
-                  <YAxis label={{ value: "Ratio AC/DC", angle: -90, position: "insideLeft" }} />
+                  <YAxis
+                    label={{
+                      value: "Ratio AC/DC",
+                      angle: -90,
+                      position: "insideLeft",
+                    }}
+                  />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       border: "1px solid hsl(var(--border))",
                       borderRadius: "6px",
                     }}
+                    labelFormatter={(label) => `Normalized minute: ${label}`}
                     formatter={(value: number) => [
                       `${value.toFixed(2)}`,
                       "Ratio",
@@ -717,7 +821,7 @@ export default function ResearchPage() {
                       y={ratioMetadata.median}
                       stroke="hsl(var(--muted-foreground))"
                       strokeDasharray="5 5"
-                      label={{ value: "Media", position: "right" }}
+                      label={{ value: "Media", position: "insideRight" }}
                     />
                   )}
                   <ReferenceLine
@@ -736,37 +840,37 @@ export default function ResearchPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Available Matches</CardTitle>
-              <CardDescription>
-                List of all matches included in this analysis
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {matches.map((match) => (
-                  <div
-                    key={match.match_name}
-                    className="p-3 border border-border rounded-md bg-card hover:bg-accent transition-colors"
-                  >
-                    <div className="font-medium text-sm truncate">
-                      {match.match_name}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {match.player_count} players ·{" "}
-                      {match.duration_minutes?.toFixed(0) || "N/A"} min
-                    </div>
-                  </div>
-                ))}
+      <Card>
+        <CardHeader>
+          <CardTitle>Available Matches</CardTitle>
+          <CardDescription>
+            List of all matches included in this analysis
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {matches.map((match) => (
+              <div
+                key={match.match_name}
+                className="p-3 border border-border rounded-md bg-card hover:bg-accent transition-colors"
+              >
+                <div className="font-medium text-sm truncate">
+                  {match.match_name}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {match.player_count} players ·{" "}
+                  {match.duration_minutes?.toFixed(0) || "N/A"} min
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

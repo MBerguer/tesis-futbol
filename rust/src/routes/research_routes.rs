@@ -4,6 +4,7 @@ use sqlx::PgPool;
 
 pub fn research_routes(pool: PgPool) -> Router {
     Router::new()
+        .route("/all-charts-data", get(handlers::get_all_charts_data))
         .route(
             "/distance-per-minute",
             get(handlers::get_distance_per_minute),
