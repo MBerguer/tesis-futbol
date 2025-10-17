@@ -123,7 +123,10 @@ pub async fn resolve_table_for_match(
         WHERE m.match_id = $1
         "#,
         match_id
-    ).fetch_one(&pool).await {
+    )
+    .fetch_one(&pool)
+    .await
+    {
         Ok(r) => r,
         Err(e) => return Json(json!({"error": format!("match not found: {}", e)})),
     };
@@ -136,15 +139,20 @@ pub async fn resolve_table_for_match(
         WHERE table_schema = 'public' 
           AND table_name NOT LIKE '%_view'
         "#
-    ).fetch_all(&pool).await {
+    )
+    .fetch_all(&pool)
+    .await
+    {
         Ok(v) => v,
         Err(e) => return Json(json!({"error": format!("cannot list tables: {}", e)})),
     };
 
-    let norm = |s: &str| s.chars()
-        .filter(|c| c.is_alphanumeric() || *c=='_' || *c=='-')
-        .collect::<String>()
-        .to_lowercase();
+    let norm = |s: &str| {
+        s.chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+            .collect::<String>()
+            .to_lowercase()
+    };
 
     let away = norm(row.away_team_name.as_str());
     let home = norm(row.home_team_name.as_str());
@@ -172,9 +180,15 @@ pub async fn get_positions_window(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
- ) -> Json<Value> {
-    let center_sec: i64 = params.get("center_sec").and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
-    let radius_sec: i64 = params.get("radius_sec").and_then(|s| s.parse::<i64>().ok()).unwrap_or(15);
+) -> Json<Value> {
+    let center_sec: i64 = params
+        .get("center_sec")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0);
+    let radius_sec: i64 = params
+        .get("radius_sec")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(15);
 
     let (sql, bind_center_low, bind_center_high) = (
         format!(
@@ -189,7 +203,6 @@ pub async fn get_positions_window(
         center_sec - radius_sec,
         center_sec + radius_sec,
     );
-    
 
     // logging removed
 
@@ -220,7 +233,7 @@ pub async fn get_positions_window(
         .collect();
 
     Json(json!({"positions": data, "center_sec": center_sec, "radius_sec": radius_sec}))
- }
+}
 
 /// Detalle de períodos detectados replicando exactamente la lógica del notebook
 /// Endpoint: GET /match/table/:table_name/periods/detect-notebook
@@ -270,7 +283,7 @@ pub async fn detect_match_periods_notebook(
     if let Some(_row) = &cached {
         println!("Found cached periods for match {}", table_name);
     } else {
-        println!("No cached periods found for match {}", table_name); 
+        println!("No cached periods found for match {}", table_name);
     }
 
     if let Some(row) = cached {
@@ -288,7 +301,12 @@ pub async fn detect_match_periods_notebook(
         let man_ht_start: Option<i32> = row.try_get("manual_halftime_start").ok();
         let man_ht_end: Option<i32> = row.try_get("manual_halftime_end").ok();
 
-        let using_manual = man_fh_start.is_some() || man_fh_end.is_some() || man_sh_start.is_some() || man_sh_end.is_some() || man_ht_start.is_some() || man_ht_end.is_some();
+        let using_manual = man_fh_start.is_some()
+            || man_fh_end.is_some()
+            || man_sh_start.is_some()
+            || man_sh_end.is_some()
+            || man_ht_start.is_some()
+            || man_ht_end.is_some();
 
         let fh_start = man_fh_start.unwrap_or(det_fh_start);
         let fh_end = man_fh_end.unwrap_or(det_fh_end);
@@ -320,7 +338,10 @@ pub async fn detect_match_periods_notebook(
         }
     }
     // cargar tabla completa ordenada por time
-    let query = format!("SELECT player_display_name, time, speed FROM \"{}\" ORDER BY time", table_name);
+    let query = format!(
+        "SELECT player_display_name, time, speed FROM \"{}\" ORDER BY time",
+        table_name
+    );
     let rows = match sqlx::query(&query).fetch_all(&pool).await {
         Ok(r) => r,
         Err(e) => return Json(json!({"error": format!("db read error: {}", e)})),
@@ -333,9 +354,15 @@ pub async fn detect_match_periods_notebook(
     let mut data: Vec<serde_json::Map<String, Value>> = Vec::with_capacity(rows.len());
     for row in rows {
         let mut m = serde_json::Map::new();
-        if let Ok(v) = row.try_get::<String, _>("player_display_name") { m.insert("player_display_name".into(), Value::from(v)); }
-        if let Ok(v) = row.try_get::<String, _>("time") { m.insert("time".into(), Value::from(v)); }
-        if let Ok(v) = row.try_get::<f64, _>("speed") { m.insert("speed".into(), Value::from(v)); }
+        if let Ok(v) = row.try_get::<String, _>("player_display_name") {
+            m.insert("player_display_name".into(), Value::from(v));
+        }
+        if let Ok(v) = row.try_get::<String, _>("time") {
+            m.insert("time".into(), Value::from(v));
+        }
+        if let Ok(v) = row.try_get::<f64, _>("speed") {
+            m.insert("speed".into(), Value::from(v));
+        }
         data.push(m);
     }
 
@@ -344,9 +371,18 @@ pub async fn detect_match_periods_notebook(
         if let Some(t) = r.get("time").and_then(|v| v.as_str()) {
             // parse HH:MM:SS(.MS) to seconds
             let parts: Vec<&str> = t.split(':').collect();
-            let h = parts.get(0).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
-            let m = parts.get(1).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
-            let s = parts.get(2).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+            let h = parts
+                .get(0)
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(0.0);
+            let m = parts
+                .get(1)
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(0.0);
+            let s = parts
+                .get(2)
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(0.0);
             let secs = h * 3600.0 + m * 60.0 + s;
             r.insert("seconds_since_midnight".into(), Value::from(secs));
         }
@@ -356,7 +392,7 @@ pub async fn detect_match_periods_notebook(
     let velocidad_partido = 5.9_f64;
     let velocidad_partido_entretiempo = 11.0_f64;
     let ventana_primer_tiempo: i64 = 20; // PT: 20s
-    let ventana_segundo_tiempo: i64 = 6;  // ST: >5s en notebook => 6s
+    let ventana_segundo_tiempo: i64 = 6; // ST: >5s en notebook => 6s
     let duracion_segundo_tiempo: i64 = 45 * 60;
 
     // construir Second y promedios por segundo (mín 2 jugadores y relleno de huecos)
@@ -364,12 +400,17 @@ pub async fn detect_match_periods_notebook(
     let mut second_to_players: HashMap<i64, HashSet<String>> = HashMap::new();
     for r in &data {
         if let (Some(sec), Some(speed), Some(player)) = (
-            r.get("seconds_since_midnight").and_then(|v| v.as_f64()).map(|s| s.floor() as i64),
+            r.get("seconds_since_midnight")
+                .and_then(|v| v.as_f64())
+                .map(|s| s.floor() as i64),
             r.get("speed").and_then(|v| v.as_f64()),
             r.get("player_display_name").and_then(|v| v.as_str()),
         ) {
             second_to_speeds.entry(sec).or_default().push(speed);
-            second_to_players.entry(sec).or_default().insert(player.to_string());
+            second_to_players
+                .entry(sec)
+                .or_default()
+                .insert(player.to_string());
         }
     }
     let max_second = *second_to_speeds.keys().max().unwrap_or(&0);
@@ -379,7 +420,11 @@ pub async fn detect_match_periods_notebook(
         if num_players >= 2 {
             let empty: Vec<f64> = Vec::new();
             let speeds = second_to_speeds.get(&sec).unwrap_or(&empty);
-            let avg = if speeds.is_empty() { 0.0 } else { speeds.iter().sum::<f64>() / speeds.len() as f64 };
+            let avg = if speeds.is_empty() {
+                0.0
+            } else {
+                speeds.iter().sum::<f64>() / speeds.len() as f64
+            };
             second_avg_speed.push((sec, avg));
         } else {
             second_avg_speed.push((sec, 0.0));
@@ -390,10 +435,18 @@ pub async fn detect_match_periods_notebook(
     let mut runs: Vec<Vec<i64>> = Vec::new();
     let mut run: Vec<i64> = Vec::new();
     for (sec, sp) in &second_avg_speed {
-        if *sp <= velocidad_partido_entretiempo { run.push(*sec); }
-        else { if !run.is_empty() { runs.push(run.clone()); run.clear(); } }
+        if *sp <= velocidad_partido_entretiempo {
+            run.push(*sec);
+        } else {
+            if !run.is_empty() {
+                runs.push(run.clone());
+                run.clear();
+            }
+        }
     }
-    if !run.is_empty() { runs.push(run); }
+    if !run.is_empty() {
+        runs.push(run);
+    }
 
     let mut current_window = 900_i64;
     let maximum_halftime_end = max_second - duracion_segundo_tiempo;
@@ -406,23 +459,48 @@ pub async fn detect_match_periods_notebook(
             .filter(|b| *b.last().unwrap_or(&0) <= maximum_halftime_end)
             .cloned()
             .collect();
-        if !halftime_blocks.is_empty() || current_window <= 0 { break; }
+        if !halftime_blocks.is_empty() || current_window <= 0 {
+            break;
+        }
         current_window -= 10;
     }
     let halftime_block = halftime_blocks.into_iter().next().unwrap_or_default();
-    let (halftime_start, mut halftime_end) = if halftime_block.is_empty() { (0, 0) } else { (halftime_block[0], *halftime_block.last().unwrap()) };
+    let (halftime_start, mut halftime_end) = if halftime_block.is_empty() {
+        (0, 0)
+    } else {
+        (halftime_block[0], *halftime_block.last().unwrap())
+    };
     if halftime_start > 0 {
         let max_halftime_end = halftime_start + 900;
-        if halftime_end > max_halftime_end { halftime_end = max_halftime_end; }
-        if let Some((refined_end, _)) = second_avg_speed.iter().filter(|(s, _)| *s > halftime_end).find(|(_, sp)| *sp > velocidad_partido_entretiempo) { halftime_end = *refined_end; }
+        if halftime_end > max_halftime_end {
+            halftime_end = max_halftime_end;
+        }
+        if let Some((refined_end, _)) = second_avg_speed
+            .iter()
+            .filter(|(s, _)| *s > halftime_end)
+            .find(|(_, sp)| *sp > velocidad_partido_entretiempo)
+        {
+            halftime_end = *refined_end;
+        }
     }
 
     // inicio PT: PRIMER run > 5.9 de 20s (ignorando los primeros 60s)
     let mut acc: i64 = 0;
     let mut first_half_start = 0;
-    for (sec, sp) in second_avg_speed.iter().filter(|(s, _)| *s > 60).filter(|(s, _)| *s <= halftime_start) {
-        if *sp > velocidad_partido { acc += 1; } else { acc = 0; }
-        if acc >= ventana_primer_tiempo { first_half_start = *sec - ventana_primer_tiempo + 1; break; }
+    for (sec, sp) in second_avg_speed
+        .iter()
+        .filter(|(s, _)| *s > 60)
+        .filter(|(s, _)| *s <= halftime_start)
+    {
+        if *sp > velocidad_partido {
+            acc += 1;
+        } else {
+            acc = 0;
+        }
+        if acc >= ventana_primer_tiempo {
+            first_half_start = *sec - ventana_primer_tiempo + 1;
+            break;
+        }
     }
     let first_half_end = halftime_start;
 
@@ -433,22 +511,41 @@ pub async fn detect_match_periods_notebook(
     if first_half_start > 0 && (first_half_end - first_half_start) < desired_first_half_secs {
         let kickoff_spike_kmh: f64 = 20.0;
         // Buscar el primer segundo con pico >= 20 km/h antes del HT
-        for (sec, sp) in second_avg_speed.iter().filter(|(s, _)| *s <= first_half_end) {
-            if *sp >= kickoff_spike_kmh { kickoff_spike_sec = Some(*sec); break; }
+        for (sec, sp) in second_avg_speed
+            .iter()
+            .filter(|(s, _)| *s <= first_half_end)
+        {
+            if *sp >= kickoff_spike_kmh {
+                kickoff_spike_sec = Some(*sec);
+                break;
+            }
         }
         if let Some(s0) = kickoff_spike_sec {
             // Desde el pico, buscar el primer run >5.9 de 20s
             let mut acc2: i64 = 0;
             let mut adjusted: Option<i64> = None;
-            for (sec, sp) in second_avg_speed.iter().filter(|(s, _)| *s >= s0).filter(|(s, _)| *s <= first_half_end) {
-                if *sp > velocidad_partido { acc2 += 1; } else { acc2 = 0; }
+            for (sec, sp) in second_avg_speed
+                .iter()
+                .filter(|(s, _)| *s >= s0)
+                .filter(|(s, _)| *s <= first_half_end)
+            {
+                if *sp > velocidad_partido {
+                    acc2 += 1;
+                } else {
+                    acc2 = 0;
+                }
                 if acc2 >= ventana_primer_tiempo {
                     let candidate = *sec - ventana_primer_tiempo + 1;
                     // Aceptar sólo si resultará en al menos 45'
-                    if (first_half_end - candidate) >= desired_first_half_secs { adjusted = Some(candidate); break; }
+                    if (first_half_end - candidate) >= desired_first_half_secs {
+                        adjusted = Some(candidate);
+                        break;
+                    }
                 }
             }
-            if let Some(start_ok) = adjusted { first_half_start = start_ok; }
+            if let Some(start_ok) = adjusted {
+                first_half_start = start_ok;
+            }
         }
         // Si aún no alcanza, forzar mínimo 45'
         if (first_half_end - first_half_start) < desired_first_half_secs {
@@ -460,16 +557,33 @@ pub async fn detect_match_periods_notebook(
     acc = 0;
     let mut second_half_start = halftime_end;
     for (sec, sp) in second_avg_speed.iter().filter(|(s, _)| *s > halftime_end) {
-        if *sp > velocidad_partido_entretiempo { acc += 1; } else { acc = 0; }
-        if acc >= ventana_segundo_tiempo { second_half_start = *sec - ventana_segundo_tiempo + 1; break; }
+        if *sp > velocidad_partido_entretiempo {
+            acc += 1;
+        } else {
+            acc = 0;
+        }
+        if acc >= ventana_segundo_tiempo {
+            second_half_start = *sec - ventana_segundo_tiempo + 1;
+            break;
+        }
     }
 
     // fin ST: a partir de 45min, caída sostenida <= 5.9 por 20s
     let mut second_half_end = second_half_start + duracion_segundo_tiempo;
     acc = 0;
-    for (sec, sp) in second_avg_speed.iter().filter(|(s, _)| *s >= second_half_end) {
-        if *sp <= velocidad_partido { acc += 1; } else { acc = 0; }
-        if acc >= 20 { second_half_end = *sec; break; }
+    for (sec, sp) in second_avg_speed
+        .iter()
+        .filter(|(s, _)| *s >= second_half_end)
+    {
+        if *sp <= velocidad_partido {
+            acc += 1;
+        } else {
+            acc = 0;
+        }
+        if acc >= 20 {
+            second_half_end = *sec;
+            break;
+        }
     }
 
     // 8) Persist results to cache table (UPSERT)
@@ -749,8 +863,6 @@ pub async fn get_match_entries_seconds_since_midnight(
     }))
 }
 
-
-
 pub async fn get_player_worst_cases_from_view(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
@@ -780,11 +892,15 @@ pub async fn get_player_worst_cases_from_view(
             if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
                 (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
             } else {
-                return Json(json!({ "worst_cases": [], "error": "manual periods not available for this match" }));
+                return Json(
+                    json!({ "worst_cases": [], "error": "manual periods not available for this match" }),
+                );
             }
         }
         Err(_) => {
-            return Json(json!({ "worst_cases": [], "error": "manual periods not found for this match" }));
+            return Json(
+                json!({ "worst_cases": [], "error": "manual periods not found for this match" }),
+            );
         }
     };
 
@@ -808,11 +924,14 @@ pub async fn get_player_worst_cases_from_view(
     if !cached.is_empty() {
         let mut all_within = true;
         for row in &cached {
-            let ss = row.try_get::<f64,_>("start_second").unwrap_or(0.0);
-            let ee = row.try_get::<f64,_>("end_second").unwrap_or(0.0);
-            let in_first  = ss >= s1 && ee <= e1;
+            let ss = row.try_get::<f64, _>("start_second").unwrap_or(0.0);
+            let ee = row.try_get::<f64, _>("end_second").unwrap_or(0.0);
+            let in_first = ss >= s1 && ee <= e1;
             let in_second = ss >= s2 && ee <= e2;
-            if !(in_first || in_second) { all_within = false; break; }
+            if !(in_first || in_second) {
+                all_within = false;
+                break;
+            }
         }
         if all_within {
             let worst_cases_json: Vec<Value> = cached
@@ -832,7 +951,7 @@ pub async fn get_player_worst_cases_from_view(
 
     // Query usando la vista procesada y filtrando por períodos manuales
     let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
-    
+
     let worst_cases_query = format!(
         r#"
         WITH high_speed_data AS (
@@ -899,10 +1018,15 @@ pub async fn get_player_worst_cases_from_view(
 
     // Write-through: store cache rows (upsert)
     for row in &results {
-        let player: String = row.try_get::<String,_>("player_display_name").unwrap_or_default();
-        let start_sec = parse_interval_to_seconds(&row.try_get::<String,_>("start_second").unwrap_or_default());
-        let end_sec = parse_interval_to_seconds(&row.try_get::<String,_>("end_second").unwrap_or_default());
-        let dist = row.try_get::<f64,_>("distance_covered").unwrap_or(0.0);
+        let player: String = row
+            .try_get::<String, _>("player_display_name")
+            .unwrap_or_default();
+        let start_sec = parse_interval_to_seconds(
+            &row.try_get::<String, _>("start_second").unwrap_or_default(),
+        );
+        let end_sec =
+            parse_interval_to_seconds(&row.try_get::<String, _>("end_second").unwrap_or_default());
+        let dist = row.try_get::<f64, _>("distance_covered").unwrap_or(0.0);
         let _ = sqlx::query(
             r#"
             INSERT INTO player_worst_cases_cache (
@@ -976,7 +1100,9 @@ pub async fn get_sprints_in_worst_cases(
         let mut current_player: Option<String> = None;
         let mut sprint_counter: i64 = 0;
         for row in cached_rows {
-            let player = row.try_get::<String,_>("player_display_name").unwrap_or_default();
+            let player = row
+                .try_get::<String, _>("player_display_name")
+                .unwrap_or_default();
             if current_player.as_deref() != Some(player.as_str()) {
                 current_player = Some(player.clone());
                 sprint_counter = 0;
@@ -1002,7 +1128,7 @@ pub async fn get_sprints_in_worst_cases(
 
     // Query para encontrar sprints dentro de los worst cases
     let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
-    
+
     let sprints_query = format!(
         r#"
         WITH high_speed_data AS (
@@ -1111,17 +1237,32 @@ pub async fn get_sprints_in_worst_cases(
 
     // Write-through: store cache rows (upsert)
     for row in &results {
-        let player = row.try_get::<String,_>("player_display_name").unwrap_or_default();
-        let wc_start = parse_interval_to_seconds(&row.try_get::<String,_>("start_second").unwrap_or_default());
-        let wc_end = parse_interval_to_seconds(&row.try_get::<String,_>("end_second").unwrap_or_default());
-        let wc_dist = row.try_get::<f64,_>("distance_covered").unwrap_or(0.0);
-        let s_start_time = row.try_get::<String,_>("sprint_start_time").unwrap_or_default();
-        let s_end_time = row.try_get::<String,_>("sprint_end_time").unwrap_or_default();
-        let s_start_sec = row.try_get::<f64,_>("sprint_start_sec").unwrap_or(0.0);
-        let s_end_sec = row.try_get::<f64,_>("sprint_end_sec").unwrap_or(0.0);
-        let s_dist = row.try_get::<f64,_>("total_sprint_distance").unwrap_or(0.0);
-        let s_min = row.try_get::<f64,_>("min_speed_reached_within_sprint").unwrap_or(0.0);
-        let s_max = row.try_get::<f64,_>("max_speed_reached_within_sprint").unwrap_or(0.0);
+        let player = row
+            .try_get::<String, _>("player_display_name")
+            .unwrap_or_default();
+        let wc_start = parse_interval_to_seconds(
+            &row.try_get::<String, _>("start_second").unwrap_or_default(),
+        );
+        let wc_end =
+            parse_interval_to_seconds(&row.try_get::<String, _>("end_second").unwrap_or_default());
+        let wc_dist = row.try_get::<f64, _>("distance_covered").unwrap_or(0.0);
+        let s_start_time = row
+            .try_get::<String, _>("sprint_start_time")
+            .unwrap_or_default();
+        let s_end_time = row
+            .try_get::<String, _>("sprint_end_time")
+            .unwrap_or_default();
+        let s_start_sec = row.try_get::<f64, _>("sprint_start_sec").unwrap_or(0.0);
+        let s_end_sec = row.try_get::<f64, _>("sprint_end_sec").unwrap_or(0.0);
+        let s_dist = row
+            .try_get::<f64, _>("total_sprint_distance")
+            .unwrap_or(0.0);
+        let s_min = row
+            .try_get::<f64, _>("min_speed_reached_within_sprint")
+            .unwrap_or(0.0);
+        let s_max = row
+            .try_get::<f64, _>("max_speed_reached_within_sprint")
+            .unwrap_or(0.0);
 
         let _ = sqlx::query(
             r#"
@@ -1212,17 +1353,17 @@ fn parse_interval_to_seconds(interval_str: &str) -> f64 {
     if interval_str.is_empty() {
         return 0.0;
     }
-    
+
     // Formato de PostgreSQL INTERVAL: "HH:MM:SS" o "HH:MM:SS.MS"
     let parts: Vec<&str> = interval_str.split(':').collect();
     if parts.len() < 3 {
         return 0.0;
     }
-    
+
     let h = parts[0].parse::<f64>().unwrap_or(0.0);
     let m = parts[1].parse::<f64>().unwrap_or(0.0);
     let s = parts[2].parse::<f64>().unwrap_or(0.0);
-    
+
     h * 3600.0 + m * 60.0 + s
 }
 
@@ -1263,10 +1404,7 @@ pub async fn patch_match_periods(
         VALUES ($1)
         ON CONFLICT (match_name) DO NOTHING
     "#;
-    let _ = sqlx::query(query)
-        .bind(&match_name)
-        .execute(&pool)
-        .await;
+    let _ = sqlx::query(query).bind(&match_name).execute(&pool).await;
 
     let update = r#"
         UPDATE match_periods SET
@@ -1305,7 +1443,6 @@ pub async fn patch_match_periods(
         Err(e) => Json(json!({"error": format!("failed to patch periods: {}", e)})),
     }
 }
-
 
 /// GET /match/table/:table_name/accelerations?mode=summary|full
 /// Computes per-player acceleration/deceleration events from the processed GPS view
@@ -1361,7 +1498,7 @@ pub async fn get_accelerations_hardcoded(
         }
     };
 
-    // Base CTE used by both summary and full queries (built with player_display_name key)
+    // Base CTE using pre-calculated player_acceleration_final_smooth from SQL views
     let base_cte = format!(
         r#"
 WITH base AS (
@@ -1369,13 +1506,11 @@ WITH base AS (
     player_display_name,
     time,
     (speed::numeric) AS speed_kph,
+    (player_acceleration_final_smooth::numeric) AS acceleration_smooth,
     EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time) AS epoch_time,
     LAG(EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) OVER (
       PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
-    ) AS prev_epoch,
-    LAG((speed::numeric)) OVER (
-      PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
-    ) AS prev_speed_kph
+    ) AS prev_epoch
   FROM public.{view}
 ),
 
@@ -1384,12 +1519,12 @@ filtered_base AS (
   WHERE (epoch_time BETWEEN $1 AND $2) OR (epoch_time BETWEEN $3 AND $4)
 ),
 
-delta AS (
+filtered AS (
   SELECT
     player_display_name,
     time,
     speed_kph,
-    prev_speed_kph,
+    acceleration_smooth AS acceleration_limited,
     COALESCE(
       CASE
         WHEN prev_epoch IS NULL THEN 0
@@ -1398,30 +1533,19 @@ delta AS (
       END,
     0) AS delta_time
   FROM filtered_base
-),
-
-acc_calc AS (
-  SELECT
-    player_display_name,
-    time,
-    speed_kph,
-    delta_time,
-    CASE
-      WHEN delta_time > 0 AND prev_speed_kph IS NOT NULL THEN (speed_kph - prev_speed_kph) / delta_time
-      ELSE 0
-    END AS calc_acceleration
-  FROM delta
-),
-
-filtered AS (
-  SELECT
-    player_display_name,
-    time,
-    speed_kph,
-    delta_time,
-    GREATEST(LEAST(calc_acceleration, 22), -22) AS acceleration_limited
-  FROM acc_calc
-  WHERE delta_time > 0 AND delta_time < 0.5
+  WHERE COALESCE(
+      CASE
+        WHEN prev_epoch IS NULL THEN 0
+        WHEN epoch_time >= prev_epoch THEN epoch_time - prev_epoch
+        ELSE epoch_time + 86400 - prev_epoch
+      END,
+    0) > 0 AND COALESCE(
+      CASE
+        WHEN prev_epoch IS NULL THEN 0
+        WHEN epoch_time >= prev_epoch THEN epoch_time - prev_epoch
+        ELSE epoch_time + 86400 - prev_epoch
+      END,
+    0) < 0.5
 ),
 
 time_cum AS (
@@ -1494,8 +1618,8 @@ events AS (
 filtered_events AS (
   SELECT *
   FROM events
-  WHERE (event_type = 'accel_potential' AND peak_acc >= 2.5 AND duration_s >= 0.5)
-     OR (event_type = 'decel_potential' AND peak_acc <= -2.5 AND duration_s >= 0.5)
+  WHERE (event_type = 'accel_potential' AND peak_acc >= 2.5 AND duration_s >= 0.6)
+     OR (event_type = 'decel_potential' AND peak_acc <= -2.5 AND duration_s >= 0.6)
 ),
 
 classified AS (
@@ -1564,20 +1688,20 @@ classified AS (
 
         let sql_full = format!(
             r#"{base}
-SELECT
-  ROW_NUMBER() OVER (ORDER BY player_display_name, start_time_s) AS id,
-  player_display_name,
-  CASE WHEN event_type = 'accel_potential' THEN 'accel' ELSE 'decel' END AS accel_or_decel,
-  start_time_text AS start_time,
-  end_time_text AS end_time,
-  ROUND(duration_s::numeric, 3)::double precision AS duration_s,
-  ROUND(peak_acc::numeric, 3)::double precision AS peak_acc,
-  ROUND(max_speed::numeric, 3)::double precision AS max_speed_kph,
-  ROUND(distance_m::numeric, 3)::double precision AS distance_m,
-  EXTRACT(EPOCH FROM to_timestamp(start_time_text, 'HH24:MI:SS.MS')::time)::double precision AS seconds_since_midnight,
-  intensity_category
-FROM classified
-ORDER BY player_display_name, start_time_s"#,
+    SELECT
+    ROW_NUMBER() OVER (ORDER BY player_display_name, start_time_s) AS id,
+    player_display_name,
+    CASE WHEN event_type = 'accel_potential' THEN 'accel' ELSE 'decel' END AS accel_or_decel,
+    start_time_text AS start_time,
+    end_time_text AS end_time,
+    ROUND(duration_s::numeric, 3)::double precision AS duration_s,
+    ROUND(peak_acc::numeric, 3)::double precision AS peak_acc,
+    ROUND(max_speed::numeric, 3)::double precision AS max_speed_kph,
+    ROUND(distance_m::numeric, 3)::double precision AS distance_m,
+    EXTRACT(EPOCH FROM to_timestamp(start_time_text, 'HH24:MI:SS.MS')::time)::double precision AS seconds_since_midnight,
+    intensity_category
+    FROM classified
+    ORDER BY player_display_name, start_time_s"#,
             base = base_cte
         );
 
@@ -1671,17 +1795,19 @@ ORDER BY player_display_name, start_time_s"#,
             .into_iter()
             .enumerate()
             .map(|(idx, r)| {
-                let name = r.try_get::<String,_>("player_display_name").unwrap_or_default();
-                let v1 = r.try_get::<i64,_>("total_accel_events").unwrap_or(0) as f64;
-                let v2 = r.try_get::<i64,_>("accel_low").unwrap_or(0) as f64;
-                let v3 = r.try_get::<i64,_>("accel_medium").unwrap_or(0) as f64;
-                let v4 = r.try_get::<i64,_>("accel_high").unwrap_or(0) as f64;
-                let v5 = r.try_get::<i64,_>("total_decel_events").unwrap_or(0) as f64;
-                let v6 = r.try_get::<i64,_>("decel_low").unwrap_or(0) as f64;
-                let v7 = r.try_get::<i64,_>("decel_medium").unwrap_or(0) as f64;
-                let v8 = r.try_get::<i64,_>("decel_high").unwrap_or(0) as f64;
-                let v9 = r.try_get::<f64,_>("total_distance_m").unwrap_or(0.0);
-                let v10 = r.try_get::<f64,_>("total_time_s").unwrap_or(0.0);
+                let name = r
+                    .try_get::<String, _>("player_display_name")
+                    .unwrap_or_default();
+                let v1 = r.try_get::<i64, _>("total_accel_events").unwrap_or(0) as f64;
+                let v2 = r.try_get::<i64, _>("accel_low").unwrap_or(0) as f64;
+                let v3 = r.try_get::<i64, _>("accel_medium").unwrap_or(0) as f64;
+                let v4 = r.try_get::<i64, _>("accel_high").unwrap_or(0) as f64;
+                let v5 = r.try_get::<i64, _>("total_decel_events").unwrap_or(0) as f64;
+                let v6 = r.try_get::<i64, _>("decel_low").unwrap_or(0) as f64;
+                let v7 = r.try_get::<i64, _>("decel_medium").unwrap_or(0) as f64;
+                let v8 = r.try_get::<i64, _>("decel_high").unwrap_or(0) as f64;
+                let v9 = r.try_get::<f64, _>("total_distance_m").unwrap_or(0.0);
+                let v10 = r.try_get::<f64, _>("total_time_s").unwrap_or(0.0);
                 json!({
                     "id": (idx as i64) + 1,
                     "player_display_name": name,
@@ -1750,17 +1876,20 @@ ORDER BY player_display_name"#,
             "#,
         )
         .bind(&table_name)
-        .bind(r.try_get::<String,_>("player_display_name").unwrap_or_default())
-        .bind(r.try_get::<i64,_>("total_accel_events").unwrap_or(0))
-        .bind(r.try_get::<i64,_>("accel_low").unwrap_or(0))
-        .bind(r.try_get::<i64,_>("accel_medium").unwrap_or(0))
-        .bind(r.try_get::<i64,_>("accel_high").unwrap_or(0))
-        .bind(r.try_get::<i64,_>("total_decel_events").unwrap_or(0))
-        .bind(r.try_get::<i64,_>("decel_low").unwrap_or(0))
-        .bind(r.try_get::<i64,_>("decel_medium").unwrap_or(0))
-        .bind(r.try_get::<i64,_>("decel_high").unwrap_or(0))
-        .bind(r.try_get::<f64,_>("total_distance_m").unwrap_or(0.0))
-        .bind(r.try_get::<f64,_>("total_time_s").unwrap_or(0.0))
+        .bind(
+            r.try_get::<String, _>("player_display_name")
+                .unwrap_or_default(),
+        )
+        .bind(r.try_get::<i64, _>("total_accel_events").unwrap_or(0))
+        .bind(r.try_get::<i64, _>("accel_low").unwrap_or(0))
+        .bind(r.try_get::<i64, _>("accel_medium").unwrap_or(0))
+        .bind(r.try_get::<i64, _>("accel_high").unwrap_or(0))
+        .bind(r.try_get::<i64, _>("total_decel_events").unwrap_or(0))
+        .bind(r.try_get::<i64, _>("decel_low").unwrap_or(0))
+        .bind(r.try_get::<i64, _>("decel_medium").unwrap_or(0))
+        .bind(r.try_get::<i64, _>("decel_high").unwrap_or(0))
+        .bind(r.try_get::<f64, _>("total_distance_m").unwrap_or(0.0))
+        .bind(r.try_get::<f64, _>("total_time_s").unwrap_or(0.0))
         .execute(&pool)
         .await;
     }
@@ -1769,7 +1898,9 @@ ORDER BY player_display_name"#,
         .into_iter()
         .map(|r| {
             let id = r.try_get::<i64, _>("id").unwrap_or(0);
-            let name = r.try_get::<String, _>("player_display_name").unwrap_or_default();
+            let name = r
+                .try_get::<String, _>("player_display_name")
+                .unwrap_or_default();
             let v1 = r.try_get::<i64, _>("total_accel_events").unwrap_or(0) as f64;
             let v2 = r.try_get::<i64, _>("accel_low").unwrap_or(0) as f64;
             let v3 = r.try_get::<i64, _>("accel_medium").unwrap_or(0) as f64;
@@ -1824,11 +1955,15 @@ pub async fn get_sprint_events_full(
             if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
                 (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
             } else {
-                return Json(json!({"sprints": [], "error": "manual periods not available for this match"}));
+                return Json(
+                    json!({"sprints": [], "error": "manual periods not available for this match"}),
+                );
             }
         }
         Err(_) => {
-            return Json(json!({"sprints": [], "error": "manual periods not found for this match"}));
+            return Json(
+                json!({"sprints": [], "error": "manual periods not found for this match"}),
+            );
         }
     };
 
@@ -2132,11 +2267,15 @@ pub async fn get_sharp_angles(
             if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
                 (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
             } else {
-                return Json(json!({"sharp_angles": [], "error": "manual periods not available for this match"}));
+                return Json(
+                    json!({"sharp_angles": [], "error": "manual periods not available for this match"}),
+                );
             }
         }
         Err(_) => {
-            return Json(json!({"sharp_angles": [], "error": "manual periods not found for this match"}));
+            return Json(
+                json!({"sharp_angles": [], "error": "manual periods not found for this match"}),
+            );
         }
     };
 
@@ -2462,11 +2601,15 @@ pub async fn get_sharp_angles_2(
             if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
                 (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
             } else {
-                return Json(json!({"sharp_angles_2": [], "error": "manual periods not available for this match"}));
+                return Json(
+                    json!({"sharp_angles_2": [], "error": "manual periods not available for this match"}),
+                );
             }
         }
         Err(_) => {
-            return Json(json!({"sharp_angles_2": [], "error": "manual periods not found for this match"}));
+            return Json(
+                json!({"sharp_angles_2": [], "error": "manual periods not found for this match"}),
+            );
         }
     };
 
@@ -2729,9 +2872,18 @@ pub async fn get_player_trace_window(
         Some(p) if !p.trim().is_empty() => p,
         _ => return Json(json!({"trace": [], "error": "missing player"})),
     };
-    let start_sec: f64 = params.get("start").and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
-    let end_sec: f64 = params.get("end").and_then(|s| s.parse::<f64>().ok()).unwrap_or(start_sec);
-    let pad: f64 = params.get("pad").and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.3);
+    let start_sec: f64 = params
+        .get("start")
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(0.0);
+    let end_sec: f64 = params
+        .get("end")
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(start_sec);
+    let pad: f64 = params
+        .get("pad")
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(0.3);
 
     let lo = start_sec - pad;
     let hi = end_sec + pad;
@@ -2776,4 +2928,3 @@ pub async fn get_player_trace_window(
 
     Json(json!({"trace": trace, "player": player, "start": start_sec, "end": end_sec, "pad": pad}))
 }
-
