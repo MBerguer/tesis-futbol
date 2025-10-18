@@ -3265,7 +3265,8 @@ pub async fn get_sharp_angles_3(
           inicio_s,
           fin_s,
           avg_speed,
-          distance
+          distance,
+          avg_angle
         FROM sharp_angles_3_cache
         WHERE match_name = $1
         ORDER BY inicio_s
@@ -3290,7 +3291,8 @@ pub async fn get_sharp_angles_3(
                     "inicio_s": r.try_get::<f64,_>("inicio_s").unwrap_or(0.0),
                     "fin_s": r.try_get::<f64,_>("fin_s").unwrap_or(0.0),
                     "avg_speed": r.try_get::<f64,_>("avg_speed").unwrap_or(0.0),
-                    "distance": r.try_get::<f64,_>("distance").unwrap_or(0.0)
+                    "distance": r.try_get::<f64,_>("distance").unwrap_or(0.0),
+                    "avg_angle": r.try_get::<f64,_>("avg_angle").unwrap_or(0.0)
                 })
             })
             .collect();
@@ -3335,7 +3337,8 @@ final_events AS (
         MIN(inicio_s) AS inicio_s,
         MAX(fin_s) AS fin_s,
         AVG(speed_val) AS avg_speed,
-        SUM(distance_val) AS distance
+        SUM(distance_val) AS distance,
+        MAX(angle) AS avg_angle
     FROM grp_calc
     GROUP BY player_id, player_display_name, grp
 )
@@ -3368,7 +3371,8 @@ ORDER BY inicio_s
                 "inicio_s": r.try_get::<f64,_>("inicio_s").unwrap_or(0.0),
                 "fin_s": r.try_get::<f64,_>("fin_s").unwrap_or(0.0),
                 "avg_speed": r.try_get::<f64,_>("avg_speed").unwrap_or(0.0),
-                "distance": r.try_get::<f64,_>("distance").unwrap_or(0.0)
+                "distance": r.try_get::<f64,_>("distance").unwrap_or(0.0),
+                "avg_angle": r.try_get::<f64,_>("avg_angle").unwrap_or(0.0)
             })
         })
         .collect();
@@ -3376,9 +3380,9 @@ ORDER BY inicio_s
     let insert_query = format!(
         r#"
         INSERT INTO sharp_angles_3_cache (
-            match_name, player_id, player_display_name, inicio_s, fin_s, avg_speed, distance
+            match_name, player_id, player_display_name, inicio_s, fin_s, avg_speed, distance, avg_angle
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (match_name, player_id, inicio_s) DO NOTHING
         "#
     );
@@ -3395,6 +3399,7 @@ ORDER BY inicio_s
             .bind(row.try_get::<f64, _>("fin_s").unwrap_or(0.0))
             .bind(row.try_get::<f64, _>("avg_speed").unwrap_or(0.0))
             .bind(row.try_get::<f64, _>("distance").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("avg_angle").unwrap_or(0.0))
             .execute(&pool)
             .await;
     }

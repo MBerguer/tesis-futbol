@@ -150,6 +150,7 @@ interface SharpAngle3Row {
   fin_s: number;
   avg_speed: number;
   distance: number;
+  avg_angle: number;
 }
 
 interface MatchDetails {
@@ -5596,6 +5597,12 @@ export default function Page() {
                           >
                             Distance (m)
                           </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort3("avg_angle")}
+                          >
+                            Avg Angle (°)
+                          </th>
                           <th className="text-left py-2 px-2">Actions</th>
                         </tr>
                       </thead>
@@ -5768,6 +5775,38 @@ export default function Page() {
                                   className="underline-offset-2 hover:underline"
                                 >
                                   {ev.distance.toFixed(2)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(ev.inicio_s || 0);
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.avg_angle.toFixed(2)}
                                 </button>
                               </td>
                               <td className="py-2 px-2">
