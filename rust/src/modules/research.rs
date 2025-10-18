@@ -16,15 +16,26 @@ pub async fn get_all_charts_data(
     Query(params): Query<TimeSeriesParams>,
 ) -> Json<Value> {
     let min_minutes = params.min_minutes_played.unwrap_or(85.0);
+    let accel_col = match params.accel_filter.as_deref() {
+        Some("original") => "accel_original",
+        Some("sma") => "accel_sma",
+        Some("ema") => "accel_ema",
+        Some("butterworth") => "accel_butterworth",
+        Some("savitzky_golay") => "acceleraciones_fil_savitzky_golay",
+        Some("smooth") => "player_acceleration_final_smooth",
+        Some("stddev_window") => "accel_stddev_window",
+        _ => "acceleraciones_fil_savitzky_golay",
+    };
 
-    let query = r#"
+    let query = format!(
+        r#"
         WITH match_durations AS (
             SELECT 
                 match_name,
                 MIN(seconds_since_midnight) as match_start,
                 MAX(seconds_since_midnight) as match_end,
                 (MAX(seconds_since_midnight) - MIN(seconds_since_midnight)) / 60.0 as total_duration_minutes
-            FROM all_matches_filtred
+            FROM all_matches_filtered_accelerations
             WHERE match_name IS NOT NULL AND seconds_since_midnight IS NOT NULL
             GROUP BY match_name
         ),
@@ -36,7 +47,7 @@ pub async fn get_all_charts_data(
                 md.total_duration_minutes,
                 md.match_start,
                 md.match_end
-            FROM all_matches_filtred amf
+            FROM all_matches_filtered_accelerations amf
             JOIN match_durations md ON md.match_name = amf.match_name
             WHERE amf.seconds_since_midnight IS NOT NULL
             GROUP BY amf.match_name, amf.player_display_name, md.total_duration_minutes, md.match_start, md.match_end
@@ -48,7 +59,7 @@ pub async fn get_all_charts_data(
                 amf.match_name,
                 FLOOR(((amf.seconds_since_midnight - pm.match_start) / (pm.match_end - pm.match_start)) * $2)::integer as normalized_minute,
                 amf.speed,
-                amf.player_acceleration_final_smooth,
+                amf.{},
                 (amf.speed / 3.6) * 0.1 as distance_per_sample,
                 CASE 
                     WHEN amf.speed >= $3 AND amf.speed < $4 THEN (amf.speed / 3.6) * 0.1
@@ -59,18 +70,18 @@ pub async fn get_all_charts_data(
                     ELSE 0 
                 END as sprint_distance_sample,
                 CASE 
-                    WHEN ABS(amf.player_acceleration_final_smooth) >= $5 THEN 1
+                    WHEN ABS(amf.{}) >= $5 THEN 1
                     ELSE 0
                 END as high_intensity_event,
                 CASE 
-                    WHEN amf.player_acceleration_final_smooth > 0 THEN amf.player_acceleration_final_smooth
+                    WHEN amf.{} > 0 THEN amf.{}
                     ELSE 0
                 END as acceleration_value,
                 CASE 
-                    WHEN amf.player_acceleration_final_smooth < 0 THEN ABS(amf.player_acceleration_final_smooth)
+                    WHEN amf.{} < 0 THEN ABS(amf.{})
                     ELSE 0
                 END as deceleration_value
-            FROM all_matches_filtred amf
+            FROM all_matches_filtered_accelerations amf
             JOIN player_minutes pm 
                 ON pm.match_name = amf.match_name 
                 AND pm.player_display_name = amf.player_display_name
@@ -126,7 +137,9 @@ pub async fn get_all_charts_data(
             (avg_acceleration::float / NULLIF(avg_deceleration, 0)::float) as acdc_ratio
         FROM aggregated_by_minute
         ORDER BY normalized_minute
-    "#;
+    "#,
+        accel_col, accel_col, accel_col, accel_col, accel_col, accel_col
+    );
 
     match sqlx::query_as::<
         _,
@@ -146,7 +159,7 @@ pub async fn get_all_charts_data(
             i64,
             Option<f64>,
         ),
-    >(query)
+    >(&query)
     .bind(min_minutes)
     .bind(NORMALIZED_MATCH_DURATION)
     .bind(Z2_MIN_KMH)
@@ -353,6 +366,7 @@ pub async fn get_all_charts_data(
 pub struct TimeSeriesParams {
     min_minutes_played: Option<f64>,
     matches: Option<String>,
+    accel_filter: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -764,15 +778,26 @@ pub async fn get_high_accel_decel_per_minute(
     Query(params): Query<TimeSeriesParams>,
 ) -> Json<Value> {
     let min_minutes = params.min_minutes_played.unwrap_or(85.0);
+    let accel_col = match params.accel_filter.as_deref() {
+        Some("original") => "accel_original",
+        Some("sma") => "accel_sma",
+        Some("ema") => "accel_ema",
+        Some("butterworth") => "accel_butterworth",
+        Some("savitzky_golay") => "acceleraciones_fil_savitzky_golay",
+        Some("smooth") => "player_acceleration_final_smooth",
+        Some("stddev_window") => "accel_stddev_window",
+        _ => "acceleraciones_fil_savitzky_golay",
+    };
 
-    let query = r#"
+    let query = format!(
+        r#"
         WITH match_durations AS (
             SELECT 
                 match_name,
                 MIN(seconds_since_midnight) as match_start,
                 MAX(seconds_since_midnight) as match_end,
                 (MAX(seconds_since_midnight) - MIN(seconds_since_midnight)) / 60.0 as total_duration_minutes
-            FROM all_matches_filtred
+            FROM all_matches_filtered_accelerations
             WHERE match_name IS NOT NULL AND seconds_since_midnight IS NOT NULL
             GROUP BY match_name
         ),
@@ -784,7 +809,7 @@ pub async fn get_high_accel_decel_per_minute(
                 md.total_duration_minutes,
                 md.match_start,
                 md.match_end
-            FROM all_matches_filtred amf
+            FROM all_matches_filtered_accelerations amf
             JOIN match_durations md ON md.match_name = amf.match_name
             WHERE amf.seconds_since_midnight IS NOT NULL
             GROUP BY amf.match_name, amf.player_display_name, md.total_duration_minutes, md.match_start, md.match_end
@@ -795,20 +820,20 @@ pub async fn get_high_accel_decel_per_minute(
                 amf.player_display_name,
                 amf.match_name,
                 FLOOR(((amf.seconds_since_midnight - pm.match_start) / (pm.match_end - pm.match_start)) * $2)::integer as normalized_minute,
-                amf.player_acceleration_final_smooth
-            FROM all_matches_filtred amf
+                amf.{}
+            FROM all_matches_filtered_accelerations amf
             JOIN player_minutes pm 
                 ON pm.match_name = amf.match_name 
                 AND pm.player_display_name = amf.player_display_name
             WHERE amf.seconds_since_midnight IS NOT NULL
-                AND amf.player_acceleration_final_smooth IS NOT NULL
+                AND amf.{} IS NOT NULL
         ),
         minute_high_accels AS (
             SELECT 
                 player_display_name,
                 match_name,
                 normalized_minute,
-                COUNT(CASE WHEN ABS(player_acceleration_final_smooth) >= $3 THEN 1 END) as high_accel_count
+                COUNT(CASE WHEN ABS({}) >= $3 THEN 1 END) as high_accel_count
             FROM normalized_data
             WHERE normalized_minute >= 0 AND normalized_minute < $2
             GROUP BY player_display_name, match_name, normalized_minute
@@ -820,9 +845,11 @@ pub async fn get_high_accel_decel_per_minute(
         FROM minute_high_accels
         GROUP BY normalized_minute
         ORDER BY normalized_minute
-    "#;
+    "#,
+        accel_col, accel_col, accel_col
+    );
 
-    match sqlx::query_as::<_, (i32, Option<f64>, i64)>(query)
+    match sqlx::query_as::<_, (i32, Option<f64>, i64)>(&query)
         .bind(min_minutes)
         .bind(NORMALIZED_MATCH_DURATION)
         .bind(HIGH_ACCEL_THRESHOLD)
@@ -869,15 +896,26 @@ pub async fn get_accel_decel_separated_per_minute(
     Query(params): Query<TimeSeriesParams>,
 ) -> Json<Value> {
     let min_minutes = params.min_minutes_played.unwrap_or(85.0);
+    let accel_col = match params.accel_filter.as_deref() {
+        Some("original") => "accel_original",
+        Some("sma") => "accel_sma",
+        Some("ema") => "accel_ema",
+        Some("butterworth") => "accel_butterworth",
+        Some("savitzky_golay") => "acceleraciones_fil_savitzky_golay",
+        Some("smooth") => "player_acceleration_final_smooth",
+        Some("stddev_window") => "accel_stddev_window",
+        _ => "acceleraciones_fil_savitzky_golay",
+    };
 
-    let query = r#"
+    let query = format!(
+        r#"
         WITH match_durations AS (
             SELECT 
                 match_name,
                 MIN(seconds_since_midnight) as match_start,
                 MAX(seconds_since_midnight) as match_end,
                 (MAX(seconds_since_midnight) - MIN(seconds_since_midnight)) / 60.0 as total_duration_minutes
-            FROM all_matches_filtred
+            FROM all_matches_filtered_accelerations
             WHERE match_name IS NOT NULL AND seconds_since_midnight IS NOT NULL
             GROUP BY match_name
         ),
@@ -889,7 +927,7 @@ pub async fn get_accel_decel_separated_per_minute(
                 md.total_duration_minutes,
                 md.match_start,
                 md.match_end
-            FROM all_matches_filtred amf
+            FROM all_matches_filtered_accelerations amf
             JOIN match_durations md ON md.match_name = amf.match_name
             WHERE amf.seconds_since_midnight IS NOT NULL
             GROUP BY amf.match_name, amf.player_display_name, md.total_duration_minutes, md.match_start, md.match_end
@@ -900,23 +938,23 @@ pub async fn get_accel_decel_separated_per_minute(
                 amf.player_display_name,
                 amf.match_name,
                 FLOOR(((amf.seconds_since_midnight - pm.match_start) / (pm.match_end - pm.match_start)) * $2)::integer as normalized_minute,
-                amf.player_acceleration_final_smooth
-            FROM all_matches_filtred amf
+                amf.{}
+            FROM all_matches_filtered_accelerations amf
             JOIN player_minutes pm 
                 ON pm.match_name = amf.match_name 
                 AND pm.player_display_name = amf.player_display_name
             WHERE amf.seconds_since_midnight IS NOT NULL
-                AND amf.player_acceleration_final_smooth IS NOT NULL
+                AND amf.{} IS NOT NULL
         ),
         minute_accels AS (
             SELECT 
                 player_display_name,
                 match_name,
                 normalized_minute,
-                AVG(CASE WHEN player_acceleration_final_smooth > 0 THEN player_acceleration_final_smooth END) as avg_accel,
-                AVG(CASE WHEN player_acceleration_final_smooth < 0 THEN ABS(player_acceleration_final_smooth) END) as avg_decel,
-                COUNT(CASE WHEN player_acceleration_final_smooth > 0 THEN 1 END) as accel_count,
-                COUNT(CASE WHEN player_acceleration_final_smooth < 0 THEN 1 END) as decel_count
+                AVG(CASE WHEN {} > 0 THEN {} END) as avg_accel,
+                AVG(CASE WHEN {} < 0 THEN ABS({}) END) as avg_decel,
+                COUNT(CASE WHEN {} > 0 THEN 1 END) as accel_count,
+                COUNT(CASE WHEN {} < 0 THEN 1 END) as decel_count
             FROM normalized_data
             WHERE normalized_minute >= 0 AND normalized_minute < $2
             GROUP BY player_display_name, match_name, normalized_minute
@@ -930,9 +968,11 @@ pub async fn get_accel_decel_separated_per_minute(
         FROM minute_accels
         GROUP BY normalized_minute
         ORDER BY normalized_minute
-    "#;
+    "#,
+        accel_col, accel_col, accel_col, accel_col, accel_col, accel_col, accel_col, accel_col
+    );
 
-    match sqlx::query_as::<_, (i32, Option<f64>, Option<f64>, Option<i64>, Option<i64>)>(query)
+    match sqlx::query_as::<_, (i32, Option<f64>, Option<f64>, Option<i64>, Option<i64>)>(&query)
         .bind(min_minutes)
         .bind(NORMALIZED_MATCH_DURATION)
         .fetch_all(&pool)
@@ -986,15 +1026,26 @@ pub async fn get_accel_decel_ratio_per_minute(
     Query(params): Query<TimeSeriesParams>,
 ) -> Json<Value> {
     let min_minutes = params.min_minutes_played.unwrap_or(85.0);
+    let accel_col = match params.accel_filter.as_deref() {
+        Some("original") => "accel_original",
+        Some("sma") => "accel_sma",
+        Some("ema") => "accel_ema",
+        Some("butterworth") => "accel_butterworth",
+        Some("savitzky_golay") => "acceleraciones_fil_savitzky_golay",
+        Some("smooth") => "player_acceleration_final_smooth",
+        Some("stddev_window") => "accel_stddev_window",
+        _ => "acceleraciones_fil_savitzky_golay",
+    };
 
-    let query = r#"
+    let query = format!(
+        r#"
         WITH match_durations AS (
             SELECT 
                 match_name,
                 MIN(seconds_since_midnight) as match_start,
                 MAX(seconds_since_midnight) as match_end,
                 (MAX(seconds_since_midnight) - MIN(seconds_since_midnight)) / 60.0 as total_duration_minutes
-            FROM all_matches_filtred
+            FROM all_matches_filtered_accelerations
             WHERE match_name IS NOT NULL AND seconds_since_midnight IS NOT NULL
             GROUP BY match_name
         ),
@@ -1006,7 +1057,7 @@ pub async fn get_accel_decel_ratio_per_minute(
                 md.total_duration_minutes,
                 md.match_start,
                 md.match_end
-            FROM all_matches_filtred amf
+            FROM all_matches_filtered_accelerations amf
             JOIN match_durations md ON md.match_name = amf.match_name
             WHERE amf.seconds_since_midnight IS NOT NULL
             GROUP BY amf.match_name, amf.player_display_name, md.total_duration_minutes, md.match_start, md.match_end
@@ -1017,21 +1068,21 @@ pub async fn get_accel_decel_ratio_per_minute(
                 amf.player_display_name,
                 amf.match_name,
                 FLOOR(((amf.seconds_since_midnight - pm.match_start) / (pm.match_end - pm.match_start)) * $2)::integer as normalized_minute,
-                amf.player_acceleration_final_smooth
-            FROM all_matches_filtred amf
+                amf.{}
+            FROM all_matches_filtered_accelerations amf
             JOIN player_minutes pm 
                 ON pm.match_name = amf.match_name 
                 AND pm.player_display_name = amf.player_display_name
             WHERE amf.seconds_since_midnight IS NOT NULL
-                AND amf.player_acceleration_final_smooth IS NOT NULL
+                AND amf.{} IS NOT NULL
         ),
         minute_ratios AS (
             SELECT 
                 player_display_name,
                 match_name,
                 normalized_minute,
-                COUNT(CASE WHEN player_acceleration_final_smooth > 0 THEN 1 END)::float as accel_count,
-                COUNT(CASE WHEN player_acceleration_final_smooth < 0 THEN 1 END)::float as decel_count
+                COUNT(CASE WHEN {} > 0 THEN 1 END)::float as accel_count,
+                COUNT(CASE WHEN {} < 0 THEN 1 END)::float as decel_count
             FROM normalized_data
             WHERE normalized_minute >= 0 AND normalized_minute < $2
             GROUP BY player_display_name, match_name, normalized_minute
@@ -1042,9 +1093,11 @@ pub async fn get_accel_decel_ratio_per_minute(
         FROM minute_ratios
         GROUP BY normalized_minute
         ORDER BY normalized_minute
-    "#;
+    "#,
+        accel_col, accel_col, accel_col, accel_col
+    );
 
-    match sqlx::query_as::<_, (i32, Option<f64>)>(query)
+    match sqlx::query_as::<_, (i32, Option<f64>)>(&query)
         .bind(min_minutes)
         .bind(NORMALIZED_MATCH_DURATION)
         .fetch_all(&pool)

@@ -1,4 +1,4 @@
-use crate::modules::{matches, forecast_realtime};
+use crate::modules::{forecast_realtime, matches};
 use axum::{routing::get, routing::post, Router};
 use sqlx::PgPool;
 
@@ -10,9 +10,13 @@ pub fn matches_routes(pool: PgPool) -> Router {
             "/:match_id/gps",
             get(matches::get_match_gps_players_details),
         )
-        .route("/by-id/:match_id/table", get(matches::resolve_table_for_match))
+        .route(
+            "/by-id/:match_id/table",
+            get(matches::resolve_table_for_match),
+        )
         .route("/:match_id/players", post(matches::submit_match_players))
         .route("/tables", get(matches::list_match_tables))
+        .route("/gps-tables", get(matches::list_match_gps_tables))
         .route(
             "/table/:table_name/players",
             get(matches::get_match_players),
@@ -44,6 +48,10 @@ pub fn matches_routes(pool: PgPool) -> Router {
         .route(
             "/table/:table_name/accelerations",
             get(matches::get_accelerations_hardcoded),
+        )
+        .route(
+            "/table/:table_name/accelerations-filtered",
+            get(matches::get_accelerations_filtered),
         )
         .route(
             "/table/:table_name/sprints",

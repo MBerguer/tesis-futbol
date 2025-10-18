@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Loader2, Clock } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { formatMmSsFromSeconds, parseMmSsToSeconds } from "./utils/time";
@@ -4382,902 +4382,1006 @@ export default function Page() {
         </Card>
       </div>
 
-      {/* Sharp Angles section */}
+      {/* Sharp Angles Tabbed section */}
       <div className="mt-6">
         <Card className="bg-card border-border">
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="flex items-center gap-2">
-                Sharp Angles - Reilly 2021
-                {loadingSharpAngles && (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                )}
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  size={"sm"}
-                  variant={"secondary"}
-                  onClick={async () => {
-                    const pageRows = sortedSharpAngles.slice(
-                      (sharpPage - 1) * SHARP_PAGE_SIZE,
-                      sharpPage * SHARP_PAGE_SIZE
-                    );
-                    const traces: Array<{ player: string; points: any[] }> = [];
-                    for (const ev of pageRows) {
-                      const qs = new URLSearchParams({
-                        player: ev.player_display_name,
-                        start: String(ev.start_time),
-                        end: String(ev.finish_time),
-                      });
-                      const res = await fetch(
-                        `${API_BASE}/match/table/${selectedTable}/trace?` +
-                          qs.toString()
-                      );
-                      if (res.ok) {
-                        const data = await res.json();
-                        traces.push({
-                          player: ev.player_display_name,
-                          points: data?.trace || [],
-                        });
-                      }
-                    }
-                    setSharpTraces(traces);
-                    const el = document.getElementById("unified-video");
-                    if (el)
-                      el.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center",
-                      });
-                  }}
-                >
-                  Show all traces
-                </Button>
-              </div>
-            </div>
+            <CardTitle className="flex items-center gap-2">
+              Sharp Angles Analysis
+              {(loadingSharpAngles || loadingSharpAngles2) && (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {!selectedTable ? (
-              <div className="text-sm text-muted-foreground">
-                Select a match to view sharp angles.
-              </div>
-            ) : loadingSharpAngles ? (
-              <div className="space-y-2">
-                <Skeleton className="h-6" />
-                <Skeleton className="h-6" />
-                <Skeleton className="h-6" />
-              </div>
-            ) : sharpAngles.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
-                No sharp angles.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-foreground">
-                    <tr className="border-b border-border">
-                      <th
-                        className="text-left py-2 pr-3 cursor-pointer"
-                        onClick={() => toggleSharpSort("player_display_name")}
-                      >
-                        Player
-                      </th>
-                      <th className="text-left py-2 px-2">vs WCS</th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() =>
-                          toggleSharpSort("seconds_since_midnight")
-                        }
-                      >
-                        Sharp angle time
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort("start_time")}
-                      >
-                        Start (s)
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort("finish_time")}
-                      >
-                        Finish (s)
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort("duration_seconds")}
-                      >
-                        Duration (s)
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort("angle_degrees")}
-                      >
-                        Angle (°)
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort("actual_dist_in")}
-                      >
-                        In dist (m)
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort("actual_dist_out")}
-                      >
-                        Out dist (m)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedSharpAngles
-                      .slice(
+            <Tabs defaultValue="reilly2021" className="w-full">
+              <TabsList>
+                <TabsTrigger value="reilly2021">Reilly 2021</TabsTrigger>
+                <TabsTrigger value="dossantos2022">Dos'Santos 2022</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="reilly2021">
+                <div className="flex items-center justify-end gap-2 mb-4">
+                  <Button
+                    size={"sm"}
+                    variant={"secondary"}
+                    onClick={async () => {
+                      const pageRows = sortedSharpAngles.slice(
                         (sharpPage - 1) * SHARP_PAGE_SIZE,
                         sharpPage * SHARP_PAGE_SIZE
-                      )
-                      .map((ev, idx) => (
-                        <tr
-                          key={`sharp-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`}
-                          className="border-b border-border hover:bg-accent"
-                        >
-                          <td className="py-2 pr-3 text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(
-                                  ev.seconds_since_midnight || 0
-                                );
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.player_display_name}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-foreground">
-                            {(() => {
-                              const norm = (s: string) =>
-                                (s || "")
-                                  .trim()
-                                  .normalize("NFD")
-                                  .replace(/[\u0300-\u036f]/g, "")
-                                  .replace(/\s+/g, " ")
-                                  .toLowerCase();
-                              const key = norm(ev.player_display_name || "");
-                              const w = wcsWindowByPlayer[key];
-                              if (!w) return "—";
-                              const t = Number(ev.seconds_since_midnight || 0);
-                              if (t < w.start) return "Before";
-                              if (t > w.end) return "After";
-                              return "During";
-                            })()}
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(
-                                  ev.seconds_since_midnight || 0
-                                );
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.seconds_since_midnight.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(
-                                  ev.seconds_since_midnight || 0
-                                );
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.start_time.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(
-                                  ev.seconds_since_midnight || 0
-                                );
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.finish_time.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(
-                                  ev.seconds_since_midnight || 0
-                                );
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.duration_seconds.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(
-                                  ev.seconds_since_midnight || 0
-                                );
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.angle_degrees > 300
-                                ? (ev.angle_degrees - 360).toFixed(3)
-                                : ev.angle_degrees.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(
-                                  ev.seconds_since_midnight || 0
-                                );
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.actual_dist_in.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(
-                                  ev.seconds_since_midnight || 0
-                                );
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.actual_dist_out.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2">
-                            <div className="flex gap-2">
-                              <Button
-                                size={"sm"}
-                                variant={"secondary"}
-                                onClick={async () => {
-                                  try {
-                                    const qs = new URLSearchParams({
-                                      player: ev.player_display_name,
-                                      start: String(ev.start_time),
-                                      end: String(ev.finish_time),
-                                    });
-                                    const res = await fetch(
-                                      `${API_BASE}/match/table/${selectedTable}/trace?` +
-                                        qs.toString()
-                                    );
-                                    if (res.ok) {
-                                      const data = await res.json();
-                                      const points = data?.trace || [];
-                                      setSharpTraces((prev) => [
-                                        ...prev.filter(
-                                          (t) =>
-                                            t.player !== ev.player_display_name
-                                        ),
-                                        {
-                                          player: ev.player_display_name,
-                                          points,
-                                        },
-                                      ]);
-                                      const abs = Number(ev.start_time || 0);
-                                      const vs = absToVideoSec(abs);
-                                      setVideoTimeSec(vs);
-                                      setPendingSeek(vs);
-                                      try {
-                                        document.dispatchEvent(
-                                          new CustomEvent("tf:seek", {
-                                            detail: vs,
-                                          })
-                                        );
-                                      } catch {}
-                                      const el =
-                                        document.getElementById(
-                                          "unified-video"
-                                        );
-                                      if (el)
-                                        el.scrollIntoView({
-                                          behavior: "smooth",
-                                          block: "center",
-                                        });
-                                    }
-                                  } catch {}
-                                }}
-                              >
-                                Show trace
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-                <div className="flex items-center justify-between mt-3 text-sm text-foreground">
-                  <div>
-                    Page {sharpPage} of{" "}
-                    {Math.max(
-                      1,
-                      Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE)
-                    )}
+                      );
+                      const traces: Array<{ player: string; points: any[] }> =
+                        [];
+                      for (const ev of pageRows) {
+                        const qs = new URLSearchParams({
+                          player: ev.player_display_name,
+                          start: String(ev.start_time),
+                          end: String(ev.finish_time),
+                        });
+                        const res = await fetch(
+                          `${API_BASE}/match/table/${selectedTable}/trace?` +
+                            qs.toString()
+                        );
+                        if (res.ok) {
+                          const data = await res.json();
+                          traces.push({
+                            player: ev.player_display_name,
+                            points: data?.trace || [],
+                          });
+                        }
+                      }
+                      setSharpTraces(traces);
+                      const el = document.getElementById("unified-video");
+                      if (el)
+                        el.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        });
+                    }}
+                  >
+                    Show all traces
+                  </Button>
+                </div>
+                {!selectedTable ? (
+                  <div className="text-sm text-muted-foreground">
+                    Select a match to view sharp angles.
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={"outline"}
-                      size={"sm"}
-                      disabled={sharpPage <= 1}
-                      onClick={() => setSharpPage((p) => Math.max(1, p - 1))}
-                    >
-                      Prev
-                    </Button>
-                    <Button
-                      variant={"outline"}
-                      size={"sm"}
-                      disabled={
-                        sharpPage >=
-                        Math.max(
+                ) : loadingSharpAngles ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : sharpAngles.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No sharp angles.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-foreground">
+                        <tr className="border-b border-border">
+                          <th
+                            className="text-left py-2 pr-3 cursor-pointer"
+                            onClick={() =>
+                              toggleSharpSort("player_display_name")
+                            }
+                          >
+                            Player
+                          </th>
+                          <th className="text-left py-2 px-2">vs WCS</th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() =>
+                              toggleSharpSort("seconds_since_midnight")
+                            }
+                          >
+                            Sharp angle time
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort("start_time")}
+                          >
+                            Start (s)
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort("finish_time")}
+                          >
+                            Finish (s)
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort("duration_seconds")}
+                          >
+                            Duration (s)
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort("angle_degrees")}
+                          >
+                            Angle (°)
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort("actual_dist_in")}
+                          >
+                            In dist (m)
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort("actual_dist_out")}
+                          >
+                            Out dist (m)
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedSharpAngles
+                          .slice(
+                            (sharpPage - 1) * SHARP_PAGE_SIZE,
+                            sharpPage * SHARP_PAGE_SIZE
+                          )
+                          .map((ev, idx) => (
+                            <tr
+                              key={`sharp-${ev.id}-${ev.player_display_name}-${ev.seconds_since_midnight}-${idx}`}
+                              className="border-b border-border hover:bg-accent"
+                            >
+                              <td className="py-2 pr-3 text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(
+                                      ev.seconds_since_midnight || 0
+                                    );
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.player_display_name}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-foreground">
+                                {(() => {
+                                  const norm = (s: string) =>
+                                    (s || "")
+                                      .trim()
+                                      .normalize("NFD")
+                                      .replace(/[\u0300-\u036f]/g, "")
+                                      .replace(/\s+/g, " ")
+                                      .toLowerCase();
+                                  const key = norm(
+                                    ev.player_display_name || ""
+                                  );
+                                  const w = wcsWindowByPlayer[key];
+                                  if (!w) return "—";
+                                  const t = Number(
+                                    ev.seconds_since_midnight || 0
+                                  );
+                                  if (t < w.start) return "Before";
+                                  if (t > w.end) return "After";
+                                  return "During";
+                                })()}
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(
+                                      ev.seconds_since_midnight || 0
+                                    );
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.seconds_since_midnight.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(
+                                      ev.seconds_since_midnight || 0
+                                    );
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.start_time.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(
+                                      ev.seconds_since_midnight || 0
+                                    );
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.finish_time.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(
+                                      ev.seconds_since_midnight || 0
+                                    );
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.duration_seconds.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(
+                                      ev.seconds_since_midnight || 0
+                                    );
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.angle_degrees > 300
+                                    ? (ev.angle_degrees - 360).toFixed(3)
+                                    : ev.angle_degrees.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(
+                                      ev.seconds_since_midnight || 0
+                                    );
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.actual_dist_in.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(
+                                      ev.seconds_since_midnight || 0
+                                    );
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.actual_dist_out.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2">
+                                <div className="flex gap-2">
+                                  <Button
+                                    size={"sm"}
+                                    variant={"secondary"}
+                                    onClick={async () => {
+                                      try {
+                                        const qs = new URLSearchParams({
+                                          player: ev.player_display_name,
+                                          start: String(ev.start_time),
+                                          end: String(ev.finish_time),
+                                        });
+                                        const res = await fetch(
+                                          `${API_BASE}/match/table/${selectedTable}/trace?` +
+                                            qs.toString()
+                                        );
+                                        if (res.ok) {
+                                          const data = await res.json();
+                                          const points = data?.trace || [];
+                                          setSharpTraces((prev) => [
+                                            ...prev.filter(
+                                              (t) =>
+                                                t.player !==
+                                                ev.player_display_name
+                                            ),
+                                            {
+                                              player: ev.player_display_name,
+                                              points,
+                                            },
+                                          ]);
+                                          const abs = Number(
+                                            ev.start_time || 0
+                                          );
+                                          const vs = absToVideoSec(abs);
+                                          setVideoTimeSec(vs);
+                                          setPendingSeek(vs);
+                                          try {
+                                            document.dispatchEvent(
+                                              new CustomEvent("tf:seek", {
+                                                detail: vs,
+                                              })
+                                            );
+                                          } catch {}
+                                          const el =
+                                            document.getElementById(
+                                              "unified-video"
+                                            );
+                                          if (el)
+                                            el.scrollIntoView({
+                                              behavior: "smooth",
+                                              block: "center",
+                                            });
+                                        }
+                                      } catch {}
+                                    }}
+                                  >
+                                    Show trace
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                    <div className="flex items-center justify-between mt-3 text-sm text-foreground">
+                      <div>
+                        Page {sharpPage} of{" "}
+                        {Math.max(
                           1,
                           Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE)
-                        )
-                      }
-                      onClick={() =>
-                        setSharpPage((p) =>
-                          Math.min(
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={"outline"}
+                          size={"sm"}
+                          disabled={sharpPage <= 1}
+                          onClick={() =>
+                            setSharpPage((p) => Math.max(1, p - 1))
+                          }
+                        >
+                          Prev
+                        </Button>
+                        <Button
+                          variant={"outline"}
+                          size={"sm"}
+                          disabled={
+                            sharpPage >=
                             Math.max(
                               1,
                               Math.ceil(sharpAngles.length / SHARP_PAGE_SIZE)
-                            ),
-                            p + 1
-                          )
-                        )
-                      }
-                    >
-                      Next
-                    </Button>
+                            )
+                          }
+                          onClick={() =>
+                            setSharpPage((p) =>
+                              Math.min(
+                                Math.max(
+                                  1,
+                                  Math.ceil(
+                                    sharpAngles.length / SHARP_PAGE_SIZE
+                                  )
+                                ),
+                                p + 1
+                              )
+                            )
+                          }
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Sharp Angles 2 section */}
-      <div className="mt-6">
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="flex items-center gap-2">
-                Sharp Angles 2 - Dos'Santos, 2022
-                {loadingSharpAngles2 && (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 )}
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  size={"sm"}
-                  variant={"secondary"}
-                  onClick={async () => {
-                    const pageRows = sortedSharpAngles2.slice(
-                      (sharpPage2 - 1) * SHARP_PAGE_SIZE_2,
-                      sharpPage2 * SHARP_PAGE_SIZE_2
-                    );
-                    const traces: Array<{ player: string; points: any[] }> = [];
-                    for (const ev of pageRows) {
-                      const qs = new URLSearchParams({
-                        player: ev.player_display_name,
-                        start: String(ev.start_time),
-                        end: String(ev.finish_time),
-                      });
-                      const res = await fetch(
-                        `${API_BASE}/match/table/${selectedTable}/trace?` +
-                          qs.toString()
-                      );
-                      if (res.ok) {
-                        const data = await res.json();
-                        traces.push({
-                          player: ev.player_display_name,
-                          points: data?.trace || [],
-                        });
-                      }
-                    }
-                    setSharpTraces2(traces);
-                    const el = document.getElementById("unified-video");
-                    if (el)
-                      el.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center",
-                      });
-                  }}
-                >
-                  Show all traces
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!selectedTable ? (
-              <div className="text-sm text-muted-foreground">
-                Select a match to view sharp angles 2.
-              </div>
-            ) : loadingSharpAngles2 ? (
-              <div className="space-y-2">
-                <Skeleton className="h-6" />
-                <Skeleton className="h-6" />
-                <Skeleton className="h-6" />
-              </div>
-            ) : sharpAngles2.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
-                No sharp angles 2.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-foreground">
-                    <tr className="border-b border-border">
-                      <th
-                        className="text-left py-2 pr-3 cursor-pointer"
-                        onClick={() => toggleSharpSort2("player_display_name")}
-                      >
-                        Player
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort2("start_time")}
-                      >
-                        Start (s)
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort2("finish_time")}
-                      >
-                        Finish (s)
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort2("duration_seconds")}
-                      >
-                        Duration (s)
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort2("entry_speed")}
-                      >
-                        Entry Speed (m/s)
-                      </th>
-                      <th
-                        className="text-right py-2 px-2 cursor-pointer"
-                        onClick={() =>
-                          toggleSharpSort2("turning_angle_degrees")
-                        }
-                      >
-                        Turning Angle (°)
-                      </th>
-                      <th
-                        className="text-left py-2 px-2 cursor-pointer"
-                        onClick={() => toggleSharpSort2("entry_speed_category")}
-                      >
-                        Speed Category
-                      </th>
-                      <th
-                        className="text-left py-2 px-2 cursor-pointer"
-                        onClick={() =>
-                          toggleSharpSort2("turning_angle_category")
-                        }
-                      >
-                        Angle Category
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedSharpAngles2
-                      .slice(
+              </TabsContent>
+
+              <TabsContent value="dossantos2022">
+                <div className="flex items-center justify-end gap-2 mb-4">
+                  <Button
+                    size={"sm"}
+                    variant={"secondary"}
+                    onClick={async () => {
+                      const pageRows = sortedSharpAngles2.slice(
                         (sharpPage2 - 1) * SHARP_PAGE_SIZE_2,
                         sharpPage2 * SHARP_PAGE_SIZE_2
-                      )
-                      .map((ev, idx) => (
-                        <tr
-                          key={`sharp2-${ev.turn_id}-${ev.player_display_name}-${ev.start_time}-${idx}`}
-                          className="border-b border-border hover:bg-accent"
-                        >
-                          <td className="py-2 pr-3 text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(ev.start_time || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.player_display_name}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(ev.start_time || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.start_time.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(ev.finish_time || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.finish_time.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(ev.start_time || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.duration_seconds.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(ev.start_time || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.entry_speed.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-right tabular-nums text-foreground">
-                            <button
-                              onClick={() => {
-                                const abs = Number(ev.start_time || 0);
-                                const vs = absToVideoSec(abs);
-                                setVideoTimeSec(vs);
-                                setPendingSeek(vs);
-                                try {
-                                  document.dispatchEvent(
-                                    new CustomEvent("tf:seek", { detail: vs })
-                                  );
-                                } catch {}
-                                const el =
-                                  document.getElementById("unified-video");
-                                if (el)
-                                  el.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                if (ev.player_display_name)
-                                  setPinnedPlayers((prev) => ({
-                                    ...prev,
-                                    [ev.player_display_name]: true,
-                                  }));
-                              }}
-                              className="underline-offset-2 hover:underline"
-                            >
-                              {ev.turning_angle_degrees.toFixed(3)}
-                            </button>
-                          </td>
-                          <td className="py-2 px-2 text-foreground">
-                            {ev.entry_speed_category}
-                          </td>
-                          <td className="py-2 px-2 text-foreground">
-                            {ev.turning_angle_category}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-                <div className="flex items-center justify-between mt-3 text-sm text-foreground">
-                  <div>
-                    Page {sharpPage2} of{" "}
-                    {Math.max(
-                      1,
-                      Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2)
-                    )}
+                      );
+                      const traces: Array<{ player: string; points: any[] }> =
+                        [];
+                      for (const ev of pageRows) {
+                        const qs = new URLSearchParams({
+                          player: ev.player_display_name,
+                          start: String(ev.start_time),
+                          end: String(ev.finish_time),
+                        });
+                        const res = await fetch(
+                          `${API_BASE}/match/table/${selectedTable}/trace?` +
+                            qs.toString()
+                        );
+                        if (res.ok) {
+                          const data = await res.json();
+                          traces.push({
+                            player: ev.player_display_name,
+                            points: data?.trace || [],
+                          });
+                        }
+                      }
+                      setSharpTraces2(traces);
+                      const el = document.getElementById("unified-video");
+                      if (el)
+                        el.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        });
+                    }}
+                  >
+                    Show all traces
+                  </Button>
+                </div>
+                {!selectedTable ? (
+                  <div className="text-sm text-muted-foreground">
+                    Select a match to view sharp angles 2.
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={"outline"}
-                      size={"sm"}
-                      disabled={sharpPage2 <= 1}
-                      onClick={() => setSharpPage2((p) => Math.max(1, p - 1))}
-                    >
-                      Prev
-                    </Button>
-                    <Button
-                      variant={"outline"}
-                      size={"sm"}
-                      disabled={
-                        sharpPage2 >=
-                        Math.max(
+                ) : loadingSharpAngles2 ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : sharpAngles2.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No sharp angles 2.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-foreground">
+                        <tr className="border-b border-border">
+                          <th
+                            className="text-left py-2 pr-3 cursor-pointer"
+                            onClick={() =>
+                              toggleSharpSort2("player_display_name")
+                            }
+                          >
+                            Player
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort2("start_time")}
+                          >
+                            Start (s)
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort2("finish_time")}
+                          >
+                            Finish (s)
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort2("duration_seconds")}
+                          >
+                            Duration (s)
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() => toggleSharpSort2("entry_speed")}
+                          >
+                            Entry Speed (m/s)
+                          </th>
+                          <th
+                            className="text-right py-2 px-2 cursor-pointer"
+                            onClick={() =>
+                              toggleSharpSort2("turning_angle_degrees")
+                            }
+                          >
+                            Turning Angle (°)
+                          </th>
+                          <th
+                            className="text-left py-2 px-2 cursor-pointer"
+                            onClick={() =>
+                              toggleSharpSort2("entry_speed_category")
+                            }
+                          >
+                            Speed Category
+                          </th>
+                          <th
+                            className="text-left py-2 px-2 cursor-pointer"
+                            onClick={() =>
+                              toggleSharpSort2("turning_angle_category")
+                            }
+                          >
+                            Angle Category
+                          </th>
+                          <th className="text-left py-2 px-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedSharpAngles2
+                          .slice(
+                            (sharpPage2 - 1) * SHARP_PAGE_SIZE_2,
+                            sharpPage2 * SHARP_PAGE_SIZE_2
+                          )
+                          .map((ev, idx) => (
+                            <tr
+                              key={`sharp2-${ev.turn_id}-${ev.player_display_name}-${ev.start_time}-${idx}`}
+                              className="border-b border-border hover:bg-accent"
+                            >
+                              <td className="py-2 pr-3 text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(ev.start_time || 0);
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.player_display_name}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(ev.start_time || 0);
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.start_time.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(ev.finish_time || 0);
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.finish_time.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(ev.start_time || 0);
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.duration_seconds.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(ev.start_time || 0);
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.entry_speed.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-right tabular-nums text-foreground">
+                                <button
+                                  onClick={() => {
+                                    const abs = Number(ev.start_time || 0);
+                                    const vs = absToVideoSec(abs);
+                                    setVideoTimeSec(vs);
+                                    setPendingSeek(vs);
+                                    try {
+                                      document.dispatchEvent(
+                                        new CustomEvent("tf:seek", {
+                                          detail: vs,
+                                        })
+                                      );
+                                    } catch {}
+                                    const el =
+                                      document.getElementById("unified-video");
+                                    if (el)
+                                      el.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    if (ev.player_display_name)
+                                      setPinnedPlayers((prev) => ({
+                                        ...prev,
+                                        [ev.player_display_name]: true,
+                                      }));
+                                  }}
+                                  className="underline-offset-2 hover:underline"
+                                >
+                                  {ev.turning_angle_degrees.toFixed(3)}
+                                </button>
+                              </td>
+                              <td className="py-2 px-2 text-foreground">
+                                {ev.entry_speed_category}
+                              </td>
+                              <td className="py-2 px-2 text-foreground">
+                                {ev.turning_angle_category}
+                              </td>
+                              <td className="py-2 px-2">
+                                <div className="flex gap-2">
+                                  <Button
+                                    size={"sm"}
+                                    variant={"secondary"}
+                                    onClick={async () => {
+                                      try {
+                                        const qs = new URLSearchParams({
+                                          player: ev.player_display_name,
+                                          start: String(ev.start_time),
+                                          end: String(ev.finish_time),
+                                        });
+                                        const res = await fetch(
+                                          `${API_BASE}/match/table/${selectedTable}/trace?` +
+                                            qs.toString()
+                                        );
+                                        if (res.ok) {
+                                          const data = await res.json();
+                                          const points = data?.trace || [];
+                                          setSharpTraces2((prev) => [
+                                            ...prev.filter(
+                                              (t) =>
+                                                t.player !==
+                                                ev.player_display_name
+                                            ),
+                                            {
+                                              player: ev.player_display_name,
+                                              points,
+                                            },
+                                          ]);
+                                          const abs = Number(
+                                            ev.start_time || 0
+                                          );
+                                          const vs = absToVideoSec(abs);
+                                          setVideoTimeSec(vs);
+                                          setPendingSeek(vs);
+                                          try {
+                                            document.dispatchEvent(
+                                              new CustomEvent("tf:seek", {
+                                                detail: vs,
+                                              })
+                                            );
+                                          } catch {}
+                                          const el =
+                                            document.getElementById(
+                                              "unified-video"
+                                            );
+                                          if (el)
+                                            el.scrollIntoView({
+                                              behavior: "smooth",
+                                              block: "center",
+                                            });
+                                        }
+                                      } catch {}
+                                    }}
+                                  >
+                                    Show trace
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                    <div className="flex items-center justify-between mt-3 text-sm text-foreground">
+                      <div>
+                        Page {sharpPage2} of{" "}
+                        {Math.max(
                           1,
                           Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2)
-                        )
-                      }
-                      onClick={() =>
-                        setSharpPage2((p) =>
-                          Math.min(
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={"outline"}
+                          size={"sm"}
+                          disabled={sharpPage2 <= 1}
+                          onClick={() =>
+                            setSharpPage2((p) => Math.max(1, p - 1))
+                          }
+                        >
+                          Prev
+                        </Button>
+                        <Button
+                          variant={"outline"}
+                          size={"sm"}
+                          disabled={
+                            sharpPage2 >=
                             Math.max(
                               1,
                               Math.ceil(sharpAngles2.length / SHARP_PAGE_SIZE_2)
-                            ),
-                            p + 1
-                          )
-                        )
-                      }
-                    >
-                      Next
-                    </Button>
+                            )
+                          }
+                          onClick={() =>
+                            setSharpPage2((p) =>
+                              Math.min(
+                                Math.max(
+                                  1,
+                                  Math.ceil(
+                                    sharpAngles2.length / SHARP_PAGE_SIZE_2
+                                  )
+                                ),
+                                p + 1
+                              )
+                            )
+                          }
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>

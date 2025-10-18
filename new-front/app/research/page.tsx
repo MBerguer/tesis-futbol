@@ -55,6 +55,31 @@ interface RatioData {
   ratio: number;
 }
 
+const AccelFilterSelector = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) => (
+  <div className="mb-4">
+    <label className="text-sm font-medium mr-3">Acceleration Filter:</label>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="px-3 py-1.5 bg-background border border-input rounded-md text-sm"
+    >
+      <option value="butterworth">Butterworth</option>
+      <option value="sma">Simple Moving Average (SMA)</option>
+      <option value="ema">Exponential Moving Average (EMA)</option>
+      <option value="savitzky_golay">Savitzky-Golay</option>
+      <option value="smooth">Final Smooth</option>
+      <option value="stddev_window">Standard Deviation Window</option>
+      <option value="original">Original (No Filter)</option>
+    </select>
+  </div>
+);
+
 export default function ResearchPage() {
   const [dtrData, setDtrData] = useState<TimeSeriesData[]>([]);
   const [z2Data, setZ2Data] = useState<TimeSeriesData[]>([]);
@@ -78,6 +103,11 @@ export default function ResearchPage() {
   const [loading, setLoading] = useState(true);
   const [minMinutesPlayed, setMinMinutesPlayed] = useState(85);
 
+  // Independent filters for each acceleration graph
+  const [highAccelFilter, setHighAccelFilter] = useState("savitzky_golay");
+  const [accelDecelFilter, setAccelDecelFilter] = useState("savitzky_golay");
+  const [ratioFilter, setRatioFilter] = useState("savitzky_golay");
+
   // Individual loading states for each chart
   const [loadingDtr, setLoadingDtr] = useState(true);
   const [loadingZ2, setLoadingZ2] = useState(true);
@@ -87,66 +117,96 @@ export default function ResearchPage() {
   const [loadingRatio, setLoadingRatio] = useState(true);
 
   useEffect(() => {
-    // Fetch all chart data in a single API call for maximum performance
-    fetchAllChartsData();
+    fetchDtrZ2SprintData();
     fetchMatches();
   }, [minMinutesPlayed]);
 
-  const fetchAllChartsData = async () => {
+  useEffect(() => {
+    fetchHighAccelData();
+  }, [minMinutesPlayed, highAccelFilter]);
+
+  useEffect(() => {
+    fetchAccelDecelData();
+  }, [minMinutesPlayed, accelDecelFilter]);
+
+  useEffect(() => {
+    fetchRatioData();
+  }, [minMinutesPlayed, ratioFilter]);
+
+  const fetchDtrZ2SprintData = async () => {
+    setLoadingDtr(true);
+    setLoadingZ2(true);
+    setLoadingSprint(true);
+
     try {
       const res = await fetch(
         `${API_BASE}/research/all-charts-data?min_minutes_played=${minMinutesPlayed}`
       );
       const json = await res.json();
 
-      // Progressive rendering: show charts one by one with small delays for better UX
-      // DTR
       setDtrData(json.dtr?.data || []);
       setDtrMetadata(json.dtr?.metadata);
       setLoadingDtr(false);
 
-      setTimeout(() => {
-        // Z2
-        setZ2Data(json.z2?.data || []);
-        setZ2Metadata(json.z2?.metadata);
-        setLoadingZ2(false);
-      }, 100);
+      setZ2Data(json.z2?.data || []);
+      setZ2Metadata(json.z2?.metadata);
+      setLoadingZ2(false);
 
-      setTimeout(() => {
-        // Sprint
-        setSprintData(json.sprint?.data || []);
-        setSprintMetadata(json.sprint?.metadata);
-        setLoadingSprint(false);
-      }, 200);
-
-      setTimeout(() => {
-        // High Accel
-        setHighAccelData(json.high_accel?.data || []);
-        setHighAccelMetadata(json.high_accel?.metadata);
-        setLoadingHighAccel(false);
-      }, 300);
-
-      setTimeout(() => {
-        // Accel/Decel
-        setAccelDecelData(json.accel_decel?.data || []);
-        setAccelDecelMetadata(json.accel_decel?.metadata);
-        setLoadingAccelDecel(false);
-      }, 400);
-
-      setTimeout(() => {
-        // Ratio
-        setRatioData(json.ratio?.data || []);
-        setRatioMetadata(json.ratio?.metadata);
-        setLoadingRatio(false);
-      }, 500);
+      setSprintData(json.sprint?.data || []);
+      setSprintMetadata(json.sprint?.metadata);
+      setLoadingSprint(false);
     } catch (error) {
-      console.error("Error fetching chart data:", error);
-      // Set all loading states to false on error
+      console.error("Error fetching DTR/Z2/Sprint data:", error);
       setLoadingDtr(false);
       setLoadingZ2(false);
       setLoadingSprint(false);
+    }
+  };
+
+  const fetchHighAccelData = async () => {
+    setLoadingHighAccel(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/research/high-accel-decel-per-minute?min_minutes_played=${minMinutesPlayed}&accel_filter=${highAccelFilter}`
+      );
+      const json = await res.json();
+      setHighAccelData(json.data || []);
+      setHighAccelMetadata(json.metadata);
+    } catch (error) {
+      console.error("Error fetching high accel data:", error);
+    } finally {
       setLoadingHighAccel(false);
+    }
+  };
+
+  const fetchAccelDecelData = async () => {
+    setLoadingAccelDecel(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/research/accel-decel-separated-per-minute?min_minutes_played=${minMinutesPlayed}&accel_filter=${accelDecelFilter}`
+      );
+      const json = await res.json();
+      setAccelDecelData(json.data || []);
+      setAccelDecelMetadata(json.metadata);
+    } catch (error) {
+      console.error("Error fetching accel/decel data:", error);
+    } finally {
       setLoadingAccelDecel(false);
+    }
+  };
+
+  const fetchRatioData = async () => {
+    setLoadingRatio(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/research/accel-decel-ratio-per-minute?min_minutes_played=${minMinutesPlayed}&accel_filter=${ratioFilter}`
+      );
+      const json = await res.json();
+      setRatioData(json.data || []);
+      setRatioMetadata(json.metadata);
+    } catch (error) {
+      console.error("Error fetching ratio data:", error);
+    } finally {
       setLoadingRatio(false);
     }
   };
@@ -315,7 +375,7 @@ export default function ResearchPage() {
                     label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="distance_m_per_min"
                     stroke="hsl(var(--primary))"
                     strokeWidth={2}
@@ -419,7 +479,7 @@ export default function ResearchPage() {
                     label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="distance_m_per_min"
                     stroke="hsl(var(--chart-2))"
                     strokeWidth={2}
@@ -519,7 +579,7 @@ export default function ResearchPage() {
                     label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="distance_m_per_min"
                     stroke="#ef4444"
                     strokeWidth={2}
@@ -543,6 +603,10 @@ export default function ResearchPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <AccelFilterSelector
+            value={highAccelFilter}
+            onChange={setHighAccelFilter}
+          />
           {loadingHighAccel ? (
             <div className="h-[420px] flex items-center justify-center">
               <div className="text-muted-foreground">Loading...</div>
@@ -620,7 +684,7 @@ export default function ResearchPage() {
                     label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="count_per_min"
                     stroke="hsl(var(--chart-4))"
                     strokeWidth={2}
@@ -643,6 +707,10 @@ export default function ResearchPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <AccelFilterSelector
+            value={accelDecelFilter}
+            onChange={setAccelDecelFilter}
+          />
           {loadingAccelDecel ? (
             <div className="h-[420px] flex items-center justify-center">
               <div className="text-muted-foreground">Loading...</div>
@@ -730,7 +798,7 @@ export default function ResearchPage() {
                     label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="avg_acceleration"
                     stroke="hsl(var(--chart-1))"
                     strokeWidth={2}
@@ -738,7 +806,7 @@ export default function ResearchPage() {
                     name="Accelerations"
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="avg_deceleration"
                     stroke="hsl(var(--chart-5))"
                     strokeWidth={2}
@@ -760,6 +828,7 @@ export default function ResearchPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <AccelFilterSelector value={ratioFilter} onChange={setRatioFilter} />
           {loadingRatio ? (
             <div className="h-[420px] flex items-center justify-center">
               <div className="text-muted-foreground">Loading...</div>
@@ -831,7 +900,7 @@ export default function ResearchPage() {
                     label={{ value: "Halftime", position: "top" }}
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="ratio"
                     stroke="hsl(var(--primary))"
                     strokeWidth={2}

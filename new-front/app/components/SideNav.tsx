@@ -124,6 +124,13 @@ export default function SideNav({
               CM
             </Link>
             <Link
+              href="/match/accelerations-analysis"
+              title="Acceleration Analysis"
+              className="rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
+            >
+              AA
+            </Link>
+            <Link
               href="/admin"
               title="Admin"
               className="rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
@@ -172,6 +179,12 @@ export default function SideNav({
                 className="rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
               >
                 Compare Matches
+              </Link>
+              <Link
+                href="/match/accelerations-analysis"
+                className="rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
+              >
+                Acceleration Analysis
               </Link>
               <Link
                 href="/admin"

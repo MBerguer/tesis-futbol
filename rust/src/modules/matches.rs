@@ -665,6 +665,29 @@ pub async fn list_match_tables(State(pool): State<PgPool>) -> Json<Value> {
     }))
 }
 
+pub async fn list_match_gps_tables(State(pool): State<PgPool>) -> Json<Value> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT DISTINCT gps_table_name
+        FROM matches
+        WHERE gps_table_name IS NOT NULL
+        ORDER BY gps_table_name DESC
+        "#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    let table_names: Vec<String> = rows
+        .into_iter()
+        .filter_map(|row| row.gps_table_name)
+        .collect();
+
+    Json(json!({
+        "tables": table_names
+    }))
+}
+
 pub async fn get_match_players(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
@@ -1618,8 +1641,8 @@ events AS (
 filtered_events AS (
   SELECT *
   FROM events
-  WHERE (event_type = 'accel_potential' AND peak_acc >= 2.5 AND duration_s >= 0.6)
-     OR (event_type = 'decel_potential' AND peak_acc <= -2.5 AND duration_s >= 0.6)
+  WHERE (event_type = 'accel_potential' AND peak_acc >= 3 AND duration_s >= 0.5)
+     OR (event_type = 'decel_potential' AND peak_acc <= -3 AND duration_s >= 0.5)
 ),
 
 classified AS (
@@ -2927,4 +2950,303 @@ pub async fn get_player_trace_window(
         .collect();
 
     Json(json!({"trace": trace, "player": player, "start": start_sec, "end": end_sec, "pad": pad}))
+}
+
+#[derive(Deserialize)]
+pub struct AccelFilterParams {
+    pub accel_threshold: Option<f64>,
+    pub decel_threshold: Option<f64>,
+    pub min_duration: Option<f64>,
+    pub filter_column: Option<String>,
+}
+
+/// GET /match/table/:table_name/accelerations-filtered?accel_threshold=3&decel_threshold=-3&min_duration=0.5
+/// Configurable acceleration analysis with dynamic thresholds and duration
+pub async fn get_accelerations_filtered(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<AccelFilterParams>,
+) -> Json<Value> {
+    let view_name = format!("{}_acc_filter_comparison", table_name);
+
+    let accel_threshold = params.accel_threshold.unwrap_or(3.0);
+    let decel_threshold = params.decel_threshold.unwrap_or(-3.0);
+    let min_duration = params.min_duration.unwrap_or(0.5);
+    let filter_column = params
+        .filter_column
+        .unwrap_or_else(|| "player_acceleration_final_smooth".to_string());
+
+    let periods_row = sqlx::query(
+        r#"
+        SELECT 
+            manual_first_half_start AS s1,
+            manual_first_half_end   AS e1,
+            manual_second_half_start AS s2,
+            manual_second_half_end   AS e2
+        FROM match_periods
+        WHERE match_name = $1
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_one(&pool)
+    .await;
+
+    let (s1, e1, s2, e2) = match periods_row {
+        Ok(r) => {
+            let s1: Option<i32> = r.try_get("s1").ok();
+            let e1: Option<i32> = r.try_get("e1").ok();
+            let s2: Option<i32> = r.try_get("s2").ok();
+            let e2: Option<i32> = r.try_get("e2").ok();
+            if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
+                (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
+            } else {
+                return Json(json!({
+                    "accelerations": [],
+                    "error": "manual periods not available for this match",
+                    "params": {
+                        "accel_threshold": accel_threshold,
+                        "decel_threshold": decel_threshold,
+                        "min_duration": min_duration,
+                        "filter_column": filter_column
+                    }
+                }));
+            }
+        }
+        Err(_) => {
+            return Json(json!({
+                "accelerations": [],
+                "error": "manual periods not found for this match",
+                "params": {
+                    "accel_threshold": accel_threshold,
+                    "decel_threshold": decel_threshold,
+                    "min_duration": min_duration,
+                    "filter_column": filter_column
+                }
+            }));
+        }
+    };
+
+    let base_cte = format!(
+        r#"
+WITH base AS (
+  SELECT
+    player_display_name,
+    time,
+    (speed::numeric) AS speed_kph,
+    ({filter_col}::numeric) AS acceleration_smooth,
+    EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time) AS epoch_time,
+    LAG(EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) OVER (
+      PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
+    ) AS prev_epoch
+  FROM public.{view}
+),
+
+filtered_base AS (
+  SELECT * FROM base
+  WHERE (epoch_time BETWEEN $1 AND $2) OR (epoch_time BETWEEN $3 AND $4)
+),
+
+filtered AS (
+  SELECT
+    player_display_name,
+    time,
+    speed_kph,
+    acceleration_smooth AS acceleration_limited,
+    COALESCE(
+      CASE
+        WHEN prev_epoch IS NULL THEN 0
+        WHEN epoch_time >= prev_epoch THEN epoch_time - prev_epoch
+        ELSE epoch_time + 86400 - prev_epoch
+      END,
+    0) AS delta_time
+  FROM filtered_base
+  WHERE COALESCE(
+      CASE
+        WHEN prev_epoch IS NULL THEN 0
+        WHEN epoch_time >= prev_epoch THEN epoch_time - prev_epoch
+        ELSE epoch_time + 86400 - prev_epoch
+      END,
+    0) > 0 AND COALESCE(
+      CASE
+        WHEN prev_epoch IS NULL THEN 0
+        WHEN epoch_time >= prev_epoch THEN epoch_time - prev_epoch
+        ELSE epoch_time + 86400 - prev_epoch
+      END,
+    0) < 0.5
+),
+
+time_cum AS (
+  SELECT
+    *,
+    SUM(delta_time) OVER (PARTITION BY player_display_name ORDER BY time) AS time_s
+  FROM filtered
+),
+
+labeled AS (
+  SELECT
+    *,
+    CASE
+      WHEN acceleration_limited >= 1 THEN 'accel_potential'
+      WHEN acceleration_limited <= -1 THEN 'decel_potential'
+      ELSE 'none'
+    END AS event_type
+  FROM time_cum
+),
+
+grp_prep AS (
+  SELECT
+    *,
+    LAG(event_type) OVER (PARTITION BY player_display_name ORDER BY time_s) AS prev_event_type
+  FROM labeled
+),
+
+grp AS (
+  SELECT
+    *,
+    SUM(CASE WHEN prev_event_type = event_type THEN 0 ELSE 1 END)
+      OVER (PARTITION BY player_display_name ORDER BY time_s) AS grp
+  FROM grp_prep
+),
+
+grouped AS (
+  SELECT
+    player_display_name,
+    event_type,
+    grp,
+    MIN(time) AS start_time_text,
+    MAX(time) AS end_time_text,
+    MIN(time_s) AS start_time_s,
+    MAX(time_s) AS end_time_s,
+    SUM(delta_time) AS duration_s,
+    MAX(speed_kph) AS max_speed,
+    MAX(acceleration_limited) AS max_acc,
+    MIN(acceleration_limited) AS min_acc,
+    SUM(speed_kph * delta_time) AS distance_m
+  FROM grp
+  GROUP BY player_display_name, event_type, grp
+),
+
+events AS (
+  SELECT
+    player_display_name,
+    event_type,
+    start_time_text,
+    end_time_text,
+    start_time_s,
+    end_time_s,
+    duration_s,
+    max_speed,
+    CASE WHEN event_type = 'accel_potential' THEN max_acc ELSE min_acc END AS peak_acc,
+    distance_m
+  FROM grouped
+  WHERE event_type <> 'none'
+),
+
+filtered_events AS (
+  SELECT *
+  FROM events
+  WHERE (event_type = 'accel_potential' AND peak_acc >= $5 AND duration_s >= $7)
+     OR (event_type = 'decel_potential' AND peak_acc <= $6 AND duration_s >= $7)
+),
+
+classified AS (
+  SELECT
+    *,
+    CASE
+      WHEN event_type = 'accel_potential' AND peak_acc >= 4    THEN 'high'
+      WHEN event_type = 'accel_potential' AND peak_acc >= 3    THEN 'medium'
+      WHEN event_type = 'accel_potential' AND peak_acc >= 2.5  THEN 'low'
+      WHEN event_type = 'decel_potential' AND peak_acc <= -4   THEN 'high'
+      WHEN event_type = 'decel_potential' AND peak_acc <= -3   THEN 'medium'
+      WHEN event_type = 'decel_potential' AND peak_acc <= -2.5 THEN 'low'
+      ELSE 'unknown'
+    END AS intensity_category
+  FROM filtered_events
+)
+        "#,
+        view = view_name,
+        filter_col = filter_column
+    );
+
+    let sql_summary = format!(
+        r#"{base}
+SELECT
+  ROW_NUMBER() OVER (ORDER BY player_display_name) AS id,
+  player_display_name,
+  SUM(CASE WHEN event_type = 'accel_potential' THEN 1 ELSE 0 END)::bigint AS total_accel_events,
+  SUM(CASE WHEN event_type = 'accel_potential' AND intensity_category = 'low' THEN 1 ELSE 0 END)::bigint AS accel_low,
+  SUM(CASE WHEN event_type = 'accel_potential' AND intensity_category = 'medium' THEN 1 ELSE 0 END)::bigint AS accel_medium,
+  SUM(CASE WHEN event_type = 'accel_potential' AND intensity_category = 'high' THEN 1 ELSE 0 END)::bigint AS accel_high,
+  SUM(CASE WHEN event_type = 'decel_potential' THEN 1 ELSE 0 END)::bigint AS total_decel_events,
+  SUM(CASE WHEN event_type = 'decel_potential' AND intensity_category = 'low' THEN 1 ELSE 0 END)::bigint AS decel_low,
+  SUM(CASE WHEN event_type = 'decel_potential' AND intensity_category = 'medium' THEN 1 ELSE 0 END)::bigint AS decel_medium,
+  SUM(CASE WHEN event_type = 'decel_potential' AND intensity_category = 'high' THEN 1 ELSE 0 END)::bigint AS decel_high,
+  ROUND(SUM(distance_m)::numeric, 3)::double precision AS total_distance_m,
+  ROUND(SUM(duration_s)::numeric, 3)::double precision AS total_time_s
+FROM classified
+GROUP BY player_display_name
+ORDER BY player_display_name"#,
+        base = base_cte
+    );
+
+    let rows = match sqlx::query(&sql_summary)
+        .bind(s1)
+        .bind(e1)
+        .bind(s2)
+        .bind(e2)
+        .bind(accel_threshold)
+        .bind(decel_threshold)
+        .bind(min_duration)
+        .fetch_all(&pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return Json(json!({
+                "accelerations": [],
+                "error": format!("db error: {}", e),
+                "params": {
+                    "accel_threshold": accel_threshold,
+                    "decel_threshold": decel_threshold,
+                    "min_duration": min_duration,
+                    "filter_column": filter_column
+                }
+            }))
+        }
+    };
+
+    let out: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            let id = r.try_get::<i64, _>("id").unwrap_or(0);
+            let name = r
+                .try_get::<String, _>("player_display_name")
+                .unwrap_or_default();
+            let v1 = r.try_get::<i64, _>("total_accel_events").unwrap_or(0) as f64;
+            let v2 = r.try_get::<i64, _>("accel_low").unwrap_or(0) as f64;
+            let v3 = r.try_get::<i64, _>("accel_medium").unwrap_or(0) as f64;
+            let v4 = r.try_get::<i64, _>("accel_high").unwrap_or(0) as f64;
+            let v5 = r.try_get::<i64, _>("total_decel_events").unwrap_or(0) as f64;
+            let v6 = r.try_get::<i64, _>("decel_low").unwrap_or(0) as f64;
+            let v7 = r.try_get::<i64, _>("decel_medium").unwrap_or(0) as f64;
+            let v8 = r.try_get::<i64, _>("decel_high").unwrap_or(0) as f64;
+            let v9 = r.try_get::<f64, _>("total_distance_m").unwrap_or(0.0);
+            let v10 = r.try_get::<f64, _>("total_time_s").unwrap_or(0.0);
+            json!({
+                "id": id,
+                "player_display_name": name,
+                "values": [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10]
+            })
+        })
+        .collect();
+
+    Json(json!({
+        "accelerations": out,
+        "params": {
+            "accel_threshold": accel_threshold,
+            "decel_threshold": decel_threshold,
+            "min_duration": min_duration,
+            "filter_column": filter_column
+        }
+    }))
 }
