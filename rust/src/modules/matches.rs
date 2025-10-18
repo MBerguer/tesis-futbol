@@ -3250,3 +3250,154 @@ ORDER BY player_display_name"#,
         }
     }))
 }
+
+pub async fn get_sharp_angles_3(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+) -> Json<Value> {
+    let acc_filter_table = format!("{}_acc_filter_comparison", table_name);
+
+    let cache_query = format!(
+        r#"
+        SELECT 
+          player_id,
+          player_display_name,
+          inicio_s,
+          fin_s,
+          avg_speed,
+          distance
+        FROM sharp_angles_3_cache
+        WHERE match_name = $1
+        ORDER BY inicio_s
+        "#
+    );
+
+    let cached = sqlx::query(&cache_query)
+        .bind(&table_name)
+        .fetch_all(&pool)
+        .await
+        .unwrap_or_default();
+
+    if !cached.is_empty() {
+        let data: Vec<Value> = cached
+            .into_iter()
+            .enumerate()
+            .map(|(idx, r)| {
+                json!({
+                    "id": (idx as i64) + 1,
+                    "player_id": r.try_get::<i32,_>("player_id").unwrap_or(0),
+                    "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                    "inicio_s": r.try_get::<f64,_>("inicio_s").unwrap_or(0.0),
+                    "fin_s": r.try_get::<f64,_>("fin_s").unwrap_or(0.0),
+                    "avg_speed": r.try_get::<f64,_>("avg_speed").unwrap_or(0.0),
+                    "distance": r.try_get::<f64,_>("distance").unwrap_or(0.0)
+                })
+            })
+            .collect();
+        return Json(json!({"sharp_angles_3": data}));
+    }
+
+    let query = format!(
+        r#"
+WITH yes_only AS (
+    SELECT *
+    FROM public.{acc_filter_table}
+    WHERE code_flag = 'yes code'
+),
+numbered AS (
+    SELECT *,
+        ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY seconds_since_midnight) AS rn,
+        seconds_since_midnight AS inicio_s,
+        seconds_since_midnight AS fin_s,
+        angle_diff AS angle,
+        distancia_total_calc AS distance_val,
+        speed AS speed_val
+    FROM yes_only
+),
+lagged AS (
+    SELECT *,
+        LAG(fin_s) OVER (PARTITION BY player_id ORDER BY rn) AS prev_fin_s
+    FROM numbered
+),
+grp_calc AS (
+    SELECT *,
+        SUM(CASE 
+                WHEN prev_fin_s IS NULL OR inicio_s - prev_fin_s > 1.0 THEN 1 
+                ELSE 0 
+            END
+        ) OVER (PARTITION BY player_id ORDER BY rn) AS grp
+    FROM lagged
+),
+final_events AS (
+    SELECT
+        player_id,
+        player_display_name,
+        MIN(inicio_s) AS inicio_s,
+        MAX(fin_s) AS fin_s,
+        AVG(speed_val) AS avg_speed,
+        SUM(distance_val) AS distance
+    FROM grp_calc
+    GROUP BY player_id, player_display_name, grp
+)
+SELECT *
+FROM final_events
+WHERE avg_speed > 15
+ORDER BY inicio_s
+        "#,
+        acc_filter_table = acc_filter_table
+    );
+
+    let rows = match sqlx::query(&query).fetch_all(&pool).await {
+        Ok(r) => r,
+        Err(e) => {
+            return Json(json!({
+                "sharp_angles_3": [],
+                "error": format!("db error: {}", e)
+            }))
+        }
+    };
+
+    let data: Vec<Value> = rows
+        .iter()
+        .enumerate()
+        .map(|(idx, r)| {
+            json!({
+                "id": (idx as i64) + 1,
+                "player_id": r.try_get::<i32,_>("player_id").unwrap_or(0),
+                "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                "inicio_s": r.try_get::<f64,_>("inicio_s").unwrap_or(0.0),
+                "fin_s": r.try_get::<f64,_>("fin_s").unwrap_or(0.0),
+                "avg_speed": r.try_get::<f64,_>("avg_speed").unwrap_or(0.0),
+                "distance": r.try_get::<f64,_>("distance").unwrap_or(0.0)
+            })
+        })
+        .collect();
+
+    let insert_query = format!(
+        r#"
+        INSERT INTO sharp_angles_3_cache (
+            match_name, player_id, player_display_name, inicio_s, fin_s, avg_speed, distance
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (match_name, player_id, inicio_s) DO NOTHING
+        "#
+    );
+
+    for row in &rows {
+        let _ = sqlx::query(&insert_query)
+            .bind(&table_name)
+            .bind(row.try_get::<i32, _>("player_id").unwrap_or(0))
+            .bind(
+                row.try_get::<String, _>("player_display_name")
+                    .unwrap_or_default(),
+            )
+            .bind(row.try_get::<f64, _>("inicio_s").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("fin_s").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("avg_speed").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("distance").unwrap_or(0.0))
+            .execute(&pool)
+            .await;
+    }
+
+    Json(json!({"sharp_angles_3": data}))
+}

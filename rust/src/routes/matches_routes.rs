@@ -66,6 +66,10 @@ pub fn matches_routes(pool: PgPool) -> Router {
             get(matches::get_sharp_angles_2),
         )
         .route(
+            "/table/:table_name/sharp-angles-3",
+            get(matches::get_sharp_angles_3),
+        )
+        .route(
             "/table/:table_name/trace",
             get(matches::get_player_trace_window),
         )
