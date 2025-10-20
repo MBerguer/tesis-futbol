@@ -2687,7 +2687,10 @@ export default function Page() {
                             className="grid grid-cols-1 md:grid-cols-2 gap-4"
                             style={{ marginLeft: forecastOpen ? 240 : 15 }}
                           >
-                            <div className="p-2" id="unified-video">
+                            <div
+                              className="p-2 h-[660px] md:h-[760px]"
+                              id="unified-video"
+                            >
                               <UnifiedVideo
                                 youtubeId={searchParams.get("yt")}
                                 videoUrl={
@@ -2776,8 +2779,8 @@ export default function Page() {
                                 </span>
                               </div>
                             </div>
-                            <div className="p-2">
-                              <div className="h-[660px] md:h-[760px]">
+                            <div className="p-2 h-[660px] md:h-[760px]">
+                              <div className="h-full">
                                 <div className="sticky z-20 bg-background/80 backdrop-blur rounded-md px-3 mb-2 shadow-sm border border-border flex items-center justify-between">
                                   <div className="flex items-center gap-2 py-2">
                                     <label className="text-xs text-muted-foreground">

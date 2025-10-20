@@ -3455,6 +3455,53 @@ pub async fn get_sharp_angles_overlap(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
 ) -> Json<Value> {
+    // Check cache first
+    let cached = sqlx::query(
+        r#"
+        SELECT 
+          player_display_name,
+          dossantos_start,
+          dossantos_finish,
+          dossantos_angle,
+          reilly_start,
+          reilly_finish,
+          reilly_angle,
+          overlap_start,
+          overlap_end,
+          diff
+        FROM sharp_angles_overlap_cache
+        WHERE match_name = $1
+        ORDER BY diff, player_display_name
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+
+    if !cached.is_empty() {
+        let data: Vec<Value> = cached
+            .into_iter()
+            .enumerate()
+            .map(|(idx, r)| {
+                json!({
+                    "id": (idx as i64) + 1,
+                    "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                    "dossantos_start": r.try_get::<f64,_>("dossantos_start").unwrap_or(0.0),
+                    "dossantos_finish": r.try_get::<f64,_>("dossantos_finish").unwrap_or(0.0),
+                    "dossantos_angle": r.try_get::<f64,_>("dossantos_angle").unwrap_or(0.0),
+                    "reilly_start": r.try_get::<f64,_>("reilly_start").unwrap_or(0.0),
+                    "reilly_finish": r.try_get::<f64,_>("reilly_finish").unwrap_or(0.0),
+                    "reilly_angle": r.try_get::<f64,_>("reilly_angle").unwrap_or(0.0),
+                    "overlap_start": r.try_get::<f64,_>("overlap_start").unwrap_or(0.0),
+                    "overlap_end": r.try_get::<f64,_>("overlap_end").unwrap_or(0.0),
+                    "diff": r.try_get::<f64,_>("diff").unwrap_or(0.0)
+                })
+            })
+            .collect();
+        return Json(json!({"sharp_angles_overlap": data}));
+    }
+
     // Fetch manual period boundaries
     let periods_row = sqlx::query(
         r#"
@@ -3574,9 +3621,6 @@ pub async fn get_sharp_angles_overlap(
             json!({
                 "id": (idx as i64) + 1,
                 "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
-                // "depablo_start": r.try_get::<f64,_>("depablo_start").unwrap_or(0.0),
-                // "depablo_finish": r.try_get::<f64,_>("depablo_finish").unwrap_or(0.0),
-                "depablo_angle": r.try_get::<f64,_>("depablo_angle").unwrap_or(0.0),
                 "dossantos_start": r.try_get::<f64,_>("dossantos_start").unwrap_or(0.0),
                 "dossantos_finish": r.try_get::<f64,_>("dossantos_finish").unwrap_or(0.0),
                 "dossantos_angle": r.try_get::<f64,_>("dossantos_angle").unwrap_or(0.0),
@@ -3589,6 +3633,35 @@ pub async fn get_sharp_angles_overlap(
             })
         })
         .collect();
+
+    let insert_query = r#"
+        INSERT INTO sharp_angles_overlap_cache (
+            match_name, player_display_name, dossantos_start, dossantos_finish, dossantos_angle,
+            reilly_start, reilly_finish, reilly_angle, overlap_start, overlap_end, diff
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (match_name, player_display_name, overlap_start) DO NOTHING
+    "#;
+
+    for row in &rows {
+        let _ = sqlx::query(insert_query)
+            .bind(&table_name)
+            .bind(
+                row.try_get::<String, _>("player_display_name")
+                    .unwrap_or_default(),
+            )
+            .bind(row.try_get::<f64, _>("dossantos_start").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("dossantos_finish").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("dossantos_angle").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("reilly_start").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("reilly_finish").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("reilly_angle").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("overlap_start").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("overlap_end").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("diff").unwrap_or(0.0))
+            .execute(&pool)
+            .await;
+    }
 
     Json(json!({"sharp_angles_overlap": data}))
 }
