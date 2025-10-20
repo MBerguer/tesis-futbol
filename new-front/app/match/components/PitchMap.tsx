@@ -21,6 +21,8 @@ interface PitchMapProps {
   traceColor2?: string;
   traceLines3?: Array<Array<{ lat: number; lon: number }>>;
   traceColor3?: string;
+  traceLines4?: Array<Array<{ lat: number; lon: number }>>;
+  traceColor4?: string;
   // Zoom controls
   limitZoom?: boolean; // when true, restrict zoom around initialZoom
   initialZoom?: number; // default zoom level used when limiting is enabled
@@ -45,6 +47,8 @@ export default function PitchMap({
   traceColor2,
   traceLines3,
   traceColor3,
+  traceLines4,
+  traceColor4,
   limitZoom = true,
   initialZoom = 18.5,
   fullZoomMin = 0,
@@ -441,6 +445,58 @@ export default function PitchMap({
       }
     } catch {}
   }, [traceLines3, traceColor3]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const srcId = "trace-line-src-4";
+    const layerId = "trace-line-lyr-4";
+    try {
+      if (!traceLines4 || traceLines4.length === 0) {
+        if (map.getLayer(layerId)) {
+          try {
+            map.removeLayer(layerId);
+          } catch {}
+        }
+        if (map.getSource(srcId)) {
+          try {
+            (map.getSource(srcId) as any).setData({
+              type: "FeatureCollection",
+              features: [],
+            });
+            map.removeSource(srcId);
+          } catch {}
+        }
+        return;
+      }
+      const features = traceLines4.map((line) => ({
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: line.map((p) => [p.lon, p.lat]),
+        },
+        properties: {},
+      }));
+      const collection = { type: "FeatureCollection", features } as any;
+      if (!map.getSource(srcId)) {
+        map.addSource(srcId, { type: "geojson", data: collection });
+      } else {
+        (map.getSource(srcId) as any).setData(collection);
+      }
+      if (!map.getLayer(layerId)) {
+        map.addLayer({
+          id: layerId,
+          type: "line",
+          source: srcId,
+          paint: {
+            "line-color": traceColor4 || "#00ff00",
+            "line-width": 3,
+            "line-opacity": 0.9,
+          },
+        });
+      }
+    } catch {}
+  }, [traceLines4, traceColor4]);
 
   return (
     <div

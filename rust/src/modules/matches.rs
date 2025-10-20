@@ -2967,7 +2967,7 @@ pub async fn get_accelerations_filtered(
     Path(table_name): Path<String>,
     axum::extract::Query(params): axum::extract::Query<AccelFilterParams>,
 ) -> Json<Value> {
-    let view_name = format!("{}_acc_filter_comparison", table_name);
+    let view_name = format!("{}_mat_view", table_name);
 
     let accel_threshold = params.accel_threshold.unwrap_or(3.0);
     let decel_threshold = params.decel_threshold.unwrap_or(-3.0);
@@ -3255,7 +3255,46 @@ pub async fn get_sharp_angles_3(
     State(pool): State<PgPool>,
     Path(table_name): Path<String>,
 ) -> Json<Value> {
-    let acc_filter_table = format!("{}_acc_filter_comparison", table_name);
+    let acc_filter_table = format!("{}_mat_view", table_name);
+
+    // Fetch manual period boundaries
+    let periods_row = sqlx::query(
+        r#"
+        SELECT 
+            manual_first_half_start AS s1,
+            manual_first_half_end   AS e1,
+            manual_second_half_start AS s2,
+            manual_second_half_end   AS e2
+        FROM match_periods
+        WHERE match_name = $1
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_one(&pool)
+    .await;
+
+    let (s1, e1, s2, e2) = match periods_row {
+        Ok(r) => {
+            let s1: Option<i32> = r.try_get("s1").ok();
+            let e1: Option<i32> = r.try_get("e1").ok();
+            let s2: Option<i32> = r.try_get("s2").ok();
+            let e2: Option<i32> = r.try_get("e2").ok();
+            if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
+                (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
+            } else {
+                return Json(json!({
+                    "sharp_angles_3": [],
+                    "error": "manual periods not available for this match"
+                }));
+            }
+        }
+        Err(_) => {
+            return Json(json!({
+                "sharp_angles_3": [],
+                "error": "manual periods not found for this match"
+            }));
+        }
+    };
 
     let cache_query = format!(
         r#"
@@ -3266,15 +3305,20 @@ pub async fn get_sharp_angles_3(
           fin_s,
           avg_speed,
           distance,
-          avg_angle
+          angle_diff
         FROM sharp_angles_3_cache
         WHERE match_name = $1
+          AND ((inicio_s BETWEEN $2 AND $3) OR (inicio_s BETWEEN $4 AND $5))
         ORDER BY inicio_s
         "#
     );
 
     let cached = sqlx::query(&cache_query)
         .bind(&table_name)
+        .bind(s1)
+        .bind(e1)
+        .bind(s2)
+        .bind(e2)
         .fetch_all(&pool)
         .await
         .unwrap_or_default();
@@ -3292,7 +3336,7 @@ pub async fn get_sharp_angles_3(
                     "fin_s": r.try_get::<f64,_>("fin_s").unwrap_or(0.0),
                     "avg_speed": r.try_get::<f64,_>("avg_speed").unwrap_or(0.0),
                     "distance": r.try_get::<f64,_>("distance").unwrap_or(0.0),
-                    "avg_angle": r.try_get::<f64,_>("avg_angle").unwrap_or(0.0)
+                    "angle_diff": r.try_get::<f64,_>("angle_diff").unwrap_or(0.0)
                 })
             })
             .collect();
@@ -3301,56 +3345,56 @@ pub async fn get_sharp_angles_3(
 
     let query = format!(
         r#"
-WITH yes_only AS (
-    SELECT *
-    FROM public.{acc_filter_table}
-    WHERE code_flag = 'yes code'
+WITH filtered_points AS (
+  SELECT 
+    player_id,
+    player_display_name,
+    seconds_since_midnight,
+    speed,
+    distancia_total_calc,
+    gps_cod_angle,
+    LAG(seconds_since_midnight) OVER (PARTITION BY player_id ORDER BY seconds_since_midnight) as prev_time
+  FROM public.{acc_filter_table}
+  WHERE (abs(gps_cod_angle) BETWEEN 45 AND 135)
+    AND ((seconds_since_midnight BETWEEN $1 AND $2) OR (seconds_since_midnight BETWEEN $3 AND $4))
 ),
-numbered AS (
-    SELECT *,
-        ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY seconds_since_midnight) AS rn,
-        seconds_since_midnight AS inicio_s,
-        seconds_since_midnight AS fin_s,
-        angle_diff AS angle,
-        distancia_total_calc AS distance_val,
-        speed AS speed_val
-    FROM yes_only
+grouped_points AS (
+  SELECT 
+    player_id,
+    player_display_name,
+    seconds_since_midnight,
+    speed,
+    distancia_total_calc,
+    gps_cod_angle,
+    SUM(CASE WHEN prev_time IS NULL OR seconds_since_midnight - prev_time > 0.2 THEN 1 ELSE 0 END) 
+      OVER (PARTITION BY player_id ORDER BY seconds_since_midnight) as event_group
+  FROM filtered_points
 ),
-lagged AS (
-    SELECT *,
-        LAG(fin_s) OVER (PARTITION BY player_id ORDER BY rn) AS prev_fin_s
-    FROM numbered
-),
-grp_calc AS (
-    SELECT *,
-        SUM(CASE 
-                WHEN prev_fin_s IS NULL OR inicio_s - prev_fin_s > 1.0 THEN 1 
-                ELSE 0 
-            END
-        ) OVER (PARTITION BY player_id ORDER BY rn) AS grp
-    FROM lagged
-),
-final_events AS (
-    SELECT
-        player_id,
-        player_display_name,
-        MIN(inicio_s) AS inicio_s,
-        MAX(fin_s) AS fin_s,
-        AVG(speed_val) AS avg_speed,
-        SUM(distance_val) AS distance,
-        MAX(angle) AS avg_angle
-    FROM grp_calc
-    GROUP BY player_id, player_display_name, grp
+events AS (
+  SELECT 
+    player_id,
+    player_display_name,
+    MIN(seconds_since_midnight) as inicio_s,
+    MAX(seconds_since_midnight) as fin_s,
+    AVG(speed) as avg_speed,
+    SUM(distancia_total_calc) as distance,
+    AVG(gps_cod_angle) as angle_diff
+  FROM grouped_points
+  GROUP BY player_id, player_display_name, event_group
 )
-SELECT *
-FROM final_events
-WHERE avg_speed > 15
-ORDER BY inicio_s
+SELECT * FROM events ORDER BY inicio_s;
         "#,
         acc_filter_table = acc_filter_table
     );
 
-    let rows = match sqlx::query(&query).fetch_all(&pool).await {
+    let rows = match sqlx::query(&query)
+        .bind(s1)
+        .bind(e1)
+        .bind(s2)
+        .bind(e2)
+        .fetch_all(&pool)
+        .await
+    {
         Ok(r) => r,
         Err(e) => {
             return Json(json!({
@@ -3372,7 +3416,7 @@ ORDER BY inicio_s
                 "fin_s": r.try_get::<f64,_>("fin_s").unwrap_or(0.0),
                 "avg_speed": r.try_get::<f64,_>("avg_speed").unwrap_or(0.0),
                 "distance": r.try_get::<f64,_>("distance").unwrap_or(0.0),
-                "avg_angle": r.try_get::<f64,_>("avg_angle").unwrap_or(0.0)
+                "angle_diff": r.try_get::<f64,_>("angle_diff").unwrap_or(0.0)
             })
         })
         .collect();
@@ -3380,7 +3424,7 @@ ORDER BY inicio_s
     let insert_query = format!(
         r#"
         INSERT INTO sharp_angles_3_cache (
-            match_name, player_id, player_display_name, inicio_s, fin_s, avg_speed, distance, avg_angle
+            match_name, player_id, player_display_name, inicio_s, fin_s, avg_speed, distance, angle_diff
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (match_name, player_id, inicio_s) DO NOTHING
@@ -3399,10 +3443,152 @@ ORDER BY inicio_s
             .bind(row.try_get::<f64, _>("fin_s").unwrap_or(0.0))
             .bind(row.try_get::<f64, _>("avg_speed").unwrap_or(0.0))
             .bind(row.try_get::<f64, _>("distance").unwrap_or(0.0))
-            .bind(row.try_get::<f64, _>("avg_angle").unwrap_or(0.0))
+            .bind(row.try_get::<f64, _>("angle_diff").unwrap_or(0.0))
             .execute(&pool)
             .await;
     }
 
     Json(json!({"sharp_angles_3": data}))
+}
+
+pub async fn get_sharp_angles_overlap(
+    State(pool): State<PgPool>,
+    Path(table_name): Path<String>,
+) -> Json<Value> {
+    // Fetch manual period boundaries
+    let periods_row = sqlx::query(
+        r#"
+        SELECT 
+            manual_first_half_start AS s1,
+            manual_first_half_end   AS e1,
+            manual_second_half_start AS s2,
+            manual_second_half_end   AS e2
+        FROM match_periods
+        WHERE match_name = $1
+        "#,
+    )
+    .bind(&table_name)
+    .fetch_one(&pool)
+    .await;
+
+    let (s1, e1, s2, e2) = match periods_row {
+        Ok(r) => {
+            let s1: Option<i32> = r.try_get("s1").ok();
+            let e1: Option<i32> = r.try_get("e1").ok();
+            let s2: Option<i32> = r.try_get("s2").ok();
+            let e2: Option<i32> = r.try_get("e2").ok();
+            if let (Some(s1), Some(e1), Some(s2), Some(e2)) = (s1, e1, s2, e2) {
+                (s1 as f64, e1 as f64, s2 as f64, e2 as f64)
+            } else {
+                return Json(json!({
+                    "sharp_angles_overlap": [],
+                    "error": "manual periods not available for this match"
+                }));
+            }
+        }
+        Err(_) => {
+            return Json(json!({
+                "sharp_angles_overlap": [],
+                "error": "manual periods not found for this match"
+            }));
+        }
+    };
+
+    let query = r#"
+
+    SELECT 
+    sa2.match_name,
+    sa2.player_display_name,
+  --  sa1.start_time as depablo_start,
+  --  sa1.finish_time as depablo_finish,
+    sa2.start_time as dossantos_start,
+    sa2.finish_time as dossantos_finish,
+    sa3.inicio_s as reilly_start,
+    sa3.fin_s as reilly_finish,
+  --  sa1.angle_degrees as depablo_angle,
+    sa2.turning_angle_degrees as dossantos_angle,
+    sa3.angle_diff as reilly_angle,
+    GREATEST(
+        -- sa1.start_time, 
+        sa2.start_time, sa3.inicio_s) as overlap_start,
+    LEAST(
+        -- sa1.finish_time, 
+        sa2.finish_time, sa3.fin_s) as overlap_end,
+    ABS(GREATEST(
+        --sa1.start_time, 
+        sa2.start_time, sa3.inicio_s) - 
+        LEAST(
+        --sa1.finish_time, 
+        sa2.finish_time, sa3.fin_s)) as diff
+    /*manual_first_half_start,
+    manual_first_half_start,
+    manual_second_half_start,
+    manual_second_half_end*/
+  FROM 
+  --sharp_angles_cache sa1 INNER JOIN 
+  sharp_angles_2_cache sa2 
+  --  ON sa1.match_name = sa2.match_name and sa1.player_display_name = sa2.player_display_name  
+  INNER JOIN sharp_angles_3_cache sa3
+    ON sa2.match_name = sa3.match_name and sa2.player_display_name = sa3.player_display_name 
+  join match_periods mp on sa2.match_name = mp.match_name 
+  where ((GREATEST(
+              --sa1.start_time, 
+              sa2.start_time, sa3.inicio_s) between manual_first_half_start and manual_first_half_start) 
+          or (GREATEST(
+              --sa1.start_time, 
+              sa2.start_time, sa3.inicio_s) between manual_second_half_start and manual_second_half_end))
+  	and sa2.match_name = $1 
+      and ABS(GREATEST(
+        --sa1.start_time, 
+        sa2.start_time, sa3.inicio_s) - 
+        LEAST(
+        --sa1.finish_time, 
+        sa2.finish_time, sa3.fin_s)) < 1
+  ORDER BY diff, sa2.player_display_name, 
+          ---sa1.start_time, 
+          sa2.start_time, sa3.inicio_s;
+    "#;
+
+    let rows = match sqlx::query(query)
+        .bind(&table_name)
+        .bind(s1)
+        .bind(e1)
+        .bind(s2)
+        .bind(e2)
+        .fetch_all(&pool)
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return Json(json!({
+                "sharp_angles_overlap": [],
+                "error": format!("db error: {}", e)
+            }))
+        }
+    };
+
+    let data: Vec<Value> = rows
+        .iter()
+        .enumerate()
+        .map(|(idx, r)| {
+            json!({
+                "id": (idx as i64) + 1,
+                "player_display_name": r.try_get::<String,_>("player_display_name").unwrap_or_default(),
+                // "depablo_start": r.try_get::<f64,_>("depablo_start").unwrap_or(0.0),
+                // "depablo_finish": r.try_get::<f64,_>("depablo_finish").unwrap_or(0.0),
+                "depablo_angle": r.try_get::<f64,_>("depablo_angle").unwrap_or(0.0),
+                "dossantos_start": r.try_get::<f64,_>("dossantos_start").unwrap_or(0.0),
+                "dossantos_finish": r.try_get::<f64,_>("dossantos_finish").unwrap_or(0.0),
+                "dossantos_angle": r.try_get::<f64,_>("dossantos_angle").unwrap_or(0.0),
+                "reilly_start": r.try_get::<f64,_>("reilly_start").unwrap_or(0.0),
+                "reilly_finish": r.try_get::<f64,_>("reilly_finish").unwrap_or(0.0),
+                "reilly_angle": r.try_get::<f64,_>("reilly_angle").unwrap_or(0.0),
+                "overlap_start": r.try_get::<f64,_>("overlap_start").unwrap_or(0.0),
+                "overlap_end": r.try_get::<f64,_>("overlap_end").unwrap_or(0.0),
+                "diff": r.try_get::<f64,_>("diff").unwrap_or(0.0)
+            })
+        })
+        .collect();
+
+    Json(json!({"sharp_angles_overlap": data}))
 }
