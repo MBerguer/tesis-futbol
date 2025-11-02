@@ -24,7 +24,7 @@ pub async fn get_all_charts_data(
         Some("savitzky_golay") => "acceleraciones_fil_savitzky_golay",
         Some("smooth") => "player_acceleration_final_smooth",
         Some("stddev_window") => "accel_stddev_window",
-        _ => "acceleraciones_fil_savitzky_golay",
+        _ => "accel_butterworth",
     };
 
     let query = format!(
@@ -786,7 +786,7 @@ pub async fn get_high_accel_decel_per_minute(
         Some("savitzky_golay") => "acceleraciones_fil_savitzky_golay",
         Some("smooth") => "player_acceleration_final_smooth",
         Some("stddev_window") => "accel_stddev_window",
-        _ => "acceleraciones_fil_savitzky_golay",
+        _ => "accel_butterworth",
     };
 
     let query = format!(
@@ -904,7 +904,7 @@ pub async fn get_accel_decel_separated_per_minute(
         Some("savitzky_golay") => "acceleraciones_fil_savitzky_golay",
         Some("smooth") => "player_acceleration_final_smooth",
         Some("stddev_window") => "accel_stddev_window",
-        _ => "acceleraciones_fil_savitzky_golay",
+        _ => "accel_butterworth",
     };
 
     let query = format!(
@@ -1034,7 +1034,7 @@ pub async fn get_accel_decel_ratio_per_minute(
         Some("savitzky_golay") => "acceleraciones_fil_savitzky_golay",
         Some("smooth") => "player_acceleration_final_smooth",
         Some("stddev_window") => "accel_stddev_window",
-        _ => "acceleraciones_fil_savitzky_golay",
+        _ => "accel_butterworth",
     };
 
     let query = format!(

@@ -1474,7 +1474,7 @@ pub async fn get_accelerations_hardcoded(
     Path(table_name): Path<String>,
     axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
 ) -> Json<Value> {
-    let view_name = format!("{}_sql_player_gemini_processed_view", table_name);
+    let view_name = format!("{}_mat_view", table_name);
     let mode = params
         .get("mode")
         .map(|s| s.to_lowercase())
@@ -1529,7 +1529,7 @@ WITH base AS (
     player_display_name,
     time,
     (speed::numeric) AS speed_kph,
-    (player_acceleration_final_smooth::numeric) AS acceleration_smooth,
+    (accel_butterworth::numeric) AS acceleration_smooth,
     EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time) AS epoch_time,
     LAG(EXTRACT(EPOCH FROM to_timestamp(time, 'HH24:MI:SS.MS')::time)) OVER (
       PARTITION BY player_display_name ORDER BY to_timestamp(time, 'HH24:MI:SS.MS')::time
@@ -1641,8 +1641,8 @@ events AS (
 filtered_events AS (
   SELECT *
   FROM events
-  WHERE (event_type = 'accel_potential' AND peak_acc >= 3 AND duration_s >= 0.5)
-     OR (event_type = 'decel_potential' AND peak_acc <= -3 AND duration_s >= 0.5)
+  WHERE (event_type = 'accel_potential' AND peak_acc >= 2.5 AND duration_s >= 0.6)
+     OR (event_type = 'decel_potential' AND peak_acc <= -2.5 AND duration_s >= 0.6)
 ),
 
 classified AS (
