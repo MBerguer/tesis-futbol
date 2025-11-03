@@ -117,6 +117,13 @@ export default function SideNav({
               RS
             </Link>
             <Link
+              href="/wcs-analysis"
+              title="WCS Analysis"
+              className="rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
+            >
+              WCS
+            </Link>
+            <Link
               href="/research/compare"
               title="Compare Matches"
               className="rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
@@ -173,6 +180,12 @@ export default function SideNav({
                 className="rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
               >
                 Research & Analytics
+              </Link>
+              <Link
+                href="/wcs-analysis"
+                className="rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent border border-transparent hover:border-border transition-all duration-200 hover:scale-105"
+              >
+                WCS Analysis
               </Link>
               <Link
                 href="/research/compare"

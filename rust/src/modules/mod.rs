@@ -4,3 +4,4 @@ pub mod forecast_realtime;
 pub mod matches;
 pub mod players;
 pub mod research;
+pub mod wcs_analysis;

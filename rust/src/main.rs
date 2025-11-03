@@ -1,9 +1,9 @@
 use axum::{routing::get, Router};
 use sqlx::postgres::PgPoolOptions;
 use std::env;
+use tokio::fs;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
-use tokio::fs;
 
 mod config;
 mod models;
@@ -39,16 +39,22 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(|| async { "Cantera inagotable API" }))
-        .nest("/match", routes::matches_routes::matches_routes(pool.clone()))
+        .nest(
+            "/match",
+            routes::matches_routes::matches_routes(pool.clone()),
+        )
         .nest("/player", routes::players_routes::players_routes())
         .nest("/api", routes::admin_api::admin_api(pool.clone()))
-        .nest("/research", routes::research_routes::research_routes(pool))
+        .nest(
+            "/research",
+            routes::research_routes::research_routes(pool.clone()),
+        )
+        .nest("/wcs", routes::wcs_routes::wcs_routes(pool))
         .nest_service("/uploads", ServeDir::new("uploads"))
         .layer(cors);
 
     // Allow overriding the port via environment variable API_PORT (defaults to 8000)
-    let port: u16 = env
-        ::var("API_PORT")
+    let port: u16 = env::var("API_PORT")
         .ok()
         .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(8000);
