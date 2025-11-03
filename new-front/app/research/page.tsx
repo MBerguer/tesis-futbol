@@ -55,31 +55,6 @@ interface RatioData {
   ratio: number;
 }
 
-const AccelFilterSelector = ({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) => (
-  <div className="mb-4">
-    <label className="text-sm font-medium mr-3">Acceleration Filter:</label>
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="px-3 py-1.5 bg-background border border-input rounded-md text-sm"
-    >
-      <option value="butterworth">Butterworth</option>
-      <option value="sma">Simple Moving Average (SMA)</option>
-      <option value="ema">Exponential Moving Average (EMA)</option>
-      <option value="savitzky_golay">Savitzky-Golay</option>
-      <option value="smooth">Final Smooth</option>
-      <option value="stddev_window">Standard Deviation Window</option>
-      <option value="original">Original (No Filter)</option>
-    </select>
-  </div>
-);
-
 export default function ResearchPage() {
   const [dtrData, setDtrData] = useState<TimeSeriesData[]>([]);
   const [z2Data, setZ2Data] = useState<TimeSeriesData[]>([]);
@@ -103,11 +78,6 @@ export default function ResearchPage() {
   const [loading, setLoading] = useState(true);
   const [minMinutesPlayed, setMinMinutesPlayed] = useState(85);
 
-  // Independent filters for each acceleration graph
-  const [highAccelFilter, setHighAccelFilter] = useState("savitzky_golay");
-  const [accelDecelFilter, setAccelDecelFilter] = useState("savitzky_golay");
-  const [ratioFilter, setRatioFilter] = useState("savitzky_golay");
-
   // Individual loading states for each chart
   const [loadingDtr, setLoadingDtr] = useState(true);
   const [loadingZ2, setLoadingZ2] = useState(true);
@@ -119,19 +89,8 @@ export default function ResearchPage() {
   useEffect(() => {
     fetchDtrZ2SprintData();
     fetchMatches();
+    fetchAccelerationData();
   }, [minMinutesPlayed]);
-
-  useEffect(() => {
-    fetchHighAccelData();
-  }, [minMinutesPlayed, highAccelFilter]);
-
-  useEffect(() => {
-    fetchAccelDecelData();
-  }, [minMinutesPlayed, accelDecelFilter]);
-
-  useEffect(() => {
-    fetchRatioData();
-  }, [minMinutesPlayed, ratioFilter]);
 
   const fetchDtrZ2SprintData = async () => {
     setLoadingDtr(true);
@@ -163,50 +122,30 @@ export default function ResearchPage() {
     }
   };
 
-  const fetchHighAccelData = async () => {
+  const fetchAccelerationData = async () => {
     setLoadingHighAccel(true);
-    try {
-      const res = await fetch(
-        `${API_BASE}/research/high-accel-decel-per-minute?min_minutes_played=${minMinutesPlayed}&accel_filter=${highAccelFilter}`
-      );
-      const json = await res.json();
-      setHighAccelData(json.data || []);
-      setHighAccelMetadata(json.metadata);
-    } catch (error) {
-      console.error("Error fetching high accel data:", error);
-    } finally {
-      setLoadingHighAccel(false);
-    }
-  };
-
-  const fetchAccelDecelData = async () => {
     setLoadingAccelDecel(true);
-    try {
-      const res = await fetch(
-        `${API_BASE}/research/accel-decel-separated-per-minute?min_minutes_played=${minMinutesPlayed}&accel_filter=${accelDecelFilter}`
-      );
-      const json = await res.json();
-      setAccelDecelData(json.data || []);
-      setAccelDecelMetadata(json.metadata);
-    } catch (error) {
-      console.error("Error fetching accel/decel data:", error);
-    } finally {
-      setLoadingAccelDecel(false);
-    }
-  };
-
-  const fetchRatioData = async () => {
     setLoadingRatio(true);
+
     try {
-      const res = await fetch(
-        `${API_BASE}/research/accel-decel-ratio-per-minute?min_minutes_played=${minMinutesPlayed}&accel_filter=${ratioFilter}`
-      );
+      const res = await fetch(`${API_BASE}/research/acceleration-charts-data`);
       const json = await res.json();
-      setRatioData(json.data || []);
-      setRatioMetadata(json.metadata);
+
+      setHighAccelData(json.high_accel?.data || []);
+      setHighAccelMetadata(json.high_accel?.metadata);
+      setLoadingHighAccel(false);
+
+      setAccelDecelData(json.accel_decel?.data || []);
+      setAccelDecelMetadata(json.accel_decel?.metadata);
+      setLoadingAccelDecel(false);
+
+      setRatioData(json.ratio?.data || []);
+      setRatioMetadata(json.ratio?.metadata);
+      setLoadingRatio(false);
     } catch (error) {
-      console.error("Error fetching ratio data:", error);
-    } finally {
+      console.error("Error fetching acceleration data:", error);
+      setLoadingHighAccel(false);
+      setLoadingAccelDecel(false);
       setLoadingRatio(false);
     }
   };
@@ -596,17 +535,13 @@ export default function ResearchPage() {
       <Card>
         <CardHeader>
           <CardTitle>
-            High Accelerations & Decelerations (&gt;3.0 m/s²)
+            High Accelerations & Decelerations (&gt;2.5 m/s²)
           </CardTitle>
           <CardDescription>
             Count of high-intensity acceleration/deceleration events per minute.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AccelFilterSelector
-            value={highAccelFilter}
-            onChange={setHighAccelFilter}
-          />
           {loadingHighAccel ? (
             <div className="h-[420px] flex items-center justify-center">
               <div className="text-muted-foreground">Loading...</div>
@@ -707,10 +642,6 @@ export default function ResearchPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AccelFilterSelector
-            value={accelDecelFilter}
-            onChange={setAccelDecelFilter}
-          />
           {loadingAccelDecel ? (
             <div className="h-[420px] flex items-center justify-center">
               <div className="text-muted-foreground">Loading...</div>
@@ -828,7 +759,6 @@ export default function ResearchPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AccelFilterSelector value={ratioFilter} onChange={setRatioFilter} />
           {loadingRatio ? (
             <div className="h-[420px] flex items-center justify-center">
               <div className="text-muted-foreground">Loading...</div>

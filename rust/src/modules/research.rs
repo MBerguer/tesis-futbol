@@ -1217,3 +1217,178 @@ pub async fn get_match_aggregate_stats(State(pool): State<PgPool>) -> Json<Value
         })),
     }
 }
+
+pub async fn get_acceleration_charts_data(State(pool): State<PgPool>) -> Json<Value> {
+    let query = r#"
+        WITH match_durations AS (
+            SELECT 
+                match_name,
+                MAX(minute_of_game) as max_minute
+            FROM per_player_minute_summary
+            WHERE match_name IS NOT NULL
+            GROUP BY match_name
+        ),
+        normalized_summary AS (
+            SELECT 
+                ps.player_display_name,
+                ps.match_name,
+                FLOOR((ps.minute_of_game::float / md.max_minute::float) * $1)::integer as normalized_minute,
+                ps.total_accel_events,
+                ps.total_decel_events,
+                ps.total_accdec
+            FROM 
+                public.per_player_minute_summary ps
+                JOIN match_durations md ON md.match_name = ps.match_name
+            WHERE md.max_minute > 0
+        )
+        SELECT 
+            ns.normalized_minute, 
+            SUM(ns.total_accel_events)::float as total_accel_events, 
+            SUM(ns.total_decel_events)::float as total_decel_events, 
+            SUM(ns.total_accdec)::float as total_accdec,
+            COUNT(*)::bigint as cant_jug,
+            (SUM(ns.total_accdec)::float / COUNT(*)::float) as high_events,
+            AVG(ns.total_accel_events)::float as avg_accel_events, 
+            AVG(ns.total_decel_events)::float as avg_decel_events
+        FROM 
+            normalized_summary ns
+            JOIN (SELECT DISTINCT player_display_name, player_id FROM all_matches_filtered_accelerations) pn 
+                ON pn.player_display_name = ns.player_display_name 
+            JOIN administrativo a ON a.player_gps_id = pn.player_id 
+        WHERE ns.normalized_minute >= 0 AND ns.normalized_minute < $1
+        GROUP BY ns.normalized_minute
+        ORDER BY ns.normalized_minute
+    "#;
+
+    match sqlx::query_as::<
+        _,
+        (
+            i32,
+            Option<f64>,
+            Option<f64>,
+            Option<f64>,
+            i64,
+            Option<f64>,
+            Option<f64>,
+            Option<f64>,
+        ),
+    >(query)
+    .bind(NORMALIZED_MATCH_DURATION)
+    .fetch_all(&pool)
+    .await
+    {
+        Ok(rows) => {
+            let mut high_accel_data = Vec::new();
+            let mut accel_decel_data = Vec::new();
+            let mut ratio_data = Vec::new();
+
+            for (
+                minute,
+                _total_accel,
+                _total_decel,
+                _total_accdec,
+                player_count,
+                high_events,
+                avg_accel,
+                avg_decel,
+            ) in rows
+            {
+                high_accel_data.push(json!({
+                    "normalized_minute": minute,
+                    "count_per_min": high_events.unwrap_or(0.0),
+                    "sample_count": player_count
+                }));
+
+                accel_decel_data.push(json!({
+                    "normalized_minute": minute,
+                    "avg_acceleration": avg_accel.unwrap_or(0.0),
+                    "avg_deceleration": avg_decel.unwrap_or(0.0),
+                    "accel_count": player_count,
+                    "decel_count": player_count
+                }));
+
+                let ratio = if let (Some(a), Some(d)) = (avg_accel, avg_decel) {
+                    if d > 0.0 {
+                        a / d
+                    } else {
+                        1.0
+                    }
+                } else {
+                    1.0
+                };
+
+                ratio_data.push(json!({
+                    "normalized_minute": minute,
+                    "ratio": ratio,
+                    "accel_count": player_count,
+                    "decel_count": player_count
+                }));
+            }
+
+            let high_accel_median = if !high_accel_data.is_empty() {
+                high_accel_data
+                    .iter()
+                    .filter_map(|v| v.get("count_per_min").and_then(|d| d.as_f64()))
+                    .sum::<f64>()
+                    / high_accel_data.len() as f64
+            } else {
+                0.0
+            };
+
+            let (accel_median, decel_median) = if !accel_decel_data.is_empty() {
+                let accel = accel_decel_data
+                    .iter()
+                    .filter_map(|v| v.get("avg_acceleration").and_then(|d| d.as_f64()))
+                    .sum::<f64>()
+                    / accel_decel_data.len() as f64;
+                let decel = accel_decel_data
+                    .iter()
+                    .filter_map(|v| v.get("avg_deceleration").and_then(|d| d.as_f64()))
+                    .sum::<f64>()
+                    / accel_decel_data.len() as f64;
+                (accel, decel)
+            } else {
+                (0.0, 0.0)
+            };
+
+            let ratio_median = if !ratio_data.is_empty() {
+                ratio_data
+                    .iter()
+                    .filter_map(|v| v.get("ratio").and_then(|d| d.as_f64()))
+                    .sum::<f64>()
+                    / ratio_data.len() as f64
+            } else {
+                1.0
+            };
+
+            Json(json!({
+                "high_accel": {
+                    "data": high_accel_data,
+                    "metadata": {
+                        "threshold": "> 2.5 m/s²",
+                        "normalized_duration": NORMALIZED_MATCH_DURATION,
+                        "median": high_accel_median
+                    }
+                },
+                "accel_decel": {
+                    "data": accel_decel_data,
+                    "metadata": {
+                        "normalized_duration": NORMALIZED_MATCH_DURATION,
+                        "median_acceleration": accel_median,
+                        "median_deceleration": decel_median
+                    }
+                },
+                "ratio": {
+                    "data": ratio_data,
+                    "metadata": {
+                        "normalized_duration": NORMALIZED_MATCH_DURATION,
+                        "median": ratio_median
+                    }
+                }
+            }))
+        }
+        Err(e) => Json(json!({
+            "error": format!("Database error: {}", e)
+        })),
+    }
+}

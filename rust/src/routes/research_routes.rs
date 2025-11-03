@@ -38,5 +38,9 @@ pub fn research_routes(pool: PgPool) -> Router {
             "/match-aggregate-stats",
             get(handlers::get_match_aggregate_stats),
         )
+        .route(
+            "/acceleration-charts-data",
+            get(handlers::get_acceleration_charts_data),
+        )
         .with_state(pool)
 }
