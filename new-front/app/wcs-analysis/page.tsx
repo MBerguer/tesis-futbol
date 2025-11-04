@@ -1067,9 +1067,9 @@ export default function WcsAnalysisPage() {
                         WCS Peak Demands (1-Minute Maximum)
                       </h3>
                     </div>
-                    <ResponsiveContainer width="100%" height={450}>
+                    <ResponsiveContainer width="100%" height={600}>
                       <LineChart
-                        margin={{ top: 20, right: 30, left: 60, bottom: 100 }}
+                        margin={{ top: 50, right: 30, left: 60, bottom: 100 }}
                       >
                         <CartesianGrid
                           strokeDasharray="3 3"
@@ -1125,9 +1125,9 @@ export default function WcsAnalysisPage() {
                         Match Average HSR per Minute
                       </h3>
                     </div>
-                    <ResponsiveContainer width="100%" height={450}>
+                    <ResponsiveContainer width="100%" height={600}>
                       <LineChart
-                        margin={{ top: 20, right: 30, left: 60, bottom: 100 }}
+                        margin={{ top: 75, right: 30, left: 60, bottom: 100 }}
                       >
                         <CartesianGrid
                           strokeDasharray="3 3"
