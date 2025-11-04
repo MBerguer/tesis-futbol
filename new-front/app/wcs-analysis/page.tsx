@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -176,9 +176,129 @@ export default function WcsAnalysisPage() {
   const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
 
+  const [sortColumn, setSortColumn] = useState<
+    "position" | "match_average" | "wcs_1min" | "player_count"
+  >("position");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  const [detailedSortColumn, setDetailedSortColumn] = useState<
+    | "match_name"
+    | "player_name"
+    | "position"
+    | "match_minute"
+    | "distance_covered"
+  >("match_name");
+  const [detailedSortDirection, setDetailedSortDirection] = useState<
+    "asc" | "desc"
+  >("asc");
+
   useEffect(() => {
     fetchAllData();
   }, []);
+
+  const handleSort = (
+    column: "position" | "match_average" | "wcs_1min" | "player_count"
+  ) => {
+    console.log("Sorting by:", column);
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const handleDetailedSort = (
+    column:
+      | "match_name"
+      | "player_name"
+      | "position"
+      | "match_minute"
+      | "distance_covered"
+  ) => {
+    console.log("Sorting detailed by:", column);
+    if (detailedSortColumn === column) {
+      setDetailedSortDirection(
+        detailedSortDirection === "asc" ? "desc" : "asc"
+      );
+    } else {
+      setDetailedSortColumn(column);
+      setDetailedSortDirection("asc");
+    }
+  };
+
+  const sortedData = useMemo(() => {
+    const filtered = comparisonByPosition.filter((row) => row.wcs_1min > 0);
+    return [...filtered].sort((a, b) => {
+      let aVal: string | number;
+      let bVal: string | number;
+
+      if (sortColumn === "position") {
+        aVal = translatePosition(a.position);
+        bVal = translatePosition(b.position);
+      } else {
+        aVal = a[sortColumn];
+        bVal = b[sortColumn];
+      }
+
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        return sortDirection === "asc"
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      } else {
+        return sortDirection === "asc"
+          ? (aVal as number) - (bVal as number)
+          : (bVal as number) - (aVal as number);
+      }
+    });
+  }, [comparisonByPosition, sortColumn, sortDirection]);
+
+  const sortedDetailedEvents = useMemo(() => {
+    return [...detailedEvents].sort((a, b) => {
+      let aVal: string | number | null;
+      let bVal: string | number | null;
+
+      switch (detailedSortColumn) {
+        case "match_name":
+          aVal = a.match_name;
+          bVal = b.match_name;
+          break;
+        case "player_name":
+          aVal = a.player_name;
+          bVal = b.player_name;
+          break;
+        case "position":
+          aVal = a.position || "";
+          bVal = b.position || "";
+          break;
+        case "match_minute":
+          aVal = a.match_minute ?? -1;
+          bVal = b.match_minute ?? -1;
+          break;
+        case "distance_covered":
+          aVal = a.distance_covered;
+          bVal = b.distance_covered;
+          break;
+        default:
+          return 0;
+      }
+
+      // Handle null values
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        return detailedSortDirection === "asc"
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      } else {
+        return detailedSortDirection === "asc"
+          ? (aVal as number) - (bVal as number)
+          : (bVal as number) - (aVal as number);
+      }
+    });
+  }, [detailedEvents, detailedSortColumn, detailedSortDirection]);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -332,43 +452,85 @@ export default function WcsAnalysisPage() {
               <table className="w-full text-sm">
                 <thead className="border-b">
                   <tr className="text-left">
-                    <th className="p-3 font-semibold">Position</th>
-                    <th className="p-3 font-semibold text-right">
-                      Match Average (HSR {"\u2265"} 19.8 km/h) (m/min)
+                    <th
+                      className="p-3 font-semibold cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("position")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Position
+                        {sortColumn === "position" && (
+                          <span className="text-xs">
+                            {sortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
                     </th>
-                    <th className="p-3 font-semibold text-right">
-                      WCS Peak (HSR {"\u2265"} 19.8 km/h) (m/min)
+                    <th
+                      className="p-3 font-semibold text-right cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("match_average")}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        Match Average (HSR {"\u2265"} 19.8 km/h) (m/min)
+                        {sortColumn === "match_average" && (
+                          <span className="text-xs">
+                            {sortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
                     </th>
-                    <th className="p-3 font-semibold text-center">Players</th>
+                    <th
+                      className="p-3 font-semibold text-right cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("wcs_1min")}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        WCS Peak (HSR {"\u2265"} 19.8 km/h) (m/min)
+                        {sortColumn === "wcs_1min" && (
+                          <span className="text-xs">
+                            {sortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="p-3 font-semibold text-center cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort("player_count")}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        Players
+                        {sortColumn === "player_count" && (
+                          <span className="text-xs">
+                            {sortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {comparisonByPosition
-                    .filter((row) => row.wcs_1min > 0)
-                    .map((row) => (
-                      <tr
-                        key={row.position}
-                        className="border-b hover:bg-muted/50"
-                      >
-                        <td className="p-3 font-medium">
-                          {translatePosition(row.position)}
-                        </td>
-                        <td className="p-3 text-right">
-                          {row.match_average.toFixed(1)}
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="font-semibold">
-                              {row.wcs_1min.toFixed(1)}
-                            </span>
-                            <span className="text-xs text-green-600 dark:text-green-400">
-                              +{row.increase_1min_pct.toFixed(0)}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="p-3 text-center">{row.player_count}</td>
-                      </tr>
-                    ))}
+                  {sortedData.map((row) => (
+                    <tr
+                      key={row.position}
+                      className="border-b hover:bg-muted/50"
+                    >
+                      <td className="p-3 font-medium">
+                        {translatePosition(row.position)}
+                      </td>
+                      <td className="p-3 text-right">
+                        {row.match_average.toFixed(1)}
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="font-semibold">
+                            {row.wcs_1min.toFixed(1)}
+                          </span>
+                          <span className="text-xs text-green-600 dark:text-green-400">
+                            +{row.increase_1min_pct.toFixed(0)}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 text-center">{row.player_count}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -740,20 +902,76 @@ export default function WcsAnalysisPage() {
               <table className="w-full text-sm">
                 <thead className="border-b sticky top-0 bg-background">
                   <tr className="text-left">
-                    <th className="p-2 font-semibold">Match</th>
-                    <th className="p-2 font-semibold">Player</th>
-                    <th className="p-2 font-semibold">Position</th>
-                    <th className="p-2 font-semibold text-right">
-                      Match Minute
+                    <th
+                      className="p-2 font-semibold cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleDetailedSort("match_name")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Match
+                        {detailedSortColumn === "match_name" && (
+                          <span className="text-xs">
+                            {detailedSortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="p-2 font-semibold cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleDetailedSort("player_name")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Player
+                        {detailedSortColumn === "player_name" && (
+                          <span className="text-xs">
+                            {detailedSortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="p-2 font-semibold cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleDetailedSort("position")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Position
+                        {detailedSortColumn === "position" && (
+                          <span className="text-xs">
+                            {detailedSortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="p-2 font-semibold text-right cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleDetailedSort("match_minute")}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        Match Minute
+                        {detailedSortColumn === "match_minute" && (
+                          <span className="text-xs">
+                            {detailedSortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
                     </th>
                     <th className="p-2 font-semibold">Period</th>
-                    <th className="p-2 font-semibold text-right">Window (s)</th>
-                    <th className="p-2 font-semibold text-right">Distance</th>
-                    <th className="p-2 font-semibold text-right">m/min</th>
+                    <th
+                      className="p-2 font-semibold text-right cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleDetailedSort("distance_covered")}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        Distance (m)
+                        {detailedSortColumn === "distance_covered" && (
+                          <span className="text-xs">
+                            {detailedSortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {detailedEvents.slice(0, 100).map((event, idx) => (
+                  {sortedDetailedEvents.slice(0, 100).map((event, idx) => (
                     <tr
                       key={idx}
                       className="border-b hover:bg-muted/50 text-xs"
@@ -784,13 +1002,7 @@ export default function WcsAnalysisPage() {
                         </span>
                       </td>
                       <td className="p-2 text-right">
-                        {event.window_duration_sec?.toFixed(0)}s
-                      </td>
-                      <td className="p-2 text-right">
-                        {event.distance_covered?.toFixed(1)}m
-                      </td>
-                      <td className="p-2 text-right font-semibold">
-                        {event.distance_per_min?.toFixed(1)}
+                        {event.distance_covered?.toFixed(1)}
                       </td>
                     </tr>
                   ))}
