@@ -38,6 +38,15 @@ pub struct WcsComparisonByPosition {
     pub player_count: i64,
 }
 
+#[derive(Debug, Serialize)]
+pub struct WcsTrendByDate {
+    pub match_date: String,
+    pub position: String,
+    pub avg_wcs_distance: f64,
+    pub avg_match_distance: f64,
+    pub event_count: i64,
+}
+
 pub async fn get_wcs_comparison_data(State(pool): State<PgPool>) -> Json<Value> {
     let result = sqlx::query(
         r#"
@@ -490,6 +499,134 @@ pub async fn get_wcs_comparison_by_position(State(pool): State<PgPool>) -> Json<
         }
         Err(e) => {
             eprintln!("Error fetching WCS comparison by position: {:?}", e);
+            Json(json!({
+                "status": "error",
+                "message": format!("Database error: {}", e),
+                "data": []
+            }))
+        }
+    }
+}
+
+pub async fn get_wcs_trends_by_date(State(pool): State<PgPool>) -> Json<Value> {
+    let result = sqlx::query(
+        r#"
+        WITH active_play_periods AS (
+            SELECT 
+                mp.match_name,
+                mp.manual_first_half_start,
+                mp.manual_first_half_end,
+                mp.manual_second_half_start,
+                mp.manual_second_half_end,
+                ((mp.manual_first_half_end - mp.manual_first_half_start) + 
+                 (mp.manual_second_half_end - mp.manual_second_half_start)) / 60.0 as active_minutes
+            FROM match_periods mp
+            WHERE mp.manual_first_half_start IS NOT NULL
+              AND mp.match_name NOT LIKE '%_no_periods'
+        ),
+        player_match_distances AS (
+            SELECT 
+                amf.match_name,
+                amf.player_display_name,
+                amf.player_id,
+                SUM(amf.distancia_total_calc) as total_hsr_distance
+            FROM all_matches_filtered_accelerations amf
+            INNER JOIN active_play_periods app ON app.match_name = amf.match_name
+            WHERE amf.speed >= 19.8 AND (
+              ((amf.seconds_since_midnight >= app.manual_first_half_start AND amf.seconds_since_midnight <= app.manual_first_half_end)
+              OR (amf.seconds_since_midnight >= app.manual_second_half_start AND amf.seconds_since_midnight <= app.manual_second_half_end))
+            )
+            GROUP BY amf.match_name, amf.player_display_name, amf.player_id
+        ),
+        match_avg_by_date_position AS (
+            SELECT 
+                m.match_date,
+                TRIM(a."Posicion") as position,
+                AVG(pmd.total_hsr_distance / mmp.minutes_played) as avg_distance_per_min
+            FROM player_match_distances pmd
+            INNER JOIN matches m ON m.gps_table_name = pmd.match_name
+            INNER JOIN match_minutes_played mmp 
+                ON mmp.match_name = pmd.match_name 
+                AND mmp.player_display_name = pmd.player_display_name
+            LEFT JOIN administrativo a ON a.player_gps_id = pmd.player_id
+            WHERE mmp.minutes_played > 0
+              AND a."Posicion" IS NOT NULL 
+              AND TRIM(a."Posicion") != ''
+              AND m.match_date IS NOT NULL
+            GROUP BY m.match_date, TRIM(a."Posicion")
+        ),
+        wcs_with_player_id AS (
+            SELECT 
+                pwc.player_display_name,
+                pwc.match_name,
+                pwc.distance_covered,
+                pwc.start_second,
+                pwc.end_second,
+                mmp.player_id
+            FROM player_worst_cases_cache pwc
+            INNER JOIN match_minutes_played mmp 
+                ON mmp.match_name = pwc.match_name 
+                AND mmp.player_display_name = pwc.player_display_name
+            WHERE pwc.match_name NOT LIKE '%_no_periods'
+        ),
+        wcs_by_date_position AS (
+            SELECT 
+                m.match_date,
+                TRIM(a."Posicion") as position,
+                AVG(w.distance_covered / ((w.end_second - w.start_second) / 60.0)) as avg_wcs_distance_per_min,
+                COUNT(*) as event_count
+            FROM wcs_with_player_id w
+            INNER JOIN matches m ON m.gps_table_name = w.match_name
+            LEFT JOIN administrativo a ON a.player_gps_id = w.player_id
+            WHERE a."Posicion" IS NOT NULL 
+              AND TRIM(a."Posicion") != ''
+              AND m.match_date IS NOT NULL
+            GROUP BY m.match_date, TRIM(a."Posicion")
+        )
+        SELECT 
+            TO_CHAR(wdp.match_date, 'YYYY-MM-DD') as match_date,
+            wdp.position,
+            wdp.avg_wcs_distance_per_min as avg_wcs_distance,
+            COALESCE(madp.avg_distance_per_min, 0) as avg_match_distance,
+            wdp.event_count
+        FROM wcs_by_date_position wdp
+        LEFT JOIN match_avg_by_date_position madp 
+            ON madp.match_date = wdp.match_date 
+            AND madp.position = wdp.position
+        ORDER BY wdp.match_date, wdp.position
+        "#,
+    )
+    .fetch_all(&pool)
+    .await;
+
+    match result {
+        Ok(rows) => {
+            let data: Vec<WcsTrendByDate> = rows
+                .iter()
+                .map(|row| {
+                    let match_date: Option<String> = row.try_get("match_date").ok().flatten();
+                    let position: Option<String> = row.try_get("position").ok().flatten();
+                    let avg_wcs: Option<f64> = row.try_get("avg_wcs_distance").ok().flatten();
+                    let avg_match: Option<f64> = row.try_get("avg_match_distance").ok().flatten();
+                    let event_count: Option<i64> = row.try_get("event_count").ok().flatten();
+
+                    WcsTrendByDate {
+                        match_date: match_date.unwrap_or_else(|| "Unknown".to_string()),
+                        position: position.unwrap_or_else(|| "Unknown".to_string()),
+                        avg_wcs_distance: avg_wcs.unwrap_or(0.0),
+                        avg_match_distance: avg_match.unwrap_or(0.0),
+                        event_count: event_count.unwrap_or(0),
+                    }
+                })
+                .collect();
+
+            Json(json!({
+                "status": "ok",
+                "data": data
+            }))
+        }
+        Err(e) => {
+            eprintln!("Error fetching WCS trends by date: {:?}", e);
             Json(json!({
                 "status": "error",
                 "message": format!("Database error: {}", e),

@@ -12,5 +12,6 @@ pub fn wcs_routes(pool: PgPool) -> Router {
         .route("/player-profiles", get(handlers::get_player_wcs_profiles))
         .route("/matches-info", get(handlers::get_wcs_matches_info))
         .route("/detailed-events", get(handlers::get_wcs_detailed_events))
+        .route("/trends-by-date", get(handlers::get_wcs_trends_by_date))
         .with_state(pool)
 }

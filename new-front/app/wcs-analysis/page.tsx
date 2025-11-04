@@ -22,6 +22,8 @@ import {
   Scatter,
   ReferenceLine,
   ReferenceArea,
+  LineChart,
+  Line,
 } from "recharts";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -66,6 +68,14 @@ interface DetailedEvent {
   distance_per_min: number;
   match_minute: number | null;
   match_period: string;
+}
+
+interface WcsTrendByDate {
+  match_date: string;
+  position: string;
+  avg_wcs_distance: number;
+  avg_match_distance: number;
+  event_count: number;
 }
 
 const COLOR_PALETTE = [
@@ -123,6 +133,23 @@ interface PositionTimingStats {
   count: number;
 }
 
+const calculateLinearRegression = (
+  data: Array<{ x: number; y: number }>
+): { slope: number; intercept: number } => {
+  const n = data.length;
+  if (n === 0) return { slope: 0, intercept: 0 };
+
+  const sumX = data.reduce((sum, point) => sum + point.x, 0);
+  const sumY = data.reduce((sum, point) => sum + point.y, 0);
+  const sumXY = data.reduce((sum, point) => sum + point.x * point.y, 0);
+  const sumXX = data.reduce((sum, point) => sum + point.x * point.x, 0);
+
+  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+
+  return { slope, intercept };
+};
+
 const calculatePositionTimingStats = (
   events: DetailedEvent[]
 ): PositionTimingStats[] => {
@@ -171,10 +198,12 @@ export default function WcsAnalysisPage() {
   const [playerProfiles, setPlayerProfiles] = useState<PlayerProfile[]>([]);
   const [matches, setMatches] = useState<WcsMatchInfo[]>([]);
   const [detailedEvents, setDetailedEvents] = useState<DetailedEvent[]>([]);
+  const [trendsByDate, setTrendsByDate] = useState<WcsTrendByDate[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [loadingTrends, setLoadingTrends] = useState(true);
 
   const [sortColumn, setSortColumn] = useState<
     "position" | "match_average" | "wcs_1min" | "player_count"
@@ -304,16 +333,24 @@ export default function WcsAnalysisPage() {
     setLoading(true);
     setLoadingProfiles(true);
     setLoadingEvents(true);
+    setLoadingTrends(true);
 
     try {
-      const [compRes, compByPosRes, profilesRes, matchesRes, eventsRes] =
-        await Promise.all([
-          fetch(`${API_BASE}/wcs/comparison-data`),
-          fetch(`${API_BASE}/wcs/comparison-by-position`),
-          fetch(`${API_BASE}/wcs/player-profiles`),
-          fetch(`${API_BASE}/wcs/matches-info`),
-          fetch(`${API_BASE}/wcs/detailed-events`),
-        ]);
+      const [
+        compRes,
+        compByPosRes,
+        profilesRes,
+        matchesRes,
+        eventsRes,
+        trendsRes,
+      ] = await Promise.all([
+        fetch(`${API_BASE}/wcs/comparison-data`),
+        fetch(`${API_BASE}/wcs/comparison-by-position`),
+        fetch(`${API_BASE}/wcs/player-profiles`),
+        fetch(`${API_BASE}/wcs/matches-info`),
+        fetch(`${API_BASE}/wcs/detailed-events`),
+        fetch(`${API_BASE}/wcs/trends-by-date`),
+      ]);
 
       const compJson = await compRes.json();
       setComparisonData(compJson.data || []);
@@ -333,11 +370,16 @@ export default function WcsAnalysisPage() {
       const eventsJson = await eventsRes.json();
       setDetailedEvents(eventsJson.events || []);
       setLoadingEvents(false);
+
+      const trendsJson = await trendsRes.json();
+      setTrendsByDate(trendsJson.data || []);
+      setLoadingTrends(false);
     } catch (error) {
       console.error("Error fetching WCS data:", error);
       setLoading(false);
       setLoadingProfiles(false);
       setLoadingEvents(false);
+      setLoadingTrends(false);
     }
   };
 
@@ -876,6 +918,264 @@ export default function WcsAnalysisPage() {
                           />
                         ))}
                       </ScatterChart>
+                    </ResponsiveContainer>
+                  </>
+                );
+              })()}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>WCS Trends Over Time</CardTitle>
+          <CardDescription>
+            Evolution of peak demands across the season by position
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingTrends ? (
+            <div className="h-96 flex items-center justify-center">
+              <div className="text-muted-foreground">Loading trends...</div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-6 text-sm text-muted-foreground">
+                <p>
+                  This analysis tracks how worst-case scenario peaks and match
+                  averages evolved throughout the season. The first graph shows
+                  peak 1-minute HSR demands, while the second shows average HSR
+                  per minute during matches. Both metrics are calculated for
+                  movements where speed exceeds 19.8 km/h.
+                </p>
+              </div>
+
+              {(() => {
+                if (trendsByDate.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No trend data available
+                    </div>
+                  );
+                }
+
+                const uniquePositions = Array.from(
+                  new Set(trendsByDate.map((d) => d.position))
+                );
+                const translatedPositions = uniquePositions.map((pos) =>
+                  translatePosition(pos)
+                );
+
+                const trendsColorMap: Record<string, string> = {};
+                translatedPositions.forEach((position, index) => {
+                  trendsColorMap[position] =
+                    COLOR_PALETTE[index % COLOR_PALETTE.length];
+                });
+
+                const chartData = trendsByDate.map((item) => ({
+                  date: item.match_date,
+                  dateTimestamp: new Date(item.match_date).getTime(),
+                  position: translatePosition(item.position),
+                  wcs: item.avg_wcs_distance,
+                  avg: item.avg_match_distance,
+                }));
+
+                const allDates = chartData.map((d) => d.dateTimestamp);
+                const minDate = Math.min(...allDates);
+                const maxDate = Math.max(...allDates);
+                const padding = (maxDate - minDate) * 0.05;
+
+                const formatDate = (timestamp: number) => {
+                  const date = new Date(timestamp);
+                  return date.toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  });
+                };
+
+                const commonXAxisProps = {
+                  type: "number" as const,
+                  dataKey: "dateTimestamp",
+                  domain: [minDate - padding, maxDate + padding],
+                  tickFormatter: formatDate,
+                  angle: -45,
+                  textAnchor: "end" as const,
+                  height: 100,
+                  className: "text-xs",
+                  ticks: Array.from(
+                    new Set(chartData.map((d) => d.dateTimestamp))
+                  )
+                    .sort((a, b) => a - b)
+                    .filter(
+                      (_, i, arr) => i % Math.ceil(arr.length / 15) === 0
+                    ),
+                };
+
+                const commonTooltipProps = {
+                  contentStyle: {
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "6px",
+                  },
+                  labelFormatter: (timestamp: number) =>
+                    new Date(timestamp).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    }),
+                  formatter: (value: number) => value.toFixed(2),
+                };
+
+                // Calculate trend line for WCS peaks
+                const wcsRegressionData = chartData.map((d) => ({
+                  x: d.dateTimestamp,
+                  y: d.wcs,
+                }));
+                const wcsRegression =
+                  calculateLinearRegression(wcsRegressionData);
+
+                // Get all unique dates for trend line
+                const uniqueDates = Array.from(
+                  new Set(chartData.map((d) => d.dateTimestamp))
+                ).sort((a, b) => a - b);
+
+                const wcsTrendData = uniqueDates.map((timestamp) => ({
+                  dateTimestamp: timestamp,
+                  trend:
+                    wcsRegression.slope * timestamp + wcsRegression.intercept,
+                }));
+
+                // Calculate trend line for match averages
+                const avgRegressionData = chartData.map((d) => ({
+                  x: d.dateTimestamp,
+                  y: d.avg,
+                }));
+                const avgRegression =
+                  calculateLinearRegression(avgRegressionData);
+
+                const avgTrendData = uniqueDates.map((timestamp) => ({
+                  dateTimestamp: timestamp,
+                  trend:
+                    avgRegression.slope * timestamp + avgRegression.intercept,
+                }));
+
+                return (
+                  <>
+                    <div className="mb-2">
+                      <h3 className="text-sm font-semibold mb-2">
+                        WCS Peak Demands (1-Minute Maximum)
+                      </h3>
+                    </div>
+                    <ResponsiveContainer width="100%" height={450}>
+                      <LineChart
+                        margin={{ top: 20, right: 30, left: 60, bottom: 100 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          className="stroke-muted"
+                        />
+                        <XAxis {...commonXAxisProps} />
+                        <YAxis
+                          label={{
+                            value: "Peak Distance (m/min, HSR > 19.8 km/h)",
+                            angle: -90,
+                            position: "insideLeft",
+                            style: { textAnchor: "middle" },
+                          }}
+                          className="text-xs"
+                          domain={[0, "auto"]}
+                        />
+                        <Tooltip {...commonTooltipProps} />
+                        <Legend
+                          wrapperStyle={{ paddingTop: "20px" }}
+                          iconType="line"
+                        />
+                        {translatedPositions.map((position) => (
+                          <Line
+                            key={position}
+                            type="monotone"
+                            dataKey="wcs"
+                            data={chartData.filter(
+                              (d) => d.position === position
+                            )}
+                            name={position}
+                            stroke={trendsColorMap[position]}
+                            strokeWidth={1.5}
+                            strokeOpacity={0.35}
+                            dot={{ r: 3, opacity: 0.4 }}
+                            connectNulls
+                          />
+                        ))}
+                        <Line
+                          type="linear"
+                          dataKey="trend"
+                          data={wcsTrendData}
+                          name="Overall Trend"
+                          stroke="#ccff00"
+                          strokeWidth={4}
+                          dot={false}
+                          strokeDasharray="8 4"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+
+                    <div className="mt-8 mb-2">
+                      <h3 className="text-sm font-semibold mb-2">
+                        Match Average HSR per Minute
+                      </h3>
+                    </div>
+                    <ResponsiveContainer width="100%" height={450}>
+                      <LineChart
+                        margin={{ top: 20, right: 30, left: 60, bottom: 100 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          className="stroke-muted"
+                        />
+                        <XAxis {...commonXAxisProps} />
+                        <YAxis
+                          label={{
+                            value: "Average Distance (m/min, HSR > 19.8 km/h)",
+                            angle: -90,
+                            position: "insideLeft",
+                            style: { textAnchor: "middle" },
+                          }}
+                          className="text-xs"
+                          domain={[0, "auto"]}
+                        />
+                        <Tooltip {...commonTooltipProps} />
+                        <Legend
+                          wrapperStyle={{ paddingTop: "20px" }}
+                          iconType="line"
+                        />
+                        {translatedPositions.map((position) => (
+                          <Line
+                            key={position}
+                            type="monotone"
+                            dataKey="avg"
+                            data={chartData.filter(
+                              (d) => d.position === position
+                            )}
+                            name={position}
+                            stroke={trendsColorMap[position]}
+                            strokeWidth={1.5}
+                            strokeOpacity={0.35}
+                            dot={{ r: 3, opacity: 0.4 }}
+                            connectNulls
+                          />
+                        ))}
+                        <Line
+                          type="linear"
+                          dataKey="trend"
+                          data={avgTrendData}
+                          name="Overall Trend"
+                          stroke="#ccff00"
+                          strokeWidth={4}
+                          dot={false}
+                          strokeDasharray="8 4"
+                        />
+                      </LineChart>
                     </ResponsiveContainer>
                   </>
                 );
