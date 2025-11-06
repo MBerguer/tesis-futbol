@@ -1,0 +1,9 @@
+names:
+  - Person
+  - ball
+  - goalkeeper
+  - referee
+nc: 4
+train: /Users/mberguer/src/tesis-futbol/notebooks/video_training/sub19-1_ball_boosted_v2/train/images
+val: /Users/mberguer/src/tesis-futbol/notebooks/video_training/sub19-1_ball_boosted_v2/valid/images
+test: /Users/mberguer/src/tesis-futbol/notebooks/video_training/sub19-1_ball_boosted_v2/test/images
