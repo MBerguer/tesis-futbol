@@ -20,3 +20,13 @@ rust/.container.env
 ml/__pycache__/
 
 .playwright-mcp/
+
+target/
+
+notebooks/video_training/sub19-1/
+notebooks/video_training/*/*/images/
+notebooks/video_training/*/*/labels/
+notebooks/video_training/*/*/*.jpg
+notebooks/video_training/*/*/*.cache
+notebooks/video_training/*/*/*/*.jpg
+notebooks/video_training/*/*.yaml
